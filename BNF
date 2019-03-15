@@ -1,0 +1,230 @@
+<TranslationUnitAST> ::= {<ExternalDeclarationAST>}*
+
+<ExternalDeclarationAST> ::= <FunctionDefinitionAST>
+                         | <DeclarationAST>
+
+<FunctionDefinitionAST> ::= {<DeclarationSpecifierAST>}* <DeclaratorAST> {<DeclarationAST>}* <CompoundStatementAST>
+
+<DeclarationSpecifierAST> ::= <StorageClassSpecifierAST>
+                          | <TypeSpecifierAST>
+                          | <TypeQualifierAST>
+
+<StorageClassSpecifierAST> ::= auto
+                            | register
+                            | static
+                            | extern
+                            | typedef
+
+<TypeSpecifierAST> ::= void
+                   | char
+                   | short
+                   | int
+                   | long
+                   | float
+                   | double
+                   | signed
+                   | unsigned
+                   | <StructOrUnionSpecifierAST>
+                   | <EnumSpecifierAST>
+                   | <TypedefNameAST>
+
+<StructOrUnionSpecifierAST> ::= <StructOrUnionAST> <IdentifierAST> { {<StructDeclarationAST>}+ }
+                              | <StructOrUnionAST> { {<StructDeclarationAST>}+ }
+                              | <StructOrUnionAST> <IdentifierAST>
+
+<StructOrUnionAST> ::= struct
+                    | union
+
+<StructDeclarationAST> ::= {<SpecifierQualifierAST>}* <StructDeclaratorListAST>
+
+<SpecifierQualifierAST> ::= <TypeSpecifierAST>
+                        | <TypeQualifierAST>
+
+<StructDeclaratorListAST> ::= <StructDeclaratorAST>
+                           | <StructDeclaratorListAST> , <StructDeclaratorAST>
+
+<StructDeclaratorAST> ::= <DeclaratorAST>
+                      | <DeclaratorAST> : <ConstantExpressionAST>
+                      | : <ConstantExpressionAST>
+
+<DeclaratorAST> ::= {<PointerAST>}? <DirectDeclaratorAST>
+
+<PointerAST> ::= * {<TypeQualifierAST>}* {<PointerAST>}?
+
+<TypeQualifierAST> ::= const
+                   | volatile
+
+<DirectDeclaratorAST> ::= <IdentifierAST>
+                      | ( <DeclaratorAST> )
+                      | <DirectDeclaratorAST> [ {<ConstantExpressionAST>}? ]
+                      | <DirectDeclaratorAST> ( <ParameterTypeListAST> )
+                      | <DirectDeclaratorAST> ( {<IdentifierAST>}* )
+
+<ConstantExpressionAST> ::= <ConditionalExpressionAST>
+
+<ConditionalExpressionAST> ::= <LogicalOrExpressionAST>
+                           | <LogicalOrExpressionAST> ? <ExpressionAST> : <ConditionalExpressionAST>
+
+<LogicalOrExpressionAST> ::= <LogicalAndExpressionAST>
+                          | <LogicalOrExpressionAST> || <LogicalAndExpressionAST>
+
+<LogicalAndExpressionAST> ::= <InclusiveOrExpressionAST>
+                           | <LogicalAndExpressionAST> && <InclusiveOrExpressionAST>
+
+<InclusiveOrExpressionAST> ::= <ExclusiveOrExpressionAST>
+                            | <InclusiveOrExpressionAST> | <ExclusiveOrExpressionAST>
+
+<ExclusiveOrExpressionAST> ::= <AndExpressionAST>
+                            | <ExclusiveOrExpressionAST> ^ <AndExpressionAST>
+
+<AndExpressionAST> ::= <EqualityExpressionAST>
+                   | <AndExpressionAST> & <EqualityExpressionAST>
+
+<EqualityExpressionAST> ::= <RelationalExpressionAST>
+                        | <EqualityExpressionAST> == <RelationalExpressionAST>
+                        | <EqualityExpressionAST> != <RelationalExpressionAST>
+
+<RelationalExpressionAST> ::= <ShiftExpressionAST>
+                          | <RelationalExpressionAST> < <ShiftExpressionAST>
+                          | <RelationalExpressionAST> AST> <ShiftExpressionAST>
+                          | <RelationalExpressionAST> <= <ShiftExpressionAST>
+                          | <RelationalExpressionAST> AST>= <ShiftExpressionAST>
+
+<ShiftExpressionAST> ::= <AdditiveExpressionAST>
+                     | <ShiftExpressionAST> << <AdditiveExpressionAST>
+                     | <ShiftExpressionAST> AST>AST> <AdditiveExpressionAST>
+
+<AdditiveExpressionAST> ::= <MultiplicativeExpressionAST>
+                        | <AdditiveExpressionAST> + <MultiplicativeExpressionAST>
+                        | <AdditiveExpressionAST> - <MultiplicativeExpressionAST>
+
+<MultiplicativeExpressionAST> ::= <CastExpressionAST>
+                              | <MultiplicativeExpressionAST> * <CastExpressionAST>
+                              | <MultiplicativeExpressionAST> / <CastExpressionAST>
+                              | <MultiplicativeExpressionAST> % <CastExpressionAST>
+
+<CastExpressionAST> ::= <UnaryExpressionAST>
+                    | ( <TypeNameAST> ) <CastExpressionAST>
+
+<UnaryExpressionAST> ::= <PostfixExpressionAST>
+                     | ++ <UnaryExpressionAST>
+                     | -- <UnaryExpressionAST>
+                     | <UnaryOperatorAST> <CastExpressionAST>
+                     | sizeof <UnaryExpressionAST>
+                     | sizeof <TypeNameAST>
+
+<PostfixExpressionAST> ::= <PrimaryExpressionAST>
+                       | <PostfixExpressionAST> [ <ExpressionAST> ]
+                       | <PostfixExpressionAST> ( {<AssignmentExpressionAST>}* )
+                       | <PostfixExpressionAST> . <IdentifierAST>
+                       | <PostfixExpressionAST> -AST> <IdentifierAST>
+                       | <PostfixExpressionAST> ++
+                       | <PostfixExpressionAST> --
+
+<PrimaryExpressionAST> ::= <IdentifierAST>
+                       | <ConstantAST>
+                       | <StringAST>
+                       | ( <ExpressionAST> )
+
+<ConstantAST> ::= <IntegerConstantAST>
+             | <CharacterConstantAST>
+             | <FloatingConstantAST>
+             | <EnumerationConstantAST>
+
+<ExpressionAST> ::= <AssignmentExpressionAST>
+               | <ExpressionAST> , <AssignmentExpressionAST>
+
+<AssignmentExpressionAST> ::= <ConditionalExpressionAST>
+                          | <UnaryExpressionAST> <AssignmentOperatorAST> <AssignmentExpressionAST>
+
+<AssignmentOperatorAST> ::= =
+                        | *=
+                        | /=
+                        | %=
+                        | +=
+                        | -=
+                        | <<=
+                        | AST>AST>=
+                        | &=
+                        | ^=
+                        | |=
+
+<UnaryOperatorAST> ::= &
+                   | *
+                   | +
+                   | -
+                   | ~
+                   | !
+
+<TypeNameAST> ::= {<SpecifierQualifierAST>}+ {<AbstractDeclaratorAST>}?
+
+<ParameterTypeListAST> ::= <ParameterListAST>
+                        | <ParameterListAST> , ...
+
+<ParameterListAST> ::= <ParameterDeclarationAST>
+                   | <ParameterListAST> , <ParameterDeclarationAST>
+
+<ParameterDeclarationAST> ::= {<DeclarationSpecifierAST>}+ <DeclaratorAST>
+                          | {<DeclarationSpecifierAST>}+ <AbstractDeclaratorAST>
+                          | {<DeclarationSpecifierAST>}+
+
+<AbstractDeclaratorAST> ::= <PointerAST>
+                        | <PointerAST> <DirectAbstractDeclaratorAST>
+                        | <DirectAbstractDeclaratorAST>
+
+<DirectAbstractDeclaratorAST> ::=  ( <AbstractDeclaratorAST> )
+                               | {<DirectAbstractDeclaratorAST>}? [ {<ConstantExpressionAST>}? ]
+                               | {<DirectAbstractDeclaratorAST>}? ( {<ParameterTypeListAST>}? )
+
+<EnumSpecifierAST> ::= enum <IdentifierAST> { <EnumeratorListAST> }
+                   | enum { <EnumeratorListAST> }
+                   | enum <IdentifierAST>
+
+<EnumeratorListAST> ::= <EnumeratorAST>
+                    | <EnumeratorListAST> , <EnumeratorAST>
+
+<EnumeratorAST> ::= <IdentifierAST>
+               | <IdentifierAST> = <ConstantExpressionAST>
+
+<TypedefNameAST> ::= <IdentifierAST>
+
+<DeclarationAST> ::=  {<DeclarationSpecifierAST>}+ {<InitDeclaratorAST>}* ;
+
+<InitDeclaratorAST> ::= <DeclaratorAST>
+                    | <DeclaratorAST> = <InitializerAST>
+
+<InitializerAST> ::= <AssignmentExpressionAST>
+                | { <InitializerListAST> }
+                | { <InitializerListAST> , }
+
+<InitializerListAST> ::= <InitializerAST>
+                     | <InitializerListAST> , <InitializerAST>
+
+<CompoundStatementAST> ::= { {<DeclarationAST>}* {<StatementAST>}* }
+
+<StatementAST> ::= <LabeledStatementAST>
+              | <ExpressionStatementAST>
+              | <CompoundStatementAST>
+              | <SelectionStatementAST>
+              | <IterationStatementAST>
+              | <JumpStatementAST>
+
+<LabeledStatementAST> ::= <IdentifierAST> : <StatementAST>
+                      | case <ConstantExpressionAST> : <StatementAST>
+                      | default : <StatementAST>
+
+<ExpressionStatementAST> ::= {<ExpressionAST>}? ;
+
+<SelectionStatementAST> ::= if ( <ExpressionAST> ) <StatementAST>
+                        | if ( <ExpressionAST> ) <StatementAST> else <StatementAST>
+                        | switch ( <ExpressionAST> ) <StatementAST>
+
+<IterationStatementAST> ::= while ( <ExpressionAST> ) <StatementAST>
+                        | do <StatementAST> while ( <ExpressionAST> ) ;
+                        | for ( {<ExpressionAST>}? ; {<ExpressionAST>}? ; {<ExpressionAST>}? ) <StatementAST>
+
+<JumpStatementAST> ::= goto <IdentifierAST> ;
+                   | continue ;
+                   | break ;
+                   | return {<ExpressionAST>}? ;
+This grammar was adapted from Section A13 of The C programming language, 2nd edition, by Brian W. Kernighan and Dennis M. Ritchie,Prentice Hall, 1988.
