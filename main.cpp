@@ -1,8 +1,9 @@
 #include <iostream>
 #include <fstream>
 #include <lex/lex.h>
+#include "src/tools/first_set_generator.h"
 
-char* enumToString(mycc::TokenKind kind) {
+const char *enumToString(mycc::TokenKind kind) {
   using namespace mycc;
   switch (kind) {
     case TokenKind::TOKEN_AUTO: return "AUTO";
@@ -94,11 +95,28 @@ char* enumToString(mycc::TokenKind kind) {
 }
 
 int main() {
-  std::ifstream testFile;
-  testFile.open("test.c");
-  mycc::Lex lex(testFile);
-  while (lex.peek()->getKind() != mycc::TokenKind::TOKEN_EOF) {
-    mycc::Token* token = lex.get();
-    std::cout << enumToString(token->getKind()) << "("<< token->getValue() << ")" << std::endl;
+//  std::ifstream testFile;
+//  testFile.open("test.c");
+//  mycc::Lex lex(testFile);
+//  while (lex.peek()->getKind() != mycc::TokenKind::TOKEN_EOF) {
+//    mycc::Token* token = lex.get();
+//    std::cout << enumToString(token->getKind()) << "("<< token->getValue() << ")" << std::endl;
+//  }
+
+  std::ifstream BNF;
+  BNF.open("BNF");
+  std::set<mycc::FirstSetGenerator::NoneTerminalId> nullalble_set;
+  mycc::FirstSetGenerator::Productions productions = mycc::FirstSetGenerator::ToProductions(BNF, nullalble_set);
+  for(auto p : productions) {
+    std::cout << p.first << " -> ";
+    for (auto symbol : p.second) {
+      if (symbol.isNone_terminal()) {
+        std::cout << symbol.getType();
+      } else {
+        std::cout << symbol.getName();
+      }
+      std::cout << ' ';
+    }
+    std::cout << std::endl;
   }
 }

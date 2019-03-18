@@ -36,7 +36,7 @@ enum class TokenKind {
   TOKEN_CONTINUE,
   TOKEN_BREAK,
   TOKEN_RETURN,
-  TOKEN_ARROW,
+  TOKEN_ARROW,//"->"
   TOKEN_LPAREN,//"("
   TOKEN_RPAREN,//")"
   TOKEN_LBRACE,//"{"
