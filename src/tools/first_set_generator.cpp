@@ -1,23 +1,28 @@
 #include <regex>
+#include <iostream>
 #include "first_set_generator.h"
-mycc::FirstSetGenerator::Symbol::Symbol(long type) : none_terminal(true), type(type) {}
-mycc::FirstSetGenerator::Symbol::Symbol(const char *src) : none_terminal(false) {
+mycc::Symbol::Symbol(long type, bool nullable)
+    : none_terminal(true), type(type), nullable(nullable) {}
+mycc::Symbol::Symbol(const char *src) : none_terminal(false), nullable(false) {
   std::strcpy(name, src);
 }
-bool mycc::FirstSetGenerator::Symbol::isNone_terminal() const {
+bool mycc::Symbol::isNone_terminal() const {
   return none_terminal;
 }
-long mycc::FirstSetGenerator::Symbol::getType() const {
+long mycc::Symbol::getType() const {
   return type;
 }
-const char *mycc::FirstSetGenerator::Symbol::getName() const {
+const char *mycc::Symbol::getName() const {
   return name;
 }
-mycc::FirstSetGenerator::Productions mycc::FirstSetGenerator::ToProductions(std::ifstream &in,
-                                                                            std::set<NoneTerminalId> &nullalble_set) {
+bool mycc::Symbol::isNullable() const {
+  return nullable;
+}
+mycc::Productions mycc::FirstSetGenerator::ToProductions(std::ifstream &in,
+                                                         std::unordered_map<std::string,
+                                                                            NoneTerminalId> &none_terminal_map) {
   ProductionId current_production = -1;
   NoneTerminalId current_none_terminal = -1;
-  std::unordered_map<std::string, NoneTerminalId> none_terminal_map;
   Productions productions;
   std::string line;
   std::regex r_production(R"((<([\w][\w-]+)>)? *(::=|\|)(( *[^ \t\n\r]+)+))");
@@ -59,9 +64,9 @@ mycc::FirstSetGenerator::Productions mycc::FirstSetGenerator::ToProductions(std:
         }
         if (is_pre_def) {
           productions[current_production].second.emplace_back(Symbol(symbol_name.c_str()));
-        }
-        else {
+        } else {
           NoneTerminalId id;
+          bool nullable = false;
           try {
             id = none_terminal_map.at(symbol_name);
           } catch (const std::out_of_range &) {
@@ -69,9 +74,9 @@ mycc::FirstSetGenerator::Productions mycc::FirstSetGenerator::ToProductions(std:
             none_terminal_map.emplace(symbol_name, id);
           }
           if (symbol[2] == '*' || symbol[2] == '?') {
-            nullalble_set.emplace(id);
+            nullable = true;
           }
-          productions[current_production].second.emplace_back(Symbol(id));
+          productions[current_production].second.emplace_back(Symbol(id, nullable));
         }
       } else {
         productions[current_production].second.emplace_back(Symbol(symbol_str.c_str()));
@@ -80,4 +85,31 @@ mycc::FirstSetGenerator::Productions mycc::FirstSetGenerator::ToProductions(std:
     }
   }
   return productions;
+}
+std::vector<std::set<std::string>> mycc::FirstSetGenerator::getFirstSets(const mycc::Productions &productions,
+                                                                         long size) {
+  std::vector<std::set<std::string>> first_sets(size);
+  bool changed;
+  do {
+    changed = false;
+    for (auto production : productions) {
+      std::set<std::string> &current_set = first_sets[production.first];
+      long before = current_set.size();
+      for (auto symbol : production.second) {
+        if (symbol.isNone_terminal()) {
+          current_set.insert(first_sets[symbol.getType()].begin(), first_sets[symbol.getType()].end());
+          if(symbol.isNullable()) {
+            continue;
+          } else {
+            break;
+          }
+        } else {
+          current_set.emplace(symbol.getName());
+          break;
+        }
+      }
+      if (before != current_set.size()) changed = true;
+    }
+  } while (changed);
+  return first_sets;
 }

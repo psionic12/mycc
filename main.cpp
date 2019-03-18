@@ -105,17 +105,26 @@ int main() {
 
   std::ifstream BNF;
   BNF.open("BNF");
-  std::set<mycc::FirstSetGenerator::NoneTerminalId> nullalble_set;
-  mycc::FirstSetGenerator::Productions productions = mycc::FirstSetGenerator::ToProductions(BNF, nullalble_set);
-  for(auto p : productions) {
-    std::cout << p.first << " -> ";
-    for (auto symbol : p.second) {
-      if (symbol.isNone_terminal()) {
-        std::cout << symbol.getType();
-      } else {
-        std::cout << symbol.getName();
-      }
-      std::cout << ' ';
+  std::unordered_map<std::string, mycc::NoneTerminalId> none_terminal_map;
+  mycc::Productions productions = mycc::FirstSetGenerator::ToProductions(BNF, none_terminal_map);
+//  for(auto p : productions) {
+//    std::cout << p.first << " -> ";
+//    for (auto symbol : p.second) {
+//      if (symbol.isNone_terminal()) {
+//        std::cout << symbol.getType();
+//      } else {
+//        std::cout << symbol.getName();
+//      }
+//      std::cout << ' ';
+//    }
+//    std::cout << std::endl;
+//  }
+  std::vector<std::set<std::string>> first_sets = mycc::FirstSetGenerator::getFirstSets(productions, none_terminal_map.size());
+  for (auto k : none_terminal_map) {
+    std::cout << k.first << " -> ";
+    auto set = first_sets[k.second];
+    for(const auto& string : set) {
+      std::cout << string << " ";
     }
     std::cout << std::endl;
   }
