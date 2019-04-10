@@ -27,12 +27,13 @@ typedef long NoneTerminalId;
 typedef long ProductionId;
 typedef std::pair<NoneTerminalId, std::vector<Symbol>> Production;
 typedef std::vector<Production> Productions;
+typedef std::vector<std::set<std::string>> FirstSets;
 class FirstSetGenerator {
  public:
-  static Productions ToProductions(std::ifstream &in, std::unordered_map<std::string, NoneTerminalId>& none_terminal_map);
-  static std::vector<std::set<std::string>> getFirstSets(const Productions&, long size);
+  static Productions ToProductions(std::ifstream &in,
+      std::unordered_map<std::string, NoneTerminalId>& none_terminal_map);
+  static FirstSets getFirstSets(const Productions&, long size);
+  static FirstSets getProductionFirstSets(const Productions&, const FirstSets&);
 };
-const std::set<std::string> pre_defined_none_terminal
-    {"identifier", "string", "integer-constant", "character-constant", "floating-constant", "enumeration-constant"};
 } //namespace mycc
 #endif //MYCCPILER_FIRST_SET_GENERATOR_H

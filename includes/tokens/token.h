@@ -143,6 +143,15 @@ class Token {
   const TokenKind getKind() const {
     return kind;
   }
+
+  const bool operator==(TokenKind kind) const {
+    return this->kind == kind;
+  }
+
+  const bool operator!=(TokenKind kind) const {
+    return this->kind != kind;
+  }
+
   const std::string &getValue() const {
     return value;
   }

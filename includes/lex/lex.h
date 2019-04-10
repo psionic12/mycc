@@ -6,31 +6,35 @@
 namespace mycc {
 class Lex {
  public:
-  explicit Lex(std::ifstream &ifstream);
-  Token *get();
-  Token *peek();
+  Lex(std::ifstream &ifstream);
+  const Token &peek(unsigned long offsite = 0);
   void consumeToken();
+  bool endOfTokens();
+  TokenKind lookupTokens(const std::initializer_list<TokenKind> &tokens);
  private:
-  Token getToken();
+  bool end_of_tokens;
+  bool eof_consumed;
+  void getToken();
   std::ifstream &in;
-  Token scanIdent();
-  Token scanNumber();
-  mycc::Token scanCharConstant();
-  Token scanStringConstant();
+  void scanIdent();
+  void scanNumber();
+  void scanCharConstant();
+  void scanStringConstant();
   void skipLineComment();
   void skipBlockComment();
   std::vector<Token> tokens;
-  Token *currentToken;
+  std::size_t current;
   long currentLineNumber;
   std::streampos currentLine;
   std::streampos tokenStart;
   std::streampos tokenEnd;
-  Token makeToken(TokenKind kind, std::string value = "");
+  void makeToken(TokenKind kind, std::string value = "");
+  void throwLexError(std::string error, TokenKind kind);
 };
 
-class TokenException : public std::exception {
+class LexException : public std::exception {
  public:
-  TokenException(Token token, std::string error);
+  LexException(Token token, std::string error);
   const char *what() const noexcept override;
  private:
   Token token;

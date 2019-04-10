@@ -1,9 +1,9 @@
-<translation-unit> ::= {<external-declaration>}*
+<translation-unit> ::= {<external-declaration>}+
 
 <external-declaration> ::= <function-definition>
                          | <declaration>
 
-<function-definition> ::= {<declaration-specifier>}* <declarator> {<declaration>}* <compound-statement>
+<function-definition> ::= {<declaration-specifier>}+ <declarator> {<declaration>}* <compound-statement>
 
 <declaration-specifier> ::= <storage-class-specifier>
                           | <type-specifier>
@@ -186,7 +186,7 @@
 <enumerator> ::= <identifier>
                | <identifier> = <constant-expression>
 
-<typedef-name> ::= <identifier>
+<typedef-name> ::= type
 
 <declaration> ::=  {<declaration-specifier>}+ {<init-declarator>}* ;
 
@@ -227,3 +227,15 @@
                    | continue ;
                    | break ;
                    | return {<expression>}? ;
+
+<identifier> ::= id
+
+<string> ::= str
+
+<integer-constant> ::= const-int
+
+<character-constant> ::= const-char
+
+<floating-constant> ::= const-float
+
+<enumeration-constant> ::= const-enum

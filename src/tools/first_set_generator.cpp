@@ -18,9 +18,10 @@ const char *mycc::Symbol::getName() const {
 bool mycc::Symbol::isNullable() const {
   return nullable;
 }
-mycc::Productions mycc::FirstSetGenerator::ToProductions(std::ifstream &in,
-                                                         std::unordered_map<std::string,
-                                                                            NoneTerminalId> &none_terminal_map) {
+mycc::Productions
+
+mycc::FirstSetGenerator::ToProductions(std::ifstream &in,
+                                       std::unordered_map<std::string, NoneTerminalId> &none_terminal_map) {
   ProductionId current_production = -1;
   NoneTerminalId current_none_terminal = -1;
   Productions productions;
@@ -55,29 +56,18 @@ mycc::Productions mycc::FirstSetGenerator::ToProductions(std::ifstream &in,
       std::string symbol_str(symbols[0]);
       if (std::regex_match(symbol_str, symbol, r_none_terminal)) {
         std::string symbol_name(symbol[1]);
-        bool is_pre_def = false;
-        for (auto pre : pre_defined_none_terminal) {
-          if (pre == symbol_name) {
-            is_pre_def = true;
-            break;
-          }
+        NoneTerminalId id;
+        bool nullable = false;
+        try {
+          id = none_terminal_map.at(symbol_name);
+        } catch (const std::out_of_range &) {
+          id = none_terminal_map.size();
+          none_terminal_map.emplace(symbol_name, id);
         }
-        if (is_pre_def) {
-          productions[current_production].second.emplace_back(Symbol(symbol_name.c_str()));
-        } else {
-          NoneTerminalId id;
-          bool nullable = false;
-          try {
-            id = none_terminal_map.at(symbol_name);
-          } catch (const std::out_of_range &) {
-            id = none_terminal_map.size();
-            none_terminal_map.emplace(symbol_name, id);
-          }
-          if (symbol[2] == '*' || symbol[2] == '?') {
-            nullable = true;
-          }
-          productions[current_production].second.emplace_back(Symbol(id, nullable));
+        if (symbol[2] == '*' || symbol[2] == '?') {
+          nullable = true;
         }
+        productions[current_production].second.emplace_back(Symbol(id, nullable));
       } else {
         productions[current_production].second.emplace_back(Symbol(symbol_str.c_str()));
       }
@@ -86,8 +76,8 @@ mycc::Productions mycc::FirstSetGenerator::ToProductions(std::ifstream &in,
   }
   return productions;
 }
-std::vector<std::set<std::string>> mycc::FirstSetGenerator::getFirstSets(const mycc::Productions &productions,
-                                                                         long size) {
+mycc::FirstSets mycc::FirstSetGenerator::getFirstSets(const mycc::Productions &productions,
+                                                      long size) {
   std::vector<std::set<std::string>> first_sets(size);
   bool changed;
   do {
@@ -98,7 +88,7 @@ std::vector<std::set<std::string>> mycc::FirstSetGenerator::getFirstSets(const m
       for (auto symbol : production.second) {
         if (symbol.isNone_terminal()) {
           current_set.insert(first_sets[symbol.getType()].begin(), first_sets[symbol.getType()].end());
-          if(symbol.isNullable()) {
+          if (symbol.isNullable()) {
             continue;
           } else {
             break;
@@ -112,4 +102,25 @@ std::vector<std::set<std::string>> mycc::FirstSetGenerator::getFirstSets(const m
     }
   } while (changed);
   return first_sets;
+}
+mycc::FirstSets mycc::FirstSetGenerator::getProductionFirstSets(const mycc::Productions &productions,
+                                                                const mycc::FirstSets &first_sets) {
+  FirstSets production_first_sets;
+  for (auto production : productions) {
+    production_first_sets.emplace_back();
+    for (auto symbol : production.second) {
+      if (symbol.isNone_terminal()) {
+        production_first_sets.back().insert(first_sets[symbol.getType()].begin(), first_sets[symbol.getType()].end());
+        if (symbol.isNullable()) {
+          continue;
+        } else {
+          break;
+        }
+      } else {
+        production_first_sets.back().insert(symbol.getName());
+        break;
+      }
+    }
+  }
+  return production_first_sets;
 }

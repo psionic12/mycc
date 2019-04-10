@@ -1,42 +1,95 @@
 #include <lex/lex.h>
 #include <fstream>
-mycc::Lex::Lex(std::ifstream &ifstream) : in(ifstream), currentLineNumber(1), currentLine(in.tellg()) {
-  tokens.emplace_back(getToken());
-  currentToken = &tokens.back();
+mycc::Lex::Lex(std::ifstream &ifstream)
+    : in(ifstream), currentLineNumber(1), currentLine(in.tellg()), current(0) {
+  while (!eof_consumed) {
+    getToken();
+  }
 }
-mycc::Token mycc::Lex::getToken() {
-  while (!in.eof()) {
+void mycc::Lex::getToken() {
+  while (!eof_consumed) {
     switch (in.peek()) {
       case ' ':
-      case '\t':
-        in.ignore();
+      case '\t':in.ignore();
         while (in.peek() == ' ' || in.peek() == '\t') {
           in.ignore();
         }
         break;
-      case '\r':
-        in.ignore();
+      case '\r':in.ignore();
         if (in.peek() == '\n') {
           in.ignore();
         }
         currentLine = in.tellg();
         ++currentLineNumber;
         break;
-      case '\n':
-        in.ignore();
+      case '\n':in.ignore();
         currentLine = in.tellg();
         ++currentLineNumber;
         break;
-      case 'A':case 'B':case 'C':case 'D':case 'E':case 'F':case 'G':case 'H':case 'I':case 'J':case 'K':
-      case 'L':case 'M':case 'N':case 'O':case 'P':case 'Q':case 'R':case 'S':case 'T':case 'U':case 'V':
-      case 'W':case 'X':case 'Y':case 'Z':case 'a':case 'b':case 'c':case 'd':case 'e':case 'f':case 'g':
-      case 'h':case 'i':case 'j':case 'k':case 'l':case 'm':case 'n':case 'o':case 'p':case 'q':case 'r':
-      case 's':case 't':case 'u':case 'v':case 'w':case 'x':case 'y':case 'z':case '_':
-        return scanIdent();
-      case '0':case '1':case '2':case '3':case '4':case '5':case '6':case '7':case '8':case '9':
-        return scanNumber();
-      case '.':
-        in.ignore();
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+      case '_':return scanIdent();
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':return scanNumber();
+      case '.':in.ignore();
         if (in.peek() >= '0' && in.peek() <= '9') {
           in.putback('.');
           return scanNumber();
@@ -44,52 +97,39 @@ mycc::Token mycc::Lex::getToken() {
           tokenStart = tokenEnd = in.tellg() -= 1;
           return makeToken(TokenKind::TOKEN_DOT);
         }
-      case ',':
-        tokenStart = tokenEnd = in.tellg();
+      case ',':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_COMMA);
-      case ';':
-        tokenStart = tokenEnd = in.tellg();
+      case ';':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_SEMI);
-      case '(':
-        tokenStart = tokenEnd = in.tellg();
+      case '(':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_LPAREN);
-      case ')':
-        tokenStart = tokenEnd = in.tellg();
+      case ')':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_RPAREN);
-      case '[':
-        tokenStart = tokenEnd = in.tellg();
+      case '[':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_LBRACKET);
-      case ']':
-        tokenStart = tokenEnd = in.tellg();
+      case ']':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_RBRACKET);
-      case '{':
-        tokenStart = tokenEnd = in.tellg();
+      case '{':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_LBRACE);
-      case '}':
-        tokenStart = tokenEnd = in.tellg();
+      case '}':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_RBRACE);
-      case '?':
-        tokenStart = tokenEnd = in.tellg();
+      case '?':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_QUES);
-      case '~':
-        tokenStart = tokenEnd = in.tellg();
+      case '~':tokenStart = tokenEnd = in.tellg();
         in.ignore();
         return makeToken(TokenKind::TOKEN_TILDE);
-      case '\'':
-        return scanCharConstant();
-      case '"':
-        return scanStringConstant();
-      case '&':
-        tokenStart = in.tellg();
+      case '\'':return scanCharConstant();
+      case '"':return scanStringConstant();
+      case '&':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '&') {
@@ -102,8 +142,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_AMP);
         }
-      case '*':
-        tokenStart = in.tellg();
+      case '*':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
@@ -113,8 +152,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_STAR);
         }
-      case '+':
-        tokenStart = in.tellg();
+      case '+':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '+') {
@@ -127,8 +165,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_PLUS);
         }
-      case '-':
-        tokenStart = in.tellg();
+      case '-':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '-') {
@@ -143,8 +180,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_SUB);
         }
-      case '!':
-        tokenStart = in.tellg();
+      case '!':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
@@ -154,8 +190,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_BANG);
         }
-      case '/':
-        tokenStart = in.tellg();
+      case '/':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '/') {
           skipLineComment();
@@ -171,8 +206,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_SLASH);
         }
-      case '%':
-        tokenStart = in.tellg();
+      case '%':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
@@ -182,8 +216,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_PERCENT);
         }
-      case '<':
-        tokenStart = in.tellg();
+      case '<':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '<') {
@@ -202,8 +235,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_LT);
         }
-      case '>':
-        tokenStart = in.tellg();
+      case '>':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '>') {
@@ -222,8 +254,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_GT);
         }
-      case '^':
-        tokenStart = in.tellg();
+      case '^':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
@@ -233,8 +264,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_CARET);
         }
-      case '|':
-        tokenStart = in.tellg();
+      case '|':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '|') {
@@ -247,8 +277,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_BAR);
         }
-      case ':':
-        tokenStart = in.tellg();
+      case ':':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == ':') {
           tokenEnd = in.tellg();
@@ -258,8 +287,7 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_COLON);
         }
-      case '=':
-        tokenStart = in.tellg();
+      case '=':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
@@ -269,32 +297,87 @@ mycc::Token mycc::Lex::getToken() {
           tokenEnd = tokenStart;
           return makeToken(TokenKind::TOKEN_EQ);
         }
-      case EOF:
-        tokenStart = tokenEnd = in.tellg();
+      case EOF:tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_EOF);
-      default:
-        tokenStart = tokenEnd = in.tellg();
-        Token token = makeToken(TokenKind::TOKEN_UNKNOWN);
+        makeToken(TokenKind::TOKEN_EOF);
+        eof_consumed = true;
+        return;
+      default:tokenStart = tokenEnd = in.tellg();
         std::string error = std::string("unknown token:");
         error.push_back((char) in.peek());
-        throw TokenException(token, error);
+        throwLexError(error, TokenKind::TOKEN_UNKNOWN);
     }
   }
-  return makeToken(TokenKind::TOKEN_EOF);
 }
-mycc::Token mycc::Lex::scanIdent() {
+void mycc::Lex::scanIdent() {
   tokenStart = in.tellg();
   std::string value;
   do {
-    switch (in.peek()) {
-      case 'A':case 'B':case 'C':case 'D':case 'E':case 'F':case 'G':case 'H':case 'I':case 'J':case 'K':case 'L':
-      case 'M':case 'N':case 'O':case 'P':case 'Q':case 'R':case 'S':case 'T':case 'U':case 'V':case 'W':case 'X':
-      case 'Y':case 'Z':case 'a':case 'b':case 'c':case 'd':case 'e':case 'f':case 'g':case 'h':case 'i':case 'j':
-      case 'k':case 'l':case 'm':case 'n':case 'o':case 'p':case 'q':case 'r':case 's':case 't':case 'u':case 'v':
-      case 'w':case 'x':case 'y':case 'z':case '_':case '0':case '1':case '2':case '3':case '4':case '5':case '6':
-      case '7':case '8':case '9':
-        value += (char) in.get();
+    char c = in.peek();
+    switch (c) {
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+      case '_':
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':value += (char) in.get();
         tokenEnd = in.tellg();
         break;
       default:TokenKind kind;
@@ -307,18 +390,75 @@ mycc::Token mycc::Lex::scanIdent() {
     }
   } while (true);
 }
-mycc::Token mycc::Lex::scanNumber() {
+void mycc::Lex::scanNumber() {
   tokenStart = in.tellg();
   std::string value;
   do {
     switch (in.peek()) {
-      case 'A':case 'B':case 'C':case 'D':case 'E':case 'F':case 'G':case 'H':case 'I':case 'J':case 'K':case 'L':
-      case 'M':case 'N':case 'O':case 'P':case 'Q':case 'R':case 'S':case 'T':case 'U':case 'V':case 'W':case 'X':
-      case 'Y':case 'Z':case 'a':case 'b':case 'c':case 'd':case 'e':case 'f':case 'g':case 'h':case 'i':case 'j':
-      case 'k':case 'l':case 'm':case 'n':case 'o':case 'p':case 'q':case 'r':case 's':case 't':case 'u':case 'v':
-      case 'w':case 'x':case 'y':case 'z':case '_':case '0':case '1':case '2':case '3':case '4':case '5':case '6':
-      case '7':case '8':case '9':case '.':
-        value += (char) in.get();
+      case 'A':
+      case 'B':
+      case 'C':
+      case 'D':
+      case 'E':
+      case 'F':
+      case 'G':
+      case 'H':
+      case 'I':
+      case 'J':
+      case 'K':
+      case 'L':
+      case 'M':
+      case 'N':
+      case 'O':
+      case 'P':
+      case 'Q':
+      case 'R':
+      case 'S':
+      case 'T':
+      case 'U':
+      case 'V':
+      case 'W':
+      case 'X':
+      case 'Y':
+      case 'Z':
+      case 'a':
+      case 'b':
+      case 'c':
+      case 'd':
+      case 'e':
+      case 'f':
+      case 'g':
+      case 'h':
+      case 'i':
+      case 'j':
+      case 'k':
+      case 'l':
+      case 'm':
+      case 'n':
+      case 'o':
+      case 'p':
+      case 'q':
+      case 'r':
+      case 's':
+      case 't':
+      case 'u':
+      case 'v':
+      case 'w':
+      case 'x':
+      case 'y':
+      case 'z':
+      case '_':
+      case '0':
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+      case '.':value += (char) in.get();
         tokenEnd = in.tellg();
         break;
       default:TokenKind kind = TokenKind::TOKEN_NUMERIC_CONSTANT;
@@ -326,15 +466,15 @@ mycc::Token mycc::Lex::scanNumber() {
     }
   } while (true);
 }
-mycc::Token mycc::Lex::scanCharConstant() {
+void mycc::Lex::scanCharConstant() {
   tokenStart = in.tellg();
   char c;
   in.ignore();
   if (in.peek() == '\'') {
-    throw TokenException(makeToken(TokenKind::TOKEN_CHARLITERAL), std::string("empty character constant"));
+    throwLexError(std::string("empty character constant"), TokenKind::TOKEN_CHARLITERAL);
   }
   if (in.peek() == '\n' || in.peek() == '\r' || in.eof()) {
-    throw TokenException(makeToken(TokenKind::TOKEN_CHARLITERAL), std::string("unclosed.char.lit"));
+    throwLexError(std::string("unclosed.char.lit"), TokenKind::TOKEN_CHARLITERAL);
   }
   if (in.peek() == '\\') {
     in.ignore();
@@ -355,7 +495,7 @@ mycc::Token mycc::Lex::scanCharConstant() {
         break;
       case '\\': c = '\\';
         break;
-      default:throw TokenException(makeToken(TokenKind::TOKEN_CHARLITERAL), std::string("illegal.esc.char"));
+      default:throwLexError(std::string("illegal.esc.char"), TokenKind::TOKEN_CHARLITERAL);
     }
   } else {
     c = (char) in.get();
@@ -366,64 +506,55 @@ mycc::Token mycc::Lex::scanCharConstant() {
     in.ignore();
     return makeToken(TokenKind::TOKEN_CHARLITERAL, std::string(1, c));
   } else {
-    throw TokenException(makeToken(TokenKind::TOKEN_CHARLITERAL), "unclosed.char.lit");
+    throwLexError(std::string("unclosed.char.lit"), TokenKind::TOKEN_CHARLITERAL);
   }
-}
-mycc::Token *mycc::Lex::get() {
-  Token *token = currentToken;
-  consumeToken();
-  return token;
 }
 void mycc::Lex::consumeToken() {
-  if (currentToken->getKind() == TokenKind::TOKEN_EOF) {
-    currentToken = nullptr;
+  if (tokens[current] != TokenKind::TOKEN_EOF) {
+    getToken();
+    ++current;
   } else {
-    tokens.emplace_back(getToken());
-    currentToken = &tokens.back();
+    end_of_tokens = true;
   }
 }
-mycc::Token *mycc::Lex::peek() {
-  return currentToken;
+const mycc::Token &
+mycc::Lex::peek(unsigned long offsite) {
+  return tokens[current + offsite];
 }
-mycc::Token mycc::Lex::makeToken(mycc::TokenKind kind, std::string value) {
-  return Token(in, Position{currentLineNumber, currentLine, tokenStart, tokenEnd}, kind, std::move(value));
+void mycc::Lex::makeToken(mycc::TokenKind kind, std::string value) {
+  return tokens.emplace_back(in,
+                             Position{currentLineNumber, currentLine, tokenStart, tokenEnd},
+                             kind,
+                             std::move(value));
 }
-mycc::Token mycc::Lex::scanStringConstant() {
+void mycc::Lex::scanStringConstant() {
   tokenStart = in.tellg();
   in.ignore();
   std::string value;
   while (in.peek() != '"') {
     if (in.peek() == '\n' || in.peek() == '\r' || in.eof()) {
-      throw TokenException(makeToken(TokenKind::TOKEN_CHARLITERAL), std::string("unclosed.char.lit"));
+      throwLexError(std::string("unclosed.char.lit"), TokenKind::TOKEN_CHARLITERAL);
     }
     if (in.peek() == '\\') {
       in.ignore();
       switch (in.get()) {
-        case 'b':
-          value.push_back('\b');
+        case 'b':value.push_back('\b');
           continue;
-        case 't':
-          value.push_back('\t');
+        case 't':value.push_back('\t');
           continue;
-        case 'n':
-          value.push_back('\n');
+        case 'n':value.push_back('\n');
           continue;
-        case 'f':
-          value.push_back('\f');
+        case 'f':value.push_back('\f');
           continue;
-        case 'r':
-          value.push_back('\r');
+        case 'r':value.push_back('\r');
           continue;
-        case '\'':
-          value.push_back('\'');
+        case '\'':value.push_back('\'');
           continue;
-        case '\"':
-          value.push_back('\"');
+        case '\"':value.push_back('\"');
           continue;
-        case '\\':
-          value.push_back('\\');
+        case '\\':value.push_back('\\');
           continue;
-        default:throw TokenException(makeToken(TokenKind::TOKEN_STRINGLITERAL), std::string("illegal.esc.char"));
+        default:throwLexError(std::string("illegal.esc.char"), TokenKind::TOKEN_STRINGLITERAL);
       }
     } else {
       value.push_back((char) in.get());
@@ -449,9 +580,27 @@ void mycc::Lex::skipBlockComment() {
     }
   }
 }
-const char *mycc::TokenException::what() const noexcept {
+void mycc::Lex::throwLexError(std::string error, mycc::TokenKind kind) {
+  Token token(in, Position{currentLineNumber, currentLine, tokenStart, tokenEnd}, kind);
+  throw LexException(std::move(token), std::move(error));
+}
+bool mycc::Lex::endOfTokens() {
+  return end_of_tokens;
+}
+mycc::TokenKind mycc::Lex::lookupTokens(const std::initializer_list<TokenKind> &tokens) {
+  for (auto it = this->tokens.begin() + current; it != this->tokens.end(); ++it) {
+    for (auto token : tokens) {
+      if (*it == token) {
+        return it->getKind();
+      }
+    }
+  }
+  return TokenKind::TOKEN_UNKNOWN;
+}
+const char *mycc::LexException::what() const noexcept {
   return error.c_str();
 }
-mycc::TokenException::TokenException(Token token, std::string error) : token(std::move(token)), error(std::move(error)) {
+mycc::LexException::LexException(Token token, std::string error)
+    : token(std::move(token)), error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
 }

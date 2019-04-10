@@ -10,11 +10,13 @@ namespace mycc {
 class Parser {
  public:
   Parser(std::ifstream& ifstream);
-  std::unique_ptr<TranslationUnitAST> parseTranslationUnit();
+  nt<TranslationUnitAST> parseTranslationUnit();
  private:
   std::ifstream &in;
   Lex lex;
-  std::unique_ptr<ExternalDeclarationAST> parseExternalDeclaration();
+  nt<ExternalDeclarationAST> parseExternalDeclaration();
+  nt<FunctionDefinitionAST> parseFunctionDefinition();
+  nt<DeclarationAST> parseDeclaration();
 };
 
 #endif //MYCCPILER_PARSER_H
