@@ -5,6 +5,7 @@
 #include <memory>
 #include <ast/ast.h>
 #include <lex/lex.h>
+#include <sema/SymbolTable.h>
 
 namespace mycc {
 class Parser {

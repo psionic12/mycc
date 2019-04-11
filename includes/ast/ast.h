@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <tokens/token.h>
+#include <sema/SymbolTable.h>
 
 namespace mycc {
 class AST {
@@ -644,9 +645,13 @@ class DeclarationAST : public AST {
 /// {
 class CompoundStatementAST : public AST {
  public:
-  CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements)
-      : AST(AST::Kind::COMPOUND_STATEMENT), decls(std::move(declarations)), stats(std::move(statements)) {}
+  CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements, const SymbolTable& table)
+      : AST(AST::Kind::COMPOUND_STATEMENT),
+        decls(std::move(declarations)),
+        stats(std::move(statements)),
+        table(table) {}
  private:
+  const SymbolTable& table;
   nts<DeclarationAST> decls;
   nts<StatementAST> stats;
 
@@ -676,9 +681,11 @@ class ExternalDeclarationAST : public AST {
 };
 class TranslationUnitAST : public AST {
  public:
-  TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations)
-      : AST(AST::Kind::TRANSLATION_UNIT), decls(std::move(external_declarations)) {}
+  TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations, const SymbolTable &table)
+      : AST(AST::Kind::TRANSLATION_UNIT), decls(std::move(external_declarations)),
+        table(table) {}
  private:
+  const SymbolTable& table;
   nts<ExternalDeclarationAST> decls;
 };
 } //namespace mycc

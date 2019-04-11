@@ -1,7 +1,10 @@
 #include <memory>
+<<<<<<< HEAD
+=======
 
 #include <memory>
 
+>>>>>>> fd9357080aa517249c7062a1c2578683b7eac34f
 #include <parser/parser.h>
 #include <tokens/token.h>
 mycc::Parser::Parser(std::ifstream &ifstream) : in(ifstream), lex(ifstream) {}
@@ -9,11 +12,15 @@ mycc::Parser::Parser(std::ifstream &ifstream) : in(ifstream), lex(ifstream) {}
 /// <translation-unit> ::= {<external-declaration>}*
 mycc::nt<mycc::TranslationUnitAST>
 mycc::Parser::parseTranslationUnit() {
+<<<<<<< HEAD
+  
+=======
+>>>>>>> fd9357080aa517249c7062a1c2578683b7eac34f
   mycc::nts<ExternalDeclarationAST> declarations;
   while (lex.peek() != TokenKind::TOKEN_EOF) {
     declarations.push_back(parseExternalDeclaration());
   }
-  return std::make_unique<TranslationUnitAST>(std::move(declarations));
+  return std::make_unique<TranslationUnitAST>(std::move(declarations), table);
 }
 
 ///<external-declaration> ::= <function-definition>
@@ -44,8 +51,12 @@ mycc::nt<mycc::ExternalDeclarationAST> mycc::Parser::parseExternalDeclaration() 
     case TokenKind::TOKEN_UNION:
     case TokenKind::TOKEN_UNSIGNED:
     case TokenKind::TOKEN_VOID:
+<<<<<<< HEAD
+    case TokenKind::TOKEN_VOLATILE: {
+=======
     case TokenKind::TOKEN_VOLATILE:
 label_lookup:
+>>>>>>> fd9357080aa517249c7062a1c2578683b7eac34f
       TokenKind kind = lex.lookupTokens({TokenKind::TOKEN_LBRACE, TokenKind::TOKEN_SEMI});
       if (kind == TokenKind::TOKEN_LBRACE) {
         return std::make_unique<mycc::ExternalDeclarationAST>(parseFunctionDefinition());
@@ -55,6 +66,10 @@ label_lookup:
         //TODO error report
       }
       break;
+<<<<<<< HEAD
+    }
+=======
+>>>>>>> fd9357080aa517249c7062a1c2578683b7eac34f
     case TokenKind::TOKEN_IDENTIFIER:
       //TODO
       // Type -> search '{' or ';';
