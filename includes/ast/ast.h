@@ -113,10 +113,9 @@ class StatementAST;
 class StringAST : public AST { public:StringAST(std::string value) : AST(AST::Kind::STRING) {}};
 class IdentifierAST : public AST {
  public:
-  IdentifierAST(std::string name, std::string value)
-      : AST(AST::Kind::IDENTIFIER), name(std::move(name)), value(std::move(value)) {}
+  IdentifierAST(std::string value)
+      : AST(AST::Kind::IDENTIFIER), value(std::move(value)) {}
  private:
-  std::string name;
   std::string value;
 };
 class AssignmentOperatorAST : public AST {
@@ -210,8 +209,7 @@ class EnumeratorAST : public AST {
 };
 class EnumeratorListAST : public AST {
  public:
-  EnumeratorListAST(nt<EnumeratorAST>) : AST(AST::Kind::ENUMERATOR_LIST, 0) {}
-  EnumeratorListAST(nt<EnumeratorListAST>, nt<EnumeratorAST>) : AST(AST::Kind::ENUMERATOR_LIST, 1) {}
+  EnumeratorListAST(nts<EnumeratorAST> &&) : AST(AST::Kind::ENUMERATOR_LIST) {}
 };
 class DirectAbstractDeclaratorAST : public AST {
  public:
@@ -242,10 +240,22 @@ class AbstractDeclaratorAST : public AST {
   AbstractDeclaratorAST(nt<PointerAST>, nt<DirectAbstractDeclaratorAST>) : AST(AST::Kind::ABSTRACT_DECLARATOR, 1) {}
   AbstractDeclaratorAST(nt<DirectAbstractDeclaratorAST>) : AST(AST::Kind::ABSTRACT_DECLARATOR, 2) {}
 };
-class EnumerationConstantAST : public AST { public:EnumerationConstantAST() : AST(AST::Kind::ENUMERATION_CONSTANT) {}};
-class FloatingConstantAST : public AST { public:FloatingConstantAST() : AST(AST::Kind::FLOATING_CONSTANT) {}};
-class CharacterConstantAST : public AST { public:CharacterConstantAST() : AST(AST::Kind::CHARACTER_CONSTANT) {}};
-class IntegerConstantAST : public AST { public:IntegerConstantAST() : AST(AST::Kind::INTEGER_CONSTANT) {}};
+class EnumerationConstantAST : public AST {
+ public:
+  EnumerationConstantAST(nt<IdentifierAST>)
+      : AST(AST::Kind::ENUMERATION_CONSTANT) {}
+};
+class FloatingConstantAST : public AST {
+ public:
+  FloatingConstantAST(std::string)
+      : AST(AST::Kind::FLOATING_CONSTANT) {}
+};
+class CharacterConstantAST : public AST {
+ public:
+  CharacterConstantAST(std::string)
+      : AST(AST::Kind::CHARACTER_CONSTANT) {}
+};
+class IntegerConstantAST : public AST { public:IntegerConstantAST(std::string) : AST(AST::Kind::INTEGER_CONSTANT) {}};
 class ConstantAST : public AST {
  public:
   ConstantAST(nt<IntegerConstantAST>) : AST(AST::Kind::CONSTANT, 0) {}
@@ -257,13 +267,16 @@ class AssignmentExpressionAST : public AST {
  public:
   AssignmentExpressionAST(nt<ConditionalExpressionAST>)
       : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0) {}
-  AssignmentExpressionAST(nt<UnaryExpressionAST>, nt<AssignmentOperatorAST>, nt<AssignmentExpressionAST>)
+  AssignmentExpressionAST(nt<ConditionalExpressionAST>, nt<AssignmentOperatorAST>, nt<AssignmentExpressionAST>)
       : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 1) {}
+      //TODO check is LHS a lvalue
 };
 class PrimaryExpressionAST : public AST {
  public:
   PrimaryExpressionAST(nt<IdentifierAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 0) {}
-  PrimaryExpressionAST(nt<ConstantAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 1) {}
+  PrimaryExpressionAST(nt<IntegerConstantAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 1) {}
+  PrimaryExpressionAST(nt<FloatingConstantAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 1) {}
+  PrimaryExpressionAST(nt<CharacterConstantAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 1) {}
   PrimaryExpressionAST(nt<StringAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 2) {}
   PrimaryExpressionAST(nt<ExpressionAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 3) {}
 };
@@ -394,16 +407,7 @@ class LogicalAndExpressionAST : public AST {
 };
 class ExpressionAST : public AST {
  public:
-  ExpressionAST(nt<AssignmentExpressionAST> assignment_expression)
-      : AST(AST::Kind::EXPRESSION, 0),
-        assignment_expression(std::move(assignment_expression)) {}
-  ExpressionAST(nt<ExpressionAST> expression, nt<AssignmentExpressionAST> assignment_expression)
-      : AST(AST::Kind::EXPRESSION, 1),
-        expression(std::move(expression)),
-        assignment_expression(std::move(assignment_expression)) {}
- private:
-  nt<AssignmentExpressionAST> assignment_expression;
-  nt<ExpressionAST> expression;
+  ExpressionAST(nts<AssignmentExpressionAST>) : AST(AST::Kind::EXPRESSION, 0) {}
 };
 class LogicalOrExpressionAST : public AST {
  public:
@@ -645,13 +649,13 @@ class DeclarationAST : public AST {
 /// {
 class CompoundStatementAST : public AST {
  public:
-  CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements, const SymbolTable& table)
+  CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements, const SymbolTable &table)
       : AST(AST::Kind::COMPOUND_STATEMENT),
         decls(std::move(declarations)),
         stats(std::move(statements)),
         table(table) {}
  private:
-  const SymbolTable& table;
+  const SymbolTable &table;
   nts<DeclarationAST> decls;
   nts<StatementAST> stats;
 
@@ -685,7 +689,7 @@ class TranslationUnitAST : public AST {
       : AST(AST::Kind::TRANSLATION_UNIT), decls(std::move(external_declarations)),
         table(table) {}
  private:
-  const SymbolTable& table;
+  const SymbolTable &table;
   nts<ExternalDeclarationAST> decls;
 };
 } //namespace mycc

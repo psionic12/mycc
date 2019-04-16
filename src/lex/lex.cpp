@@ -393,8 +393,12 @@ void mycc::Lex::scanIdent() {
 void mycc::Lex::scanNumber() {
   tokenStart = in.tellg();
   std::string value;
+  TokenKind kind = TokenKind::TOKEN_INT_CONSTANT;
   do {
     switch (in.peek()) {
+      case '.':
+        // TODO right?
+        kind = TokenKind::TOKEN_FLOAT_CONSTANT;
       case 'A':
       case 'B':
       case 'C':
@@ -457,11 +461,10 @@ void mycc::Lex::scanNumber() {
       case '6':
       case '7':
       case '8':
-      case '9':
-      case '.':value += (char) in.get();
+      case '9':value += (char) in.get();
         tokenEnd = in.tellg();
         break;
-      default:TokenKind kind = TokenKind::TOKEN_NUMERIC_CONSTANT;
+      default:
         return makeToken(kind, std::move(value));
     }
   } while (true);

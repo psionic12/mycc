@@ -10,14 +10,76 @@
 namespace mycc {
 class Parser {
  public:
-  Parser(std::ifstream& ifstream);
+  Parser(std::ifstream& ifstream, std::vector<SymbolTable>& tables);
   nt<TranslationUnitAST> parseTranslationUnit();
  private:
   std::ifstream &in;
   Lex lex;
+  std::vector<SymbolTable>& tables;
+  SymbolTable* pTable;
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
+  nt<DeclarationSpecifierAST> parseDeclarationSpecifier();
+  nt<StorageClassSpecifierAST> parseStorageClassSpecifier();
+  nt<TypeSpecifierAST> parseTypeSpecifier();
+  nt<StructOrUnionSpecifierAST> parseStructOrUnionSpecifier();
+  nt<StructOrUnionAST> parseStructOrUnion();
+  nt<StructDeclarationAST> parseStructDeclaration();
+  nt<SpecifierQualifierAST> parseSpecifierQualifier();
+  nt<StructDeclaratorListAST> parseStructDeclaratorList();
+  nt<StructDeclaratorAST> parseStructDeclarator();
+  nt<DeclaratorAST> parseDeclarator();
+  nt<PointerAST> parsePointer();
+  nt<TypeQualifierAST> parseTypeQualifier();
+  nt<DirectDeclaratorAST> parseDirectDeclarator();
+  nt<ConstantExpressionAST> parseConstantExpression();
+  nt<ConditionalExpressionAST> parseConditionalExpression();
+  nt<LogicalOrExpressionAST> parseLogicalOrExpression();
+  nt<LogicalAndExpressionAST> parseLogicalAndExpression();
+  nt<InclusiveOrExpressionAST> parseInclusiveOrExpression();
+  nt<ExclusiveOrExpressionAST> parseExclusiveOrExpression();
+  nt<AndExpressionAST> parseAndExpression();
+  nt<EqualityExpressionAST> parseEqualityExpression();
+  nt<RelationalExpressionAST> parseRelationalExpression();
+  nt<ShiftExpressionAST> parseShiftExpression();
+  nt<AdditiveExpressionAST> parseAdditiveExpression();
+  nt<MultiplicativeExpressionAST> parseMultiplicativeExpression();
+  nt<CastExpressionAST> parseCastExpression();
+  nt<UnaryExpressionAST> parseUnaryExpression();
+  nt<PostfixExpressionAST> parsePostfixExpression();
+  nt<PrimaryExpressionAST> parsePrimaryExpression();
+  nt<ConstantAST> parseConstant();
+  nt<ExpressionAST> parseExpression();
+  nt<AssignmentExpressionAST> parseAssignmentExpression();
+  nt<AssignmentOperatorAST> parseAssignmentOperator();
+  nt<UnaryOperatorAST> parseUnaryOperator();
+  nt<TypeNameAST> parseTypeName();
+  nt<ParameterTypeListAST> parseParameterTypeList();
+  nt<ParameterListAST> parseParameterList();
+  nt<ParameterDeclarationAST> parseParameterDeclaration();
+  nt<AbstractDeclaratorAST> parseAbstractDeclarator();
+  nt<DirectAbstractDeclaratorAST> parseDirectAbstractDeclarator();
+  nt<EnumSpecifierAST> parseEnumSpecifier();
+  nt<EnumeratorListAST> parseEnumeratorList();
+  nt<EnumeratorAST> parseEnumerator();
+  nt<TypedefNameAST> parseTypedefName();
   nt<DeclarationAST> parseDeclaration();
+  nt<InitDeclaratorAST> parseInitDeclarator();
+  nt<InitializerAST> parseInitializer();
+  nt<InitializerListAST> parseInitializerList();
+  nt<CompoundStatementAST> parseCompoundStatement();
+  nt<StatementAST> parseStatement();
+  nt<LabeledStatementAST> parseLabeledStatement();
+  nt<ExpressionStatementAST> parseExpressionStatement();
+  nt<SelectionStatementAST> parseSelectionStatement();
+  nt<IterationStatementAST> parseIterationStatement();
+  nt<JumpStatementAST> parseJumpStatement();
+  nt<IdentifierAST> parseIdentifer();
+
+  const std::string& accept(TokenKind kind);
+  bool expect(TokenKind kind);
+  std::runtime_error parseError(const std::string msg);
+  int precedence(TokenKind kind);
 };
 
 #endif //MYCCPILER_PARSER_H
