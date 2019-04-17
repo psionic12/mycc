@@ -24,28 +24,71 @@ std::runtime_error mycc::Parser::parseError(const std::string msg) {
   //TODO finish this
   return std::runtime_error(msg);
 }
-int mycc::Parser::precedence(mycc::TokenKind kind) {
-  switch (kind) {
-    case TokenKind::TOKEN_BARBAR:return 1;
-    case TokenKind::TOKEN_AMPAMP:return 2;
-    case TokenKind::TOKEN_BAR:return 3;
-    case TokenKind::TOKEN_CARET:return 4;
-    case TokenKind::TOKEN_AMP:return 5;
-    case TokenKind::TOKEN_EQEQ:
-    case TokenKind::TOKEN_BANGEQ:return 6;
-    case TokenKind::TOKEN_LT:
-    case TokenKind::TOKEN_GT:
-    case TokenKind::TOKEN_LTEQ:
-    case TokenKind::TOKEN_GTEQ:return 7;
-    case TokenKind::TOKEN_LTLT:
-    case TokenKind::TOKEN_GTGT:return 8;
-    case TokenKind::TOKEN_PLUS:
-    case TokenKind::TOKEN_SUB:return 9;
-    case TokenKind::TOKEN_STAR:
-    case TokenKind::TOKEN_SLASH:
-    case TokenKind::TOKEN_PERCENT:return 10;
-    default:throw parseError(std::string("precedence for illigel token: ").append(enumToString(kind)));
+int mycc::Parser::precedence(mycc::InfixOp op) {
+  switch (op) {
+    case InfixOp::BARBAR:return 1;
+    case InfixOp::AMPAMP:return 2;
+    case InfixOp::BAR:return 3;
+    case InfixOp::CARET:return 4;
+    case InfixOp::AMP:return 5;
+    case InfixOp::EQEQ:
+    case InfixOp::BANGEQ:return 6;
+    case InfixOp::LT:
+    case InfixOp::GT:
+    case InfixOp::LTEQ:
+    case InfixOp::GTEQ:return 7;
+    case InfixOp::LTLT:
+    case InfixOp::GTGT:return 8;
+    case InfixOp::PLUS:
+    case InfixOp::SUB:return 9;
+    case InfixOp::STAR:
+    case InfixOp::SLASH:
+    case InfixOp::PERCENT:return 10;
   }
+}
+mycc::InfixOp mycc::Parser::parseInfixOp() {
+  InfixOp op;
+  TokenKind kind = lex.peek().getKind();
+  switch (kind) {
+    case TokenKind::TOKEN_BARBAR:op = InfixOp::BARBAR;
+      break;
+    case TokenKind::TOKEN_AMPAMP:op = InfixOp::AMPAMP;
+      break;
+    case TokenKind::TOKEN_BAR:op = InfixOp::BAR;
+      break;
+    case TokenKind::TOKEN_CARET:op = InfixOp::CARET;
+      break;
+    case TokenKind::TOKEN_AMP:op = InfixOp::AMP;
+      break;
+    case TokenKind::TOKEN_EQEQ:op = InfixOp::EQEQ;
+      break;
+    case TokenKind::TOKEN_BANGEQ:op = InfixOp::BANGEQ;
+      break;
+    case TokenKind::TOKEN_LT:op = InfixOp::LT;
+      break;
+    case TokenKind::TOKEN_GT:op = InfixOp::GT;
+      break;
+    case TokenKind::TOKEN_LTEQ:op = InfixOp::LTEQ;
+      break;
+    case TokenKind::TOKEN_GTEQ:op = InfixOp::GTEQ;
+      break;
+    case TokenKind::TOKEN_LTLT:op = InfixOp::LTLT;
+      break;
+    case TokenKind::TOKEN_GTGT:op = InfixOp::GTGT;
+      break;
+    case TokenKind::TOKEN_PLUS:op = InfixOp::PLUS;
+      break;
+    case TokenKind::TOKEN_SUB:op = InfixOp::SUB;
+      break;
+    case TokenKind::TOKEN_STAR:op = InfixOp::STAR;
+      break;
+    case TokenKind::TOKEN_SLASH:op = InfixOp::SLASH;
+      break;
+    case TokenKind::TOKEN_PERCENT:op = InfixOp::PERCENT;
+      break;
+    default:throw parseError(std::string("unknown infix operator: ").append(enumToString(kind)));
+  }
+  return op;
 }
 
 /// <translation-unit> ::= {<external-declaration>}*
@@ -308,7 +351,7 @@ mycc::nt<mycc::ConditionalExpressionAST> mycc::Parser::parseConditionalExpressio
 }
 
 // Traditional top down parsing will not work in parsing logical expressions.
-// All logical expressions can be abstract as <logical-expression> <infixop> <logical-expression>
+// All logical expressions can be abstract as <term> <infixop> <term>
 mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression() {
   return mycc::nt<mycc::LogicalOrExpressionAST>();
 }

@@ -10,5 +10,5 @@ add_executable(myccpiler
         src/sema/SymbolTable.cpp)
 target_include_directories(myccpiler PUBLIC includes)
 
-add_executable(first_sets src/tools/main.cpp src/tools/first_set_generator.cpp)
+add_executable(first_sets src/tools/main.cpp src/tools/first_set_generator.cpp includes/sema/operator.h)
 target_include_directories(first_sets PUBLIC includes)

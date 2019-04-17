@@ -6,6 +6,7 @@
 #include <ast/ast.h>
 #include <lex/lex.h>
 #include <sema/SymbolTable.h>
+#include <sema/operator.h>
 
 namespace mycc {
 class Parser {
@@ -75,11 +76,12 @@ class Parser {
   nt<IterationStatementAST> parseIterationStatement();
   nt<JumpStatementAST> parseJumpStatement();
   nt<IdentifierAST> parseIdentifer();
+  InfixOp parseInfixOp();
 
   const std::string& accept(TokenKind kind);
   bool expect(TokenKind kind);
   std::runtime_error parseError(const std::string msg);
-  int precedence(TokenKind kind);
+  int precedence(InfixOp op);
 };
 
 #endif //MYCCPILER_PARSER_H
