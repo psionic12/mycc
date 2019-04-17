@@ -46,9 +46,8 @@ int mycc::Parser::precedence(mycc::InfixOp op) {
     case InfixOp::PERCENT:return 10;
   }
 }
-mycc::InfixOp mycc::Parser::parseInfixOp() {
+mycc::InfixOp mycc::Parser::isInfixOp(TokenKind kind) {
   InfixOp op;
-  TokenKind kind = lex.peek().getKind();
   switch (kind) {
     case TokenKind::TOKEN_BARBAR:op = InfixOp::BARBAR;
       break;
@@ -86,7 +85,7 @@ mycc::InfixOp mycc::Parser::parseInfixOp() {
       break;
     case TokenKind::TOKEN_PERCENT:op = InfixOp::PERCENT;
       break;
-    default:throw parseError(std::string("unknown infix operator: ").append(enumToString(kind)));
+    default:throw NotAInfixOpException{};
   }
   return op;
 }
@@ -352,6 +351,22 @@ mycc::nt<mycc::ConditionalExpressionAST> mycc::Parser::parseConditionalExpressio
 
 // Traditional top down parsing will not work in parsing logical expressions.
 // All logical expressions can be abstract as <term> <infixop> <term>
-mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression() {
-  return mycc::nt<mycc::LogicalOrExpressionAST>();
+mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression(int calling_prec) {
+  auto term1 = std::make_unique<LogicalOrExpressionAST>(parseCastExpression());
+  while (true) {
+    try {
+      auto op = isInfixOp(lex.peek().getKind());
+      auto prec = precedence(op);
+      if (prec <= calling_prec) {
+        return term1;
+      } else {
+        lex.consumeToken();
+        auto term2 = parseLogicalOrExpression(prec);
+        term1 = std::make_unique<LogicalOrExpressionAST>(term1, op, term2);
+      }
+    } catch (const NotAInfixOpException &e) {
+      break;
+    }
+  }
+  return term1;
 }

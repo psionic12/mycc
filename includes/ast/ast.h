@@ -411,16 +411,8 @@ class ExpressionAST : public AST {
 };
 class LogicalOrExpressionAST : public AST {
  public:
-  LogicalOrExpressionAST(nt<LogicalAndExpressionAST> logical_and_expression)
-      : AST(AST::Kind::LOGICAL_OR_EXPRESSION, 0), logical_and_expression(std::move(logical_and_expression)) {}
-  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> logical_or_expression,
-                         nt<LogicalAndExpressionAST> logical_and_expression)
-      : AST(AST::Kind::LOGICAL_OR_EXPRESSION, 1),
-        logical_or_expression(std::move(logical_or_expression)),
-        logical_and_expression(std::move(logical_and_expression)) {}
- private:
-  nt<LogicalAndExpressionAST> logical_and_expression;
-  nt<LogicalOrExpressionAST> logical_or_expression;
+  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, TokenKind kind, nt<LogicalOrExpressionAST> right);
+  LogicalOrExpressionAST(nt<CastExpressionAST> leaf);
 };
 class ConditionalExpressionAST : public AST {
  public:

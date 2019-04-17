@@ -9,15 +9,18 @@
 #include <sema/operator.h>
 
 namespace mycc {
+
+class NotAInfixOpException {};
+
 class Parser {
  public:
-  Parser(std::ifstream& ifstream, std::vector<SymbolTable>& tables);
+  Parser(std::ifstream &ifstream, std::vector<SymbolTable> &tables);
   nt<TranslationUnitAST> parseTranslationUnit();
  private:
   std::ifstream &in;
   Lex lex;
-  std::vector<SymbolTable>& tables;
-  SymbolTable* pTable;
+  std::vector<SymbolTable> &tables;
+  SymbolTable *pTable;
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
   nt<DeclarationSpecifierAST> parseDeclarationSpecifier();
@@ -35,7 +38,7 @@ class Parser {
   nt<DirectDeclaratorAST> parseDirectDeclarator();
   nt<ConstantExpressionAST> parseConstantExpression();
   nt<ConditionalExpressionAST> parseConditionalExpression();
-  nt<LogicalOrExpressionAST> parseLogicalOrExpression();
+  nt<LogicalOrExpressionAST> parseLogicalOrExpression(int calling_prec = 0);
   nt<LogicalAndExpressionAST> parseLogicalAndExpression();
   nt<InclusiveOrExpressionAST> parseInclusiveOrExpression();
   nt<ExclusiveOrExpressionAST> parseExclusiveOrExpression();
@@ -76,9 +79,9 @@ class Parser {
   nt<IterationStatementAST> parseIterationStatement();
   nt<JumpStatementAST> parseJumpStatement();
   nt<IdentifierAST> parseIdentifer();
-  InfixOp parseInfixOp();
+  InfixOp isInfixOp(TokenKind kind);
 
-  const std::string& accept(TokenKind kind);
+  const std::string &accept(TokenKind kind);
   bool expect(TokenKind kind);
   std::runtime_error parseError(const std::string msg);
   int precedence(InfixOp op);

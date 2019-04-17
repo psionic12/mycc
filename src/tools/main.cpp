@@ -35,7 +35,7 @@ int main() {
 
   mycc::FirstSets production_first_sets = mycc::FirstSetGenerator::getProductionFirstSets(productions, first_sets);
   for (int i = 0; i < production_first_sets.size(); ++i) {
-    std::cout << i << ": ";
+    std::cout << i + 1 << ": ";
     for (const auto& str: production_first_sets[i]) {
       std::cout << str << " ";
     }
