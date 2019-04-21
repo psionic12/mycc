@@ -1,8 +1,8 @@
 #include <memory>
 #include <parser/parser.h>
 #include <tokens/token.h>
-mycc::Parser::Parser(std::ifstream &ifstream, std::vector<SymbolTable> &tables)
-    : in(ifstream), lex(ifstream), tables(tables) {}
+mycc::Parser::Parser(std::ifstream &ifstream)
+    : in(ifstream), lex(ifstream) {}
 bool mycc::Parser::expect(mycc::TokenKind kind) {
   if (lex.peek() == kind) {
     lex.consumeToken();
@@ -156,23 +156,36 @@ mycc::nt<mycc::UnaryOperatorAST> mycc::Parser::parseUnaryOperator() {
 ///                        | &=
 ///                        | ^=
 ///                        | |=
-mycc::nt<mycc::AssignmentOperatorAST> mycc::Parser::parseAssignmentOperator() {
+mycc::AssignmentOp mycc::Parser::parseAssignmentOperator() {
+  AssignmentOp op;
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_EQ:
-    case TokenKind::TOKEN_STAREQ:
-    case TokenKind::TOKEN_SLASHEQ:
-    case TokenKind::TOKEN_PERCENTEQ:
-    case TokenKind::TOKEN_PLUSEQ:
-    case TokenKind::TOKEN_SUBEQ:
-    case TokenKind::TOKEN_LTLTEQ:
-    case TokenKind::TOKEN_GTGTEQ:
-    case TokenKind::TOKEN_AMPEQ:
-    case TokenKind::TOKEN_CARETEQ:
-    case TokenKind::TOKEN_BAREQ:lex.consumeToken();
-      return std::make_unique<mycc::AssignmentOperatorAST>(lex.peek().getKind());
+    case TokenKind::TOKEN_EQ:op = AssignmentOp::EQ;
+      break;
+    case TokenKind::TOKEN_STAREQ:op = AssignmentOp::STAREQ;
+      break;
+    case TokenKind::TOKEN_SLASHEQ:op = AssignmentOp::SLASHEQ;
+      break;
+    case TokenKind::TOKEN_PERCENTEQ:op = AssignmentOp::PERCENTEQ;
+      break;
+    case TokenKind::TOKEN_PLUSEQ:op = AssignmentOp::PLUSEQ;
+      break;
+    case TokenKind::TOKEN_SUBEQ:op = AssignmentOp::SUBEQ;
+      break;
+    case TokenKind::TOKEN_LTLTEQ:op = AssignmentOp::LTLTEQ;
+      break;
+    case TokenKind::TOKEN_GTGTEQ:op = AssignmentOp::GTGTEQ;
+      break;
+    case TokenKind::TOKEN_AMPEQ:op = AssignmentOp::AMPEQ;
+      break;
+    case TokenKind::TOKEN_CARETEQ:op = AssignmentOp::CARETEQ;
+      break;
+    case TokenKind::TOKEN_BAREQ:op = AssignmentOp::BAREQ;
+      break;
     default:
       throw parseError("assignment operator expected '=', '*=', '/=', '%=', '+=', '-=', '<<=', '>>=', '&=', '^=', '|='");
   }
+  lex.consumeToken();
+  return op;
 }
 
 ///<type-qualifier> ::= const
@@ -327,10 +340,10 @@ mycc::nt<mycc::AssignmentExpressionAST> mycc::Parser::parseAssignmentExpression(
     case TokenKind::TOKEN_AMPEQ:
     case TokenKind::TOKEN_CARETEQ:
     case TokenKind::TOKEN_BAREQ:
-      return std::make_unique<AssignmentExpressionAST>(LHS,
+      return std::make_unique<AssignmentExpressionAST>(std::move(LHS),
                                                        parseAssignmentOperator(),
                                                        parseAssignmentExpression());
-    default:return std::make_unique<AssignmentExpressionAST>(LHS);
+    default:return std::make_unique<AssignmentExpressionAST>(std::move(LHS));
   }
 }
 
@@ -343,9 +356,9 @@ mycc::nt<mycc::ConditionalExpressionAST> mycc::Parser::parseConditionalExpressio
     auto exp = parseExpression();
     accept(TokenKind::TOKEN_COLON);
     auto conditional = parseConditionalExpression();
-    return std::make_unique<ConditionalExpressionAST>(LHS, exp, conditional);
+    return std::make_unique<ConditionalExpressionAST>(std::move(LHS), std::move(exp), std::move(conditional));
   } else {
-    return std::make_unique<ConditionalExpressionAST>(LHS);
+    return std::make_unique<ConditionalExpressionAST>(std::move(LHS));
   }
 }
 
@@ -354,19 +367,110 @@ mycc::nt<mycc::ConditionalExpressionAST> mycc::Parser::parseConditionalExpressio
 mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression(int calling_prec) {
   auto term1 = std::make_unique<LogicalOrExpressionAST>(parseCastExpression());
   while (true) {
+    InfixOp op;
     try {
-      auto op = isInfixOp(lex.peek().getKind());
-      auto prec = precedence(op);
-      if (prec <= calling_prec) {
-        return term1;
-      } else {
-        lex.consumeToken();
-        auto term2 = parseLogicalOrExpression(prec);
-        term1 = std::make_unique<LogicalOrExpressionAST>(term1, op, term2);
-      }
+      op = isInfixOp(lex.peek().getKind());
     } catch (const NotAInfixOpException &e) {
       break;
     }
+    auto prec = precedence(op);
+    if (prec <= calling_prec) {
+      return term1;
+    } else {
+      lex.consumeToken();
+      auto term2 = parseLogicalOrExpression(prec);
+      term1 = std::make_unique<LogicalOrExpressionAST>(std::move(term1), op, std::move(term2));
+    }
+
   }
   return term1;
+}
+
+/// <declaration> ::=  {<declaration-specifier>}+ {<init-declarator>}* ;
+mycc::nt<mycc::DeclarationAST> mycc::Parser::parseDeclaration() {
+  nts<DeclarationSpecifierAST> specifiers;
+  do {
+    specifiers.push_back(parseDeclarationSpecifier());
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_IDENTIFIER:
+        try {
+          if (!pTable->lookup(lex.peek().getValue()).isType()) {
+            break;
+          }
+        } catch (SymbolNotFoundException) {
+          break;
+        }
+      case TokenKind::TOKEN_AUTO:
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_EXTERN:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_REGISTER:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STATIC:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_TYPEDEF:
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE:continue;
+      default:break;
+    }
+    break;
+  } while (true);
+
+  nts<InitDeclaratorAST> init_decls;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_IDENTIFIER:
+      case TokenKind::TOKEN_LPAREN:
+      case TokenKind::TOKEN_STAR:init_decls.push_back(parseInitDeclarator());
+        continue;
+      default:break;
+    }
+    break;
+  }
+  accept(TokenKind::TOKEN_SEMI);
+  return std::make_unique<DeclarationAST>(std::move(specifiers), std::move(init_decls));
+}
+
+///<declaration-specifier> ::= <storage-class-specifier>
+///                          | <type-specifier>
+///                          | <type-qualifier>
+mycc::nt<mycc::DeclarationSpecifierAST> mycc::Parser::parseDeclarationSpecifier() {
+  switch (lex.peek().getKind()) {
+    case TokenKind::TOKEN_AUTO:
+    case TokenKind::TOKEN_EXTERN:
+    case TokenKind::TOKEN_REGISTER:
+    case TokenKind::TOKEN_STATIC:
+    case TokenKind::TOKEN_TYPEDEF:return std::make_unique<DeclarationSpecifierAST>(parseStorageClassSpecifier());
+    case TokenKind::TOKEN_CHAR:
+    case TokenKind::TOKEN_DOUBLE:
+    case TokenKind::TOKEN_ENUM:
+    case TokenKind::TOKEN_FLOAT:
+    case TokenKind::TOKEN_INT:
+    case TokenKind::TOKEN_LONG:
+    case TokenKind::TOKEN_SHORT:
+    case TokenKind::TOKEN_SIGNED:
+    case TokenKind::TOKEN_STRUCT:
+    case TokenKind::TOKEN_IDENTIFIER:
+      try {
+        if (!pTable->lookup(lex.peek().getValue()).isType()) {
+          throw parseError("declaration specifier must be a type");
+        }
+      } catch (SymbolNotFoundException) {
+        throw parseError("except declaration specifier");
+      }
+    case TokenKind::TOKEN_UNION:
+    case TokenKind::TOKEN_UNSIGNED:
+    case TokenKind::TOKEN_VOID:return std::make_unique<DeclarationSpecifierAST>(parseTypeSpecifier());
+    case TokenKind::TOKEN_CONST:
+    case TokenKind::TOKEN_VOLATILE:return std::make_unique<DeclarationSpecifierAST>(parseTypeQualifier());
+    default:throw parseError("except declaration specifier");
+  }
 }

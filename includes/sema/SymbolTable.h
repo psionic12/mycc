@@ -3,9 +3,11 @@
 
 #include <map>
 #include <vector>
+#include <string>
 
 namespace mycc {
 class DeclarationAST;
+class SymbolNotFoundException {};
 class SymbolTable {
  public:
   SymbolTable(const std::string& name, const SymbolTable &father);

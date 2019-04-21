@@ -5,7 +5,7 @@
 #define MYCCPILER_AST_H
 #include <vector>
 #include <memory>
-#include <tokens/token.h>
+#include <sema/operator.h>
 #include <sema/SymbolTable.h>
 
 namespace mycc {
@@ -36,17 +36,7 @@ class AST {
     DIRECT_DECLARATOR,
     PARAMETER_TYPE_LIST,
     CONDITIONAL_EXPRESSION,
-    LOGICAL_OR_EXPRESSION,
     EXPRESSION,
-    LOGICAL_AND_EXPRESSION,
-    INCLUSIVE_OR_EXPRESSION,
-    EXCLUSIVE_OR_EXPRESSION,
-    AND_EXPRESSION,
-    EQUALITY_EXPRESSION,
-    RELATIONAL_EXPRESSION,
-    SHIFT_EXPRESSION,
-    ADDITIVE_EXPRESSION,
-    MULTIPLICATIVE_EXPRESSION,
     CAST_EXPRESSION,
     UNARY_EXPRESSION,
     TYPE_NAME,
@@ -120,14 +110,16 @@ class IdentifierAST : public AST {
 };
 class AssignmentOperatorAST : public AST {
  public:
-  AssignmentOperatorAST(TokenKind)
-      : AST(AST::Kind::ASSIGNMENT_OPERATOR) {}
+  AssignmentOperatorAST(AssignmentOp op)
+      : AST(AST::Kind::ASSIGNMENT_OPERATOR), op(op) {}
+ private:
+  AssignmentOp op;
 };
 class StructOrUnionAST : public AST {
  public:
-  StructOrUnionAST(TokenKind token_kind) : AST(AST::Kind::STRUCT_OR_UNION), token_kind(token_kind) {}
+  StructOrUnionAST(bool is_struct) : AST(AST::Kind::STRUCT_OR_UNION), is_struct(is_struct) {}
  private:
-  TokenKind token_kind;
+  bool is_struct;
 };
 class TypedefNameAST : public AST {
  public:
@@ -137,11 +129,10 @@ class TypedefNameAST : public AST {
 };
 class TypeQualifierAST : public AST {
  public:
-  TypeQualifierAST(TokenKind kind) : AST(AST::Kind::TYPE_QUALIFIER), token_kind(kind) {}
- private:
-  TokenKind token_kind;
+  // true for const, false for volatile
+  TypeQualifierAST(bool is_const) : AST(AST::Kind::TYPE_QUALIFIER) {}
 };
-class UnaryOperatorAST : public AST { public:UnaryOperatorAST(TokenKind) : AST(AST::Kind::UNARY_OPERATOR) {}};
+class UnaryOperatorAST : public AST { public:UnaryOperatorAST(UnaryOp op) : AST(AST::Kind::UNARY_OPERATOR) {}};
 class JumpStatementAST : public AST {
  public:
   enum class JumpType : int {
@@ -269,7 +260,7 @@ class AssignmentExpressionAST : public AST {
       : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0) {}
   AssignmentExpressionAST(nt<ConditionalExpressionAST>, nt<AssignmentOperatorAST>, nt<AssignmentExpressionAST>)
       : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 1) {}
-      //TODO check is LHS a lvalue
+  //TODO check is LHS a lvalue
 };
 class PrimaryExpressionAST : public AST {
  public:
@@ -320,98 +311,13 @@ class CastExpressionAST : public AST {
   CastExpressionAST(nt<UnaryExpressionAST>) : AST(AST::Kind::CAST_EXPRESSION, 0) {}
   CastExpressionAST(nt<TypeNameAST>, nt<CastExpressionAST>) : AST(AST::Kind::CAST_EXPRESSION, 1) {}
 };
-class MultiplicativeExpressionAST : public AST {
- public:
-  MultiplicativeExpressionAST(nt<CastExpressionAST>)
-      : AST(AST::Kind::MULTIPLICATIVE_EXPRESSION, 0) {}
-  enum class RelationalType : int {
-    MUL = 1,
-    DIV = 2,
-    MOD = 3,
-  };
-  MultiplicativeExpressionAST(nt<MultiplicativeExpressionAST>, nt<CastExpressionAST>, RelationalType type)
-      : AST(AST::Kind::MULTIPLICATIVE_EXPRESSION, static_cast<int>(type)) {}
-};
-class AdditiveExpressionAST : public AST {
- public:
-  AdditiveExpressionAST(nt<MultiplicativeExpressionAST>) : AST(AST::Kind::ADDITIVE_EXPRESSION, 0) {}
-  enum class RelationalType : int {
-    ADD = 1,
-    MIN = 2,
-  };
-  AdditiveExpressionAST(nt<AdditiveExpressionAST>, nt<MultiplicativeExpressionAST>, RelationalType type)
-      : AST(AST::Kind::ADDITIVE_EXPRESSION, static_cast<int>(type)) {}
-};
-class ShiftExpressionAST : public AST {
- public:
-  ShiftExpressionAST(nt<AdditiveExpressionAST>) : AST(AST::Kind::SHIFT_EXPRESSION, 0) {}
-  enum class RelationalType : int {
-    LTLT = 1,
-    GTGT = 2,
-  };
-  ShiftExpressionAST(nt<ShiftExpressionAST>, nt<AdditiveExpressionAST>, RelationalType type)
-      : AST(AST::Kind::SHIFT_EXPRESSION, static_cast<int>(type)) {}
-};
-class RelationalExpressionAST : public AST {
- public:
-  RelationalExpressionAST(nt<ShiftExpressionAST>)
-      : AST(AST::Kind::RELATIONAL_EXPRESSION, 0) {}
-  enum class RelationalType : int {
-    LT = 1,
-    GT = 2,
-    LTEQ = 3,
-    GTEQ = 4,
-  };
-  RelationalExpressionAST(nt<RelationalExpressionAST>, nt<ShiftExpressionAST>, RelationalType type)
-      : AST(AST::Kind::RELATIONAL_EXPRESSION, static_cast<int>(type)) {}
-};
-class EqualityExpressionAST : public AST {
- public:
-  EqualityExpressionAST(nt<RelationalExpressionAST>) : AST(AST::Kind::EQUALITY_EXPRESSION, 0) {}
-  EqualityExpressionAST(nt<EqualityExpressionAST>, nt<RelationalExpressionAST>, bool equal)
-      : AST(AST::Kind::EQUALITY_EXPRESSION, equal ? 1 : 2) {}
-
-};
-class AndExpressionAST : public AST {
- public:
-  AndExpressionAST(nt<EqualityExpressionAST>) : AST(AST::Kind::AND_EXPRESSION, 0) {}
-  AndExpressionAST(nt<AndExpressionAST>, nt<EqualityExpressionAST>) : AST(AST::Kind::AND_EXPRESSION, 1) {}
-};
-class ExclusiveOrExpressionAST : public AST {
- public:
-  ExclusiveOrExpressionAST(nt<AndExpressionAST>)
-      : AST(AST::Kind::EXCLUSIVE_OR_EXPRESSION, 0) {}
-  ExclusiveOrExpressionAST(nt<ExclusiveOrExpressionAST>, nt<AndExpressionAST>)
-      : AST(AST::Kind::EXCLUSIVE_OR_EXPRESSION, 1) {}
-};
-class InclusiveOrExpressionAST : public AST {
- public:
-  InclusiveOrExpressionAST(nt<ExclusiveOrExpressionAST>)
-      : AST(AST::Kind::INCLUSIVE_OR_EXPRESSION, 0) {}
-  InclusiveOrExpressionAST(nt<InclusiveOrExpressionAST>, nt<ExclusiveOrExpressionAST>)
-      : AST(AST::Kind::INCLUSIVE_OR_EXPRESSION, 1) {}
-};
-
-class LogicalAndExpressionAST : public AST {
- public:
-  LogicalAndExpressionAST(nt<InclusiveOrExpressionAST> inclusive_or_expression)
-      : AST(AST::Kind::LOGICAL_AND_EXPRESSION, 0), inclusive_or_expression(std::move(inclusive_or_expression)) {}
-  LogicalAndExpressionAST(nt<LogicalAndExpressionAST> logical_and_exression,
-                          nt<InclusiveOrExpressionAST> inclusive_or_expression)
-      : AST(AST::Kind::LOGICAL_AND_EXPRESSION, 1),
-        logical_and_exression(std::move(logical_and_exression)),
-        inclusive_or_expression(std::move(inclusive_or_expression)) {}
- private:
-  nt<InclusiveOrExpressionAST> inclusive_or_expression;
-  nt<LogicalAndExpressionAST> logical_and_exression;
-};
 class ExpressionAST : public AST {
  public:
   ExpressionAST(nts<AssignmentExpressionAST>) : AST(AST::Kind::EXPRESSION, 0) {}
 };
 class LogicalOrExpressionAST : public AST {
  public:
-  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, TokenKind kind, nt<LogicalOrExpressionAST> right);
+  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, InfixOp op, nt<LogicalOrExpressionAST> right);
   LogicalOrExpressionAST(nt<CastExpressionAST> leaf);
 };
 class ConditionalExpressionAST : public AST {
@@ -583,14 +489,11 @@ class StructOrUnionSpecifierAST : public AST {
 };
 class TypeSpecifierAST : public AST {
  public:
-  TypeSpecifierAST(TokenKind kind) : AST(AST::Kind::TYPE_SPECIFIER), token_kind(kind) {}
+  TypeSpecifierAST(ProtoTypeSpecifier type_specifier) : AST(AST::Kind::TYPE_SPECIFIER) {}
   TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier)
       : AST(AST::Kind::TYPE_SPECIFIER, 9), spec(std::move(specifier)) {}
   TypeSpecifierAST(nt<EnumeratorListAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 10), spec(std::move(specifier)) {}
   TypeSpecifierAST(nt<TypedefNameAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 11), spec(std::move(specifier)) {}
- private:
-  TokenKind token_kind;
-  nt<AST> spec;
 };
 class SpecifierQualifierAST : public AST {
  public:
@@ -603,10 +506,8 @@ class SpecifierQualifierAST : public AST {
 };
 class StorageClassSpecifierAST : public AST {
  public:
-  StorageClassSpecifierAST(TokenKind kind)
-      : AST(AST::Kind::STORAGE_CLASS_SPECIFIER), token_kind(kind) {}
- private:
-  TokenKind token_kind;
+  StorageClassSpecifierAST(StorageSpecifier storage_speicifier)
+      : AST(AST::Kind::STORAGE_CLASS_SPECIFIER){}
 };
 class DeclaratorAST : public AST {
  public:
@@ -634,6 +535,7 @@ class DeclarationAST : public AST {
       : AST(AST::Kind::DECLARATION),
         decl_specs(std::move(declaration_specifiers)),
         init_dec_tors(std::move(init_declarators)) {}
+  bool isType() const;
  private:
   nts<DeclarationSpecifierAST> decl_specs;
   nts<InitDeclaratorAST> init_dec_tors;

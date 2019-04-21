@@ -14,12 +14,12 @@ class NotAInfixOpException {};
 
 class Parser {
  public:
-  Parser(std::ifstream &ifstream, std::vector<SymbolTable> &tables);
+  Parser(std::ifstream &ifstream);
   nt<TranslationUnitAST> parseTranslationUnit();
  private:
   std::ifstream &in;
   Lex lex;
-  std::vector<SymbolTable> &tables;
+  std::vector<SymbolTable> tables;
   SymbolTable *pTable;
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
@@ -39,15 +39,6 @@ class Parser {
   nt<ConstantExpressionAST> parseConstantExpression();
   nt<ConditionalExpressionAST> parseConditionalExpression();
   nt<LogicalOrExpressionAST> parseLogicalOrExpression(int calling_prec = 0);
-  nt<LogicalAndExpressionAST> parseLogicalAndExpression();
-  nt<InclusiveOrExpressionAST> parseInclusiveOrExpression();
-  nt<ExclusiveOrExpressionAST> parseExclusiveOrExpression();
-  nt<AndExpressionAST> parseAndExpression();
-  nt<EqualityExpressionAST> parseEqualityExpression();
-  nt<RelationalExpressionAST> parseRelationalExpression();
-  nt<ShiftExpressionAST> parseShiftExpression();
-  nt<AdditiveExpressionAST> parseAdditiveExpression();
-  nt<MultiplicativeExpressionAST> parseMultiplicativeExpression();
   nt<CastExpressionAST> parseCastExpression();
   nt<UnaryExpressionAST> parseUnaryExpression();
   nt<PostfixExpressionAST> parsePostfixExpression();
@@ -55,7 +46,7 @@ class Parser {
   nt<ConstantAST> parseConstant();
   nt<ExpressionAST> parseExpression();
   nt<AssignmentExpressionAST> parseAssignmentExpression();
-  nt<AssignmentOperatorAST> parseAssignmentOperator();
+  AssignmentOp parseAssignmentOperator();
   nt<UnaryOperatorAST> parseUnaryOperator();
   nt<TypeNameAST> parseTypeName();
   nt<ParameterTypeListAST> parseParameterTypeList();

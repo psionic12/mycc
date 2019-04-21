@@ -9,6 +9,8 @@ const mycc::DeclarationAST &mycc::SymbolTable::lookup(const std::string &name) c
   } catch (const std::out_of_range &) {
     if (&father != this) {
       father.lookup(name);
+    } else {
+      throw SymbolNotFoundException{};
     }
   }
 }

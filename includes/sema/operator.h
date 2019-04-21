@@ -23,6 +23,44 @@ enum class InfixOp {
   PERCENT,
 };
 
+enum class AssignmentOp {
+  EQ,
+  STAREQ,
+  SLASHEQ,
+  PERCENTEQ,
+  PLUSEQ,
+  SUBEQ,
+  LTLTEQ,
+  GTGTEQ,
+  AMPEQ,
+  CARETEQ,
+  BAREQ,
+};
+
+enum class UnaryOp {
+  AMP,
+  STAR,
+  PLUS,
+  SUB,
+  TILDE,
+  BANG,
+};
+
+enum class ProtoTypeSpecifier {
+  kVOID,
+  kCHAR,
+  kSHORT,
+  kINT,
+  kLONG,
+  kFLOAT,
+  kDOUBLE,
+  kSIGNED,
+  kUNSIGNED,
+};
+
+enum class StorageSpecifier {
+  kAUTO, kREGISTER, kSTATIC, kEXTERN, kTYPEDEF,
+};
 
 } //namespace mycc
 
