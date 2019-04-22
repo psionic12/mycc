@@ -90,8 +90,7 @@ mycc::InfixOp mycc::Parser::isInfixOp(TokenKind kind) {
   return op;
 }
 
-
-bool mycc::Parser::isIdentiferAType(const std::string& name) {
+bool mycc::Parser::isIdentiferAType(const std::string &name) {
   try {
     return pTable->lookup(name).isType();
   } catch (SymbolNotFoundException) {
@@ -401,8 +400,7 @@ mycc::nt<mycc::DeclarationAST> mycc::Parser::parseDeclaration() {
   do {
     specifiers.push_back(parseDeclarationSpecifier());
     switch (lex.peek().getKind()) {
-      case TokenKind::TOKEN_IDENTIFIER:
-        if (!isIdentiferAType(lex.peek().getValue())) break;
+      case TokenKind::TOKEN_IDENTIFIER:if (!isIdentiferAType(lex.peek().getValue())) break;
       case TokenKind::TOKEN_AUTO:
       case TokenKind::TOKEN_CHAR:
       case TokenKind::TOKEN_CONST:
@@ -536,60 +534,58 @@ mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
     throw parseError("direct declarator expects identifier or '(' declarator ')'");
   }
   std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s;
-  while(lex.peek() == TokenKind::TOKEN_LBRACKET || lex.peek() == TokenKind::TOKEN_LPAREN) {
+  while (lex.peek() == TokenKind::TOKEN_LBRACKET || lex.peek() == TokenKind::TOKEN_LPAREN) {
     if (expect(TokenKind::TOKEN_LBRACKET)) {
       switch (lex.peek().getKind()) {
-        case TokenKind ::TOKEN_BANG:
-        case TokenKind ::TOKEN_AMP:
-        case TokenKind ::TOKEN_LPAREN:
-        case TokenKind ::TOKEN_STAR:
-        case TokenKind ::TOKEN_PLUS:
-        case TokenKind ::TOKEN_PLUSPLUS:
-        case TokenKind ::TOKEN_SUB:
-        case TokenKind ::TOKEN_SUBSUB:
-        case TokenKind ::TOKEN_CHAR:
-        case TokenKind ::TOKEN_STRINGLITERAL:
-        case TokenKind ::TOKEN_IDENTIFIER:
-        case TokenKind ::TOKEN_FLOAT_CONSTANT:
-        case TokenKind ::TOKEN_INT_CONSTANT:
-        case TokenKind ::TOKEN_SIZEOF:
-        case TokenKind ::TOKEN_TILDE:
-          term2s.emplace_back(DirectDeclaratorAST::Term2::ARRAY, parseConstantExpression());
+        case TokenKind::TOKEN_BANG:
+        case TokenKind::TOKEN_AMP:
+        case TokenKind::TOKEN_LPAREN:
+        case TokenKind::TOKEN_STAR:
+        case TokenKind::TOKEN_PLUS:
+        case TokenKind::TOKEN_PLUSPLUS:
+        case TokenKind::TOKEN_SUB:
+        case TokenKind::TOKEN_SUBSUB:
+        case TokenKind::TOKEN_CHAR:
+        case TokenKind::TOKEN_STRINGLITERAL:
+        case TokenKind::TOKEN_IDENTIFIER:
+        case TokenKind::TOKEN_FLOAT_CONSTANT:
+        case TokenKind::TOKEN_INT_CONSTANT:
+        case TokenKind::TOKEN_SIZEOF:
+        case TokenKind::TOKEN_TILDE:term2s.emplace_back(DirectDeclaratorAST::Term2::ARRAY, parseConstantExpression());
           break;
-        default:
-          term2s.emplace_back(DirectDeclaratorAST::Term2::ARRAY, nullptr);
+        default:term2s.emplace_back(DirectDeclaratorAST::Term2::ARRAY, nullptr);
       }
     } else {
       accept(TokenKind::TOKEN_LPAREN);
       switch (lex.peek().getKind()) {
-        case TokenKind ::TOKEN_AUTO:
-        case TokenKind ::TOKEN_CHAR:
-        case TokenKind ::TOKEN_CONST:
-        case TokenKind ::TOKEN_DOUBLE:
-        case TokenKind ::TOKEN_ENUM:
-        case TokenKind ::TOKEN_EXTERN:
-        case TokenKind ::TOKEN_FLOAT:
-        case TokenKind ::TOKEN_INT:
-        case TokenKind ::TOKEN_LONG:
-        case TokenKind ::TOKEN_REGISTER:
-        case TokenKind ::TOKEN_SHORT:
-        case TokenKind ::TOKEN_SIGNED:
-        case TokenKind ::TOKEN_STATIC:
-        case TokenKind ::TOKEN_STRUCT:
-        case TokenKind ::TOKEN_TYPEDEF:
-        case TokenKind ::TOKEN_UNION:
-        case TokenKind ::TOKEN_UNSIGNED:
-        case TokenKind ::TOKEN_VOID:
-        case TokenKind ::TOKEN_VOLATILE:
-          term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST, parseParameterTypeList());
+        case TokenKind::TOKEN_AUTO:
+        case TokenKind::TOKEN_CHAR:
+        case TokenKind::TOKEN_CONST:
+        case TokenKind::TOKEN_DOUBLE:
+        case TokenKind::TOKEN_ENUM:
+        case TokenKind::TOKEN_EXTERN:
+        case TokenKind::TOKEN_FLOAT:
+        case TokenKind::TOKEN_INT:
+        case TokenKind::TOKEN_LONG:
+        case TokenKind::TOKEN_REGISTER:
+        case TokenKind::TOKEN_SHORT:
+        case TokenKind::TOKEN_SIGNED:
+        case TokenKind::TOKEN_STATIC:
+        case TokenKind::TOKEN_STRUCT:
+        case TokenKind::TOKEN_TYPEDEF:
+        case TokenKind::TOKEN_UNION:
+        case TokenKind::TOKEN_UNSIGNED:
+        case TokenKind::TOKEN_VOID:
+        case TokenKind::TOKEN_VOLATILE:
+          term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST,
+                              parseParameterTypeList());
           break;
-        case TokenKind ::TOKEN_IDENTIFIER:
+        case TokenKind::TOKEN_IDENTIFIER:
           if (isIdentiferAType(lex.peek().getValue())) {
             term2s.emplace_back(DirectDeclaratorAST::Term2::ID, parseIdentifer());
           }
           break;
-        default:
-          throw parseError("expected para-list or identifier");
+        default:throw parseError("expected para-list or identifier");
       }
     }
   }
@@ -599,13 +595,75 @@ mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
 ///<parameter-type-list> ::= <parameter-list>
 ///                        | <parameter-list> , ...
 mycc::nt<mycc::ParameterTypeListAST> mycc::Parser::parseParameterTypeList() {
- auto para_list = parseParameterList();
- bool has_multiple = false;
- if (expect(TokenKind::TOKEN_COMMA)) {
-   accept(TokenKind::TOKEN_ELLIPSIS);
-   has_multiple = true;
- }
+  auto para_list = parseParameterList();
+  bool has_multiple = false;
+  if (expect(TokenKind::TOKEN_COMMA)) {
+    accept(TokenKind::TOKEN_ELLIPSIS);
+    has_multiple = true;
+  }
   return std::make_unique<ParameterTypeListAST>(std::move(para_list), has_multiple);
+}
+
+///<parameter-list> ::= <parameter-declaration>
+///                   | <parameter-list> , <parameter-declaration>
+mycc::nt<mycc::ParameterListAST> mycc::Parser::parseParameterList() {
+  nts<ParameterDeclarationAST> decls;
+  do {
+    decls.emplace_back(parseParameterDeclaration());
+    if (!expect(TokenKind::TOKEN_COMMA)) {
+      break;
+    }
+  } while (true);
+  return std::make_unique<ParameterListAST>(decls);
+}
+
+///<parameter-declaration> ::= {<declaration-specifier>}+ <declarator>
+///                          | {<declaration-specifier>}+ <abstract-declarator>
+///                          | {<declaration-specifier>}+
+mycc::nt<mycc::ParameterDeclarationAST> mycc::Parser::parseParameterDeclaration() {
+  nts<DeclarationSpecifierAST> decls;
+  do {
+    decls.emplace_back(parseDeclarationSpecifier());
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_AUTO:
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_EXTERN:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_REGISTER:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STATIC:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_IDENTIFIER:if (!isIdentiferAType(lex.peek().getValue())) break;
+      case TokenKind::TOKEN_TYPEDEF:
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE:continue;
+    }
+    break;
+  } while (true);
+
+  //TODO <direct-declarator> or <direct-abstract-declarator>
+
+  if (lex.peek() == TokenKind::TOKEN_STAR) {
+    auto pointer = parsePointer();
+    // TODO 123
+  } else if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
+    auto declarator = std::make_unique<DeclaratorAST>(nullptr, parseDirectDeclarator());
+    return std::make_unique<ParameterDeclarationAST>(std::move(decls), std::move(declarator));
+  } else if (lex.peek() == TokenKind::TOKEN_LBRACKET) {
+    return std::make_unique<ParameterDeclarationAST>(std::move(decls), parseDirectAbstractDeclarator());
+  } else if (lex.peek() == TokenKind::TOKEN_LPAREN) {
+    //TODO 14
+  } else {
+    return std::make_unique<ParameterDeclarationAST>(std::move(decls));
+  }
 }
 
 
