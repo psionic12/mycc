@@ -90,6 +90,15 @@ mycc::InfixOp mycc::Parser::isInfixOp(TokenKind kind) {
   return op;
 }
 
+
+bool mycc::Parser::isIdentiferAType(const std::string& name) {
+  try {
+    return pTable->lookup(name).isType();
+  } catch (SymbolNotFoundException) {
+    return false;
+  }
+}
+
 /// <translation-unit> ::= {<external-declaration>}*
 mycc::nt<mycc::TranslationUnitAST>
 mycc::Parser::parseTranslationUnit() {
@@ -393,13 +402,7 @@ mycc::nt<mycc::DeclarationAST> mycc::Parser::parseDeclaration() {
     specifiers.push_back(parseDeclarationSpecifier());
     switch (lex.peek().getKind()) {
       case TokenKind::TOKEN_IDENTIFIER:
-        try {
-          if (!pTable->lookup(lex.peek().getValue()).isType()) {
-            break;
-          }
-        } catch (SymbolNotFoundException) {
-          break;
-        }
+        if (!isIdentiferAType(lex.peek().getValue())) break;
       case TokenKind::TOKEN_AUTO:
       case TokenKind::TOKEN_CHAR:
       case TokenKind::TOKEN_CONST:
@@ -459,11 +462,7 @@ mycc::nt<mycc::DeclarationSpecifierAST> mycc::Parser::parseDeclarationSpecifier(
     case TokenKind::TOKEN_SIGNED:
     case TokenKind::TOKEN_STRUCT:
     case TokenKind::TOKEN_IDENTIFIER:
-      try {
-        if (!pTable->lookup(lex.peek().getValue()).isType()) {
-          throw parseError("declaration specifier must be a type");
-        }
-      } catch (SymbolNotFoundException) {
+      if (!isIdentiferAType(lex.peek().getValue())) {
         throw parseError("except declaration specifier");
       }
     case TokenKind::TOKEN_UNION:
@@ -474,3 +473,139 @@ mycc::nt<mycc::DeclarationSpecifierAST> mycc::Parser::parseDeclarationSpecifier(
     default:throw parseError("except declaration specifier");
   }
 }
+
+///<init-declarator> ::= <declarator>
+///                    | <declarator> = <initializer>
+mycc::nt<mycc::InitDeclaratorAST> mycc::Parser::parseInitDeclarator() {
+  auto decl = parseDeclarator();
+  if (expect(TokenKind::TOKEN_EQ)) {
+    return std::make_unique<InitDeclaratorAST>(std::move(decl), parseInitializer());
+  } else {
+    return std::make_unique<InitDeclaratorAST>(std::move(decl));
+  }
+}
+
+///<declarator> ::= {<pointer>}? <direct-declarator>
+mycc::nt<mycc::DeclaratorAST> mycc::Parser::parseDeclarator() {
+  nt<PointerAST> pointer = nullptr;
+  if (lex.peek() == TokenKind::TOKEN_STAR) {
+    pointer = parsePointer();
+  }
+  return std::make_unique<DeclaratorAST>(pointer, parseDirectDeclarator());
+}
+
+///<pointer> ::= * {<type-qualifier>}* {<pointer>}?
+mycc::nt<mycc::PointerAST> mycc::Parser::parsePointer() {
+  accept(TokenKind::TOKEN_STAR);
+  nts<TypeQualifierAST> type_qualifiers;
+  while (true) {
+    if (lex.peek() == TokenKind::TOKEN_CONST || lex.peek() == TokenKind::TOKEN_VOLATILE) {
+      type_qualifiers.push_back(parseTypeQualifier());
+      continue;
+    } else {
+      break;
+    }
+  }
+  nt<PointerAST> pointer;
+  if (lex.peek() == TokenKind::TOKEN_STAR) {
+    pointer = parsePointer();
+  } else {
+    pointer = nullptr;
+  }
+  return std::make_unique<PointerAST>(std::move(type_qualifiers), std::move(pointer));
+}
+
+///<direct-declarator> ::= <identifier>
+///                      | ( <declarator> )
+///                      | <direct-declarator> [ {<constant-expression>}? ]
+///                      | <direct-declarator> ( <parameter-type-list> )
+///                      | <direct-declarator> ( {<identifier>}* )
+
+mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
+  // these productions are not straight forward, we can consider <direct-declarator> as this:
+  // <direct-declarator> = term1 {term2}*
+  // term1 = <identifier> | ( <declarator> )
+  // term2 = [ {<constant-expression>}? ] | ( <parameter-type-list> ) | ( {<identifier>}* )
+  nt<AST> term1;
+  if (expect(TokenKind::TOKEN_IDENTIFIER)) {
+    term1 = parseIdentifer();
+  } else if (expect(TokenKind::TOKEN_LPAREN)) {
+    term1 = parseDeclarator();
+    accept(TokenKind::TOKEN_RPAREN);
+  } else {
+    throw parseError("direct declarator expects identifier or '(' declarator ')'");
+  }
+  std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s;
+  while(lex.peek() == TokenKind::TOKEN_LBRACKET || lex.peek() == TokenKind::TOKEN_LPAREN) {
+    if (expect(TokenKind::TOKEN_LBRACKET)) {
+      switch (lex.peek().getKind()) {
+        case TokenKind ::TOKEN_BANG:
+        case TokenKind ::TOKEN_AMP:
+        case TokenKind ::TOKEN_LPAREN:
+        case TokenKind ::TOKEN_STAR:
+        case TokenKind ::TOKEN_PLUS:
+        case TokenKind ::TOKEN_PLUSPLUS:
+        case TokenKind ::TOKEN_SUB:
+        case TokenKind ::TOKEN_SUBSUB:
+        case TokenKind ::TOKEN_CHAR:
+        case TokenKind ::TOKEN_STRINGLITERAL:
+        case TokenKind ::TOKEN_IDENTIFIER:
+        case TokenKind ::TOKEN_FLOAT_CONSTANT:
+        case TokenKind ::TOKEN_INT_CONSTANT:
+        case TokenKind ::TOKEN_SIZEOF:
+        case TokenKind ::TOKEN_TILDE:
+          term2s.emplace_back(DirectDeclaratorAST::Term2::ARRAY, parseConstantExpression());
+          break;
+        default:
+          term2s.emplace_back(DirectDeclaratorAST::Term2::ARRAY, nullptr);
+      }
+    } else {
+      accept(TokenKind::TOKEN_LPAREN);
+      switch (lex.peek().getKind()) {
+        case TokenKind ::TOKEN_AUTO:
+        case TokenKind ::TOKEN_CHAR:
+        case TokenKind ::TOKEN_CONST:
+        case TokenKind ::TOKEN_DOUBLE:
+        case TokenKind ::TOKEN_ENUM:
+        case TokenKind ::TOKEN_EXTERN:
+        case TokenKind ::TOKEN_FLOAT:
+        case TokenKind ::TOKEN_INT:
+        case TokenKind ::TOKEN_LONG:
+        case TokenKind ::TOKEN_REGISTER:
+        case TokenKind ::TOKEN_SHORT:
+        case TokenKind ::TOKEN_SIGNED:
+        case TokenKind ::TOKEN_STATIC:
+        case TokenKind ::TOKEN_STRUCT:
+        case TokenKind ::TOKEN_TYPEDEF:
+        case TokenKind ::TOKEN_UNION:
+        case TokenKind ::TOKEN_UNSIGNED:
+        case TokenKind ::TOKEN_VOID:
+        case TokenKind ::TOKEN_VOLATILE:
+          term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST, parseParameterTypeList());
+          break;
+        case TokenKind ::TOKEN_IDENTIFIER:
+          if (isIdentiferAType(lex.peek().getValue())) {
+            term2s.emplace_back(DirectDeclaratorAST::Term2::ID, parseIdentifer());
+          }
+          break;
+        default:
+          throw parseError("expected para-list or identifier");
+      }
+    }
+  }
+  return std::make_unique<DirectDeclaratorAST>(std::move(term1), std::move(term2s));
+}
+
+///<parameter-type-list> ::= <parameter-list>
+///                        | <parameter-list> , ...
+mycc::nt<mycc::ParameterTypeListAST> mycc::Parser::parseParameterTypeList() {
+ auto para_list = parseParameterList();
+ bool has_multiple = false;
+ if (expect(TokenKind::TOKEN_COMMA)) {
+   accept(TokenKind::TOKEN_ELLIPSIS);
+   has_multiple = true;
+ }
+  return std::make_unique<ParameterTypeListAST>(std::move(para_list), has_multiple);
+}
+
+

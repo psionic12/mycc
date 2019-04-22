@@ -347,53 +347,14 @@ class ParameterTypeListAST : public AST {
 };
 class DirectDeclaratorAST : public AST {
  public:
-  DirectDeclaratorAST(nt<IdentifierAST> identifier)
-      : AST(AST::Kind::DIRECT_DECLARATOR, 0),
-        identifier(std::move(identifier)),
-        declarator(nullptr),
-        direct_declarator(nullptr),
-        constant_expressions(),
-        parameter_type_list(nullptr),
-        identifiers() {}
-  DirectDeclaratorAST(nt<DeclaratorAST> declarator)
-      : AST(AST::Kind::DIRECT_DECLARATOR, 1),
-        identifier(nullptr),
-        declarator(std::move(declarator)),
-        direct_declarator(nullptr),
-        constant_expressions(),
-        parameter_type_list(nullptr),
-        identifiers() {}
-  DirectDeclaratorAST(nt<DirectDeclaratorAST> direct_declarator, nts<ConstantExpressionAST> constant_expressions)
-      : AST(AST::Kind::DIRECT_DECLARATOR, 2),
-        identifier(nullptr),
-        declarator(nullptr),
-        direct_declarator(std::move(direct_declarator)),
-        constant_expressions(std::move(constant_expressions)),
-        parameter_type_list(nullptr),
-        identifiers() {}
-  DirectDeclaratorAST(nt<DirectDeclaratorAST> direct_declarator, nt<ParameterTypeListAST> parameter_type_list)
-      : AST(AST::Kind::DIRECT_DECLARATOR, 3),
-        identifier(nullptr),
-        declarator(nullptr),
-        direct_declarator(std::move(direct_declarator)),
-        constant_expressions(),
-        parameter_type_list(std::move(parameter_type_list)),
-        identifiers() {}
-  DirectDeclaratorAST(nt<DirectDeclaratorAST> direct_declarator, nts<IdentifierAST> identifiers)
-      : AST(AST::Kind::DIRECT_DECLARATOR, 4),
-        identifier(nullptr),
-        declarator(nullptr),
-        direct_declarator(std::move(direct_declarator)),
-        constant_expressions(),
-        parameter_type_list(nullptr),
-        identifiers(std::move(identifiers)) {}
+  enum class Term2 {
+    ARRAY,
+    PARA_LIST,
+    ID,
+  };
  private:
-  nt<IdentifierAST> identifier;
-  nt<DeclaratorAST> declarator;
-  nt<DirectDeclaratorAST> direct_declarator;
-  nts<ConstantExpressionAST> constant_expressions;
-  nt<ParameterTypeListAST> parameter_type_list;
-  nts<IdentifierAST> identifiers;
+  nt<AST> term1;
+  std::vector<std::pair<Term2, nt<AST>>> term2s;
 };
 class PointerAST : public AST {
  public:

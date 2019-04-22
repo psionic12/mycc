@@ -76,6 +76,7 @@ class Parser {
   bool expect(TokenKind kind);
   std::runtime_error parseError(const std::string msg);
   int precedence(InfixOp op);
+  bool isIdentiferAType(const std::string& name);
 };
 
 #endif //MYCCPILER_PARSER_H
