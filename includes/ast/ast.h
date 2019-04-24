@@ -51,10 +51,8 @@ class AST {
     FLOATING_CONSTANT,
     ENUMERATION_CONSTANT,
     ASSIGNMENT_OPERATOR,
-    ABSTRACT_DECLARATOR,
     PARAMETER_LIST,
     PARAMETER_DECLARATION,
-    DIRECT_ABSTRACT_DECLARATOR,
     ENUMERATOR_LIST,
     ENUMERATOR,
     INIT_DECLARATOR,
@@ -94,7 +92,6 @@ class ConditionalExpressionAST;
 class UnaryExpressionAST;
 class PointerAST;
 class DeclarationSpecifierAST;
-class AbstractDeclaratorAST;
 class ParameterTypeListAST;
 class AssignmentExpressionAST;
 class InitializerAST;
@@ -202,34 +199,14 @@ class EnumeratorListAST : public AST {
  public:
   EnumeratorListAST(nts<EnumeratorAST> &&) : AST(AST::Kind::ENUMERATOR_LIST) {}
 };
-class DirectAbstractDeclaratorAST : public AST {
- public:
-  DirectAbstractDeclaratorAST(nt<AbstractDeclaratorAST>)
-      : AST(AST::Kind::DIRECT_ABSTRACT_DECLARATOR, 0) {}
-  DirectAbstractDeclaratorAST(nt<DirectAbstractDeclaratorAST>, nt<ConstantExpressionAST>)
-      : AST(AST::Kind::DIRECT_ABSTRACT_DECLARATOR, 1) {}
-  DirectAbstractDeclaratorAST(nt<DirectAbstractDeclaratorAST>, nt<ParameterTypeListAST>)
-      : AST(AST::Kind::DIRECT_ABSTRACT_DECLARATOR, 2) {}
-};
 class ParameterDeclarationAST : public AST {
  public:
-  ParameterDeclarationAST(nts<DeclarationSpecifierAST>, nt<DeclaratorAST>)
-      : AST(AST::Kind::PARAMETER_DECLARATION, 0) {}
-  ParameterDeclarationAST(nts<DeclarationSpecifierAST>, nt<AbstractDeclaratorAST>)
-      : AST(AST::Kind::PARAMETER_DECLARATION, 1) {}
-  ParameterDeclarationAST(nts<DeclarationSpecifierAST>)
-      : AST(AST::Kind::PARAMETER_DECLARATION, 2) {}
+  ParameterDeclarationAST(nts<DeclarationSpecifierAST>, nt<DeclaratorAST>) : AST(AST::Kind::PARAMETER_DECLARATION) {}
 };
 class ParameterListAST : public AST {
  public:
   ParameterListAST(nt<ParameterDeclarationAST>) : AST(AST::Kind::PARAMETER_LIST, 0) {}
   ParameterListAST(nt<ParameterListAST>, nt<ParameterDeclarationAST>) : AST(AST::Kind::PARAMETER_LIST, 1) {}
-};
-class AbstractDeclaratorAST : public AST {
- public:
-  AbstractDeclaratorAST(nt<PointerAST>) : AST(AST::Kind::ABSTRACT_DECLARATOR, 0) {}
-  AbstractDeclaratorAST(nt<PointerAST>, nt<DirectAbstractDeclaratorAST>) : AST(AST::Kind::ABSTRACT_DECLARATOR, 1) {}
-  AbstractDeclaratorAST(nt<DirectAbstractDeclaratorAST>) : AST(AST::Kind::ABSTRACT_DECLARATOR, 2) {}
 };
 class EnumerationConstantAST : public AST {
  public:
@@ -290,7 +267,7 @@ class PostfixExpressionAST : public AST {
 };
 class TypeNameAST : public AST {
  public:
-  TypeNameAST(nts<SpecifierQualifierAST>, nts<AbstractDeclaratorAST>)
+  TypeNameAST(nts<SpecifierQualifierAST>, nts<DeclaratorAST>)
       : AST(AST::Kind::TYPE_NAME) {}
 };
 class UnaryExpressionAST : public AST {
@@ -348,13 +325,12 @@ class ParameterTypeListAST : public AST {
 class DirectDeclaratorAST : public AST {
  public:
   enum class Term2 {
-    ARRAY,
+    CONST_EXPR,
     PARA_LIST,
     ID,
   };
- private:
-  nt<AST> term1;
-  std::vector<std::pair<Term2, nt<AST>>> term2s;
+  DirectDeclaratorAST(nt<AST> term1, std::vector<std::pair<Term2, nt<AST>>> term2s, bool abstract)
+      : AST(Kind::DIRECT_DECLARATOR) {}
 };
 class PointerAST : public AST {
  public:
@@ -468,11 +444,11 @@ class SpecifierQualifierAST : public AST {
 class StorageClassSpecifierAST : public AST {
  public:
   StorageClassSpecifierAST(StorageSpecifier storage_speicifier)
-      : AST(AST::Kind::STORAGE_CLASS_SPECIFIER){}
+      : AST(AST::Kind::STORAGE_CLASS_SPECIFIER) {}
 };
 class DeclaratorAST : public AST {
  public:
-  DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator)
+  DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator, bool abstract)
       : AST(AST::Kind::DECLARATOR), pointer(std::move(pointer)), dir_decl_tor(std::move(direct_declarator)) {}
  private:
   nt<PointerAST> pointer;

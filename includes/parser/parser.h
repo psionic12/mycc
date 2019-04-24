@@ -52,8 +52,6 @@ class Parser {
   nt<ParameterTypeListAST> parseParameterTypeList();
   nt<ParameterListAST> parseParameterList();
   nt<ParameterDeclarationAST> parseParameterDeclaration();
-  nt<AbstractDeclaratorAST> parseAbstractDeclarator();
-  nt<DirectAbstractDeclaratorAST> parseDirectAbstractDeclarator();
   nt<EnumSpecifierAST> parseEnumSpecifier();
   nt<EnumeratorListAST> parseEnumeratorList();
   nt<EnumeratorAST> parseEnumerator();
