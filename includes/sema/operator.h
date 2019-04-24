@@ -62,6 +62,11 @@ enum class StorageSpecifier {
   kAUTO, kREGISTER, kSTATIC, kEXTERN, kTYPEDEF,
 };
 
+enum class StructOrUnion {
+  kSTRUCT,
+  kUNION,
+};
+
 } //namespace mycc
 
 #endif //MYCCPILER_OPERATOR_H

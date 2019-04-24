@@ -367,17 +367,7 @@ class StructDeclaratorAST : public AST {
 };
 class StructDeclaratorListAST : public AST {
  public:
-  StructDeclaratorListAST(nt<StructDeclaratorAST> struct_declarator)
-      : AST(AST::Kind::STRUCT_DECLARATOR_LIST, 0),
-        decl_tor(std::move(struct_declarator)),
-        decl_tor_list(nullptr) {}
-  StructDeclaratorListAST(nt<StructDeclaratorListAST> struct_declarator_list, nt<StructDeclaratorAST> struct_declarator)
-      : AST(AST::Kind::STRUCT_DECLARATOR_LIST, 1),
-        decl_tor_list(std::move(struct_declarator_list)),
-        decl_tor(std::move(struct_declarator)) {}
- private:
-  nt<StructDeclaratorAST> decl_tor;
-  nt<StructDeclaratorListAST> decl_tor_list;
+  StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators) : AST(AST::Kind::STRUCT_DECLARATOR_LIST) {}
 };
 class StructDeclarationAST : public AST {
  public:
@@ -405,32 +395,15 @@ class EnumSpecifierAST : public AST {
 };
 class StructOrUnionSpecifierAST : public AST {
  public:
-  StructOrUnionSpecifierAST(nt<StructOrUnionAST> structOrUnion, nt<IdentifierAST> identifier,
-                            nts<StructDeclarationAST> struct_declarations)
-      : AST(AST::Kind::STRUCT_OR_UNION_SPECIFIER, 0),
-        struct_or_union(std::move(structOrUnion)),
-        id(std::move(identifier)),
-        struct_decls(std::move(struct_declarations)) {}
-  StructOrUnionSpecifierAST(nt<StructOrUnionAST> structOrUnion, nts<StructDeclarationAST> struct_declarations)
-      : AST(AST::Kind::STRUCT_OR_UNION_SPECIFIER, 1), struct_or_union(std::move(structOrUnion)),
-        id(nullptr),
-        struct_decls(std::move(struct_declarations)) {}
-  StructOrUnionSpecifierAST(nt<StructOrUnionAST> structOrUnion, nt<IdentifierAST> identifier)
-      : AST(AST::Kind::STRUCT_OR_UNION_SPECIFIER, 2), struct_or_union(std::move(structOrUnion)),
-        id(std::move(identifier)),
-        struct_decls() {}
- private:
-  nt<StructOrUnionAST> struct_or_union;
-  nt<IdentifierAST> id;
-  nts<StructDeclarationAST> struct_decls;
+  StructOrUnionSpecifierAST(StructOrUnion type, nt<IdentifierAST> id, nts<StructDeclarationAST> declarations);
 };
 class TypeSpecifierAST : public AST {
  public:
   TypeSpecifierAST(ProtoTypeSpecifier type_specifier) : AST(AST::Kind::TYPE_SPECIFIER) {}
   TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier)
-      : AST(AST::Kind::TYPE_SPECIFIER, 9), spec(std::move(specifier)) {}
-  TypeSpecifierAST(nt<EnumeratorListAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 10), spec(std::move(specifier)) {}
-  TypeSpecifierAST(nt<TypedefNameAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 11), spec(std::move(specifier)) {}
+      : AST(AST::Kind::TYPE_SPECIFIER, 9) {}
+  TypeSpecifierAST(nt<EnumeratorListAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 10) {}
+  TypeSpecifierAST(nt<TypedefNameAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 11) {}
 };
 class SpecifierQualifierAST : public AST {
  public:
@@ -456,14 +429,12 @@ class DeclaratorAST : public AST {
 };
 class DeclarationSpecifierAST : public AST {
  public:
-  DeclarationSpecifierAST(nt<StorageClassSpecifierAST> specifier)
-      : AST(AST::Kind::DECLARATION_SPECIFIER, 0), specifier(std::move(specifier)) {}
+  DeclarationSpecifierAST(StorageSpecifier specifier)
+      : AST(AST::Kind::DECLARATION_SPECIFIER, 0) {}
   DeclarationSpecifierAST(nt<TypeSpecifierAST> specifier)
-      : AST(AST::Kind::DECLARATION_SPECIFIER, 1), specifier(std::move(specifier)) {}
+      : AST(AST::Kind::DECLARATION_SPECIFIER, 1) {}
   DeclarationSpecifierAST(nt<TypeQualifierAST> specifier)
-      : AST(AST::Kind::DECLARATION_SPECIFIER, 2), specifier(std::move(specifier)) {}
- private:
-  nt<AST> specifier;
+      : AST(AST::Kind::DECLARATION_SPECIFIER, 2) {}
 };
 class DeclarationAST : public AST {
  public:

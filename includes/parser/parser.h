@@ -24,10 +24,9 @@ class Parser {
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
   nt<DeclarationSpecifierAST> parseDeclarationSpecifier();
-  nt<StorageClassSpecifierAST> parseStorageClassSpecifier();
+  StorageSpecifier parseStorageClassSpecifier();
   nt<TypeSpecifierAST> parseTypeSpecifier();
   nt<StructOrUnionSpecifierAST> parseStructOrUnionSpecifier();
-  nt<StructOrUnionAST> parseStructOrUnion();
   nt<StructDeclarationAST> parseStructDeclaration();
   nt<SpecifierQualifierAST> parseSpecifierQualifier();
   nt<StructDeclaratorListAST> parseStructDeclaratorList();

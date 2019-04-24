@@ -209,20 +209,6 @@ mycc::nt<mycc::TypeQualifierAST> mycc::Parser::parseTypeQualifier() {
   }
 }
 
-
-///<struct-or-union> ::= struct
-///                    | union
-
-/// struct union
-mycc::nt<mycc::StructOrUnionAST> mycc::Parser::parseStructOrUnion() {
-  switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_STRUCT:
-    case TokenKind::TOKEN_UNION:lex.consumeToken();
-      return std::make_unique<mycc::StructOrUnionAST>(lex.peek().getKind());
-    default:throw parseError(R"(expected "struct" or "union")");
-  }
-}
-
 ///<enumerator> ::= <identifier>
 ///               | <identifier> = <constant-expression>
 
@@ -678,4 +664,176 @@ mycc::nt<mycc::ParameterDeclarationAST> mycc::Parser::parseParameterDeclaration(
     default:declarator = nullptr;
   }
   std::make_unique<ParameterDeclarationAST>(std::move(ds), std::move(declarator));
+}
+
+///<storage-class-specifier> ::= auto
+///                            | register
+///                            | static
+///                            | extern
+///                            | typedef
+mycc::StorageSpecifier mycc::Parser::parseStorageClassSpecifier() {
+  switch (lex.peek().getKind()) {
+    case TokenKind::TOKEN_AUTO:return StorageSpecifier::kAUTO;
+    case TokenKind::TOKEN_REGISTER:return StorageSpecifier::kREGISTER;
+    case TokenKind::TOKEN_STATIC:return StorageSpecifier::kSTATIC;
+    case TokenKind::TOKEN_EXTERN:return StorageSpecifier::kEXTERN;
+    case TokenKind::TOKEN_TYPEDEF:return StorageSpecifier::kTYPEDEF;
+    default:throw parseError("expected storage class specifier");
+  }
+}
+
+///<type-specifier> ::= void
+//                   | char
+//                   | short
+//                   | int
+//                   | long
+//                   | float
+//                   | double
+//                   | signed
+//                   | unsigned
+//                   | <struct-or-union-specifier>
+//                   | <enum-specifier>
+//                   | <typedef-name>
+mycc::nt<mycc::TypeSpecifierAST> mycc::Parser::parseTypeSpecifier() {
+  switch (lex.peek().getKind()) {
+    case TokenKind::TOKEN_VOID:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kVOID);
+    case TokenKind::TOKEN_CHAR:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kCHAR);
+    case TokenKind::TOKEN_SHORT:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kSHORT);
+    case TokenKind::TOKEN_INT:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kINT);
+    case TokenKind::TOKEN_LONG:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kLONG);
+    case TokenKind::TOKEN_FLOAT:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kFLOAT);
+    case TokenKind::TOKEN_DOUBLE:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kDOUBLE);
+    case TokenKind::TOKEN_SIGNED:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kSIGNED);
+    case TokenKind::TOKEN_UNSIGNED:lex.consumeToken();
+      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kUNSIGNED);
+    case TokenKind::TOKEN_STRUCT:
+    case TokenKind::TOKEN_UNION:return std::make_unique<TypeSpecifierAST>(parseStructOrUnionSpecifier());
+    case TokenKind::TOKEN_ENUM:return std::make_unique<TypeSpecifierAST>(parseEnumSpecifier());
+    case TokenKind::TOKEN_IDENTIFIER:
+      if (isIdentiferAType(lex.peek().getValue())) {
+        return std::make_unique<TypeSpecifierAST>(parseTypedefName());
+      }
+    default:throw parseError("expected type specifier");
+  }
+}
+
+///<struct-or-union-specifier> ::= <struct-or-union> <identifier> { {<struct-declaration>}+ }
+///                              | <struct-or-union> { {<struct-declaration>}+ }
+///                              | <struct-or-union> <identifier>
+mycc::nt<mycc::StructOrUnionSpecifierAST> mycc::Parser::parseStructOrUnionSpecifier() {
+  StructOrUnion type;
+  if (lex.peek() == TokenKind::TOKEN_STRUCT) {
+    type = StructOrUnion::kSTRUCT;
+    lex.consumeToken();
+  } else if (lex.peek() == TokenKind::TOKEN_UNION) {
+    type = StructOrUnion::kUNION;
+    lex.consumeToken();
+  } else {
+    throw parseError(R"(struct or union-specifier must start with "struct" or "union")");
+  }
+  nt<IdentifierAST> id = nullptr;
+  if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
+    id = parseIdentifer();
+  }
+  accept(TokenKind::TOKEN_LBRACE);
+  nts<StructDeclarationAST> declarations;
+  do {
+    declarations.push_back(parseStructDeclaration());
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_LPAREN:
+      case TokenKind::TOKEN_STAR:
+      case TokenKind::TOKEN_COLON:
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_IDENTIFIER:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE:continue;
+      default:break;
+    }
+    break;
+  } while (true);
+  accept(TokenKind::TOKEN_RBRACE);
+  return std::make_unique<StructOrUnionSpecifierAST>(type, std::move(id), std::move(declarations));
+}
+
+///<struct-declaration> ::= {<specifier-qualifier>}* <struct-declarator-list>
+mycc::nt<mycc::StructDeclarationAST> mycc::Parser::parseStructDeclaration() {
+  nts<SpecifierQualifierAST> qualifiers;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_IDENTIFIER:if (!isIdentiferAType(lex.peek().getValue())) break;
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE:qualifiers.push_back(parseSpecifierQualifier());
+        continue;
+      default:break;
+    }
+    break;
+  }
+  return std::make_unique<StructDeclarationAST>(std::move(qualifiers), parseStructDeclaratorList());
+}
+
+///<specifier-qualifier> ::= <type-specifier>
+///                        | <type-qualifier>
+mycc::nt<mycc::SpecifierQualifierAST> mycc::Parser::parseSpecifierQualifier() {
+  if (lex.peek() == TokenKind::TOKEN_CONST || lex.peek() == TokenKind::TOKEN_VOLATILE) {
+    return std::make_unique<SpecifierQualifierAST>(parseTypeQualifier());
+  } else {
+    return std::make_unique<SpecifierQualifierAST>(parseTypeSpecifier());
+  }
+}
+
+///<struct-declarator-list> ::= <struct-declarator>
+///                           | <struct-declarator-list> , <struct-declarator>
+mycc::nt<mycc::StructDeclaratorListAST> mycc::Parser::parseStructDeclaratorList() {
+  nts<StructDeclaratorAST> declarators;
+  do {
+    declarators.push_back(parseStructDeclarator());
+  } while (expect(TokenKind::TOKEN_COMMA));
+  return std::make_unique<StructDeclaratorListAST>(declarators);
+}
+
+///<struct-declarator> ::= <declarator>
+///                      | <declarator> : <constant-expression>
+///                      | : <constant-expression>
+mycc::nt<mycc::StructDeclaratorAST> mycc::Parser::parseStructDeclarator() {
+  if (expect(TokenKind::TOKEN_COLON)) {
+    return std::make_unique<StructDeclaratorAST>(parseConstantExpression());
+  } else {
+    auto declarator = parseDeclarator();
+    if (expect(TokenKind::TOKEN_COLON)) {
+      return std::make_unique<StructDeclaratorAST>(std::move(declarator), parseConstantExpression());
+    } else {
+      return std::make_unique<StructDeclaratorAST>(std::move(declarator));
+    }
+  }
 }
