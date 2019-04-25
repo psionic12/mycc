@@ -140,18 +140,24 @@ mycc::nt<mycc::IdentifierAST> mycc::Parser::parseIdentifer() {
 ///                   | -
 ///                   | ~
 ///                   | !
-mycc::nt<mycc::UnaryOperatorAST> mycc::Parser::parseUnaryOperator() {
+mycc::UnaryOp mycc::Parser::parseUnaryOperator() {
+  UnaryOp op;
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_AMP:
-    case TokenKind::TOKEN_STAR:
-    case TokenKind::TOKEN_PLUS:
-    case TokenKind::TOKEN_SUB:
-    case TokenKind::TOKEN_TILDE:
-    case TokenKind::TOKEN_BANG:lex.consumeToken();
-      return std::make_unique<mycc::UnaryOperatorAST>(lex.peek().getKind());
+    case TokenKind::TOKEN_AMP:op = UnaryOp::AMP;
+      break;
+    case TokenKind::TOKEN_STAR:op = UnaryOp::STAR;
+      break;
+    case TokenKind::TOKEN_PLUS:op = UnaryOp::PLUS;
+      break;
+    case TokenKind::TOKEN_SUB:op = UnaryOp::SUB;
+      break;
+    case TokenKind::TOKEN_TILDE:op = UnaryOp::TILDE;
+      break;
+    case TokenKind::TOKEN_BANG:op = UnaryOp::BANG;
+      break;
     default:throw parseError("unary operator expected '&', '*', '+', '-', '~', '!'");
   }
-
+  return op;
 }
 
 ///<assignment-operator> ::= =
@@ -201,12 +207,16 @@ mycc::AssignmentOp mycc::Parser::parseAssignmentOperator() {
 
 /// const volatile
 mycc::nt<mycc::TypeQualifierAST> mycc::Parser::parseTypeQualifier() {
+  bool is_const;
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_CONST:
-    case TokenKind::TOKEN_VOLATILE:lex.consumeToken();
-      return std::make_unique<mycc::TypeQualifierAST>(lex.peek().getKind());
+    case TokenKind::TOKEN_CONST:is_const = true;
+      break;
+    case TokenKind::TOKEN_VOLATILE:is_const = false;
+      break;
     default:throw parseError(R"(type qualifier expected "const" or "volatile")");
   }
+  lex.consumeToken();
+  return std::make_unique<mycc::TypeQualifierAST>(is_const);
 }
 
 ///<enumerator> ::= <identifier>
@@ -461,7 +471,7 @@ mycc::nt<mycc::DeclarationSpecifierAST> mycc::Parser::parseDeclarationSpecifier(
 ///<init-declarator> ::= <declarator>
 ///                    | <declarator> = <initializer>
 mycc::nt<mycc::InitDeclaratorAST> mycc::Parser::parseInitDeclarator() {
-  auto decl = parseDeclarator(false);
+  auto decl = parseDeclarator();
   if (expect(TokenKind::TOKEN_EQ)) {
     return std::make_unique<InitDeclaratorAST>(std::move(decl), parseInitializer());
   } else {
@@ -480,7 +490,7 @@ mycc::nt<mycc::DeclaratorAST> mycc::Parser::parseDeclarator() {
   }
   nt<DirectDeclaratorAST> dd = nullptr;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER || lex.peek() == TokenKind::TOKEN_LPAREN) {
-    return std::make_unique<DeclaratorAST>(pointer, parseDirectDeclarator());
+    return std::make_unique<DeclaratorAST>(std::move(pointer), parseDirectDeclarator());
   }
 }
 
@@ -621,7 +631,7 @@ mycc::nt<mycc::ParameterListAST> mycc::Parser::parseParameterList() {
       break;
     }
   } while (true);
-  return std::make_unique<ParameterListAST>(decls);
+  return std::make_unique<ParameterListAST>(std::move(decls));
 }
 
 ///<parameter-declaration> ::= {<declaration-specifier>}+ <declarator>
@@ -819,7 +829,7 @@ mycc::nt<mycc::StructDeclaratorListAST> mycc::Parser::parseStructDeclaratorList(
   do {
     declarators.push_back(parseStructDeclarator());
   } while (expect(TokenKind::TOKEN_COMMA));
-  return std::make_unique<StructDeclaratorListAST>(declarators);
+  return std::make_unique<StructDeclaratorListAST>(std::move(declarators));
 }
 
 ///<struct-declarator> ::= <declarator>
@@ -837,3 +847,174 @@ mycc::nt<mycc::StructDeclaratorAST> mycc::Parser::parseStructDeclarator() {
     }
   }
 }
+
+///<initializer> ::= <assignment-expression>
+///                | { <initializer-list> }
+///                | { <initializer-list> , }
+mycc::nt<mycc::InitializerAST> mycc::Parser::parseInitializer() {
+  if (expect(TokenKind::TOKEN_LBRACE)) {
+    auto exp = parseInitializerList();
+    expect(TokenKind::TOKEN_COMMA);
+    accept(TokenKind::TOKEN_LBRACE);
+    return std::make_unique<InitializerAST>(std::move(exp));
+  } else {
+    return std::make_unique<InitializerAST>(parseAssignmentExpression());
+  }
+}
+
+///<initializer-list> ::= <initializer>
+///                     | <initializer-list> , <initializer>
+mycc::nt<mycc::InitializerListAST> mycc::Parser::parseInitializerList() {
+  nts<InitializerAST> list;
+  do {
+    list.push_back(parseInitializer());
+  } while (expect(TokenKind::TOKEN_COMMA));
+  return std::make_unique<InitializerListAST>(std::move(list));
+}
+
+///<function-definition> ::= {<declaration-specifier>}* <declarator> {<declaration>}* <compound-statement>
+mycc::nt<mycc::FunctionDefinitionAST> mycc::Parser::parseFunctionDefinition() {
+  nts<DeclarationSpecifierAST> specifiers;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_AUTO:
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_EXTERN:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_REGISTER:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STATIC:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_TYPEDEF:
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE:specifiers.push_back(parseDeclarationSpecifier());
+        continue;
+      case TokenKind::TOKEN_IDENTIFIER:
+        if (isIdentiferAType(lex.peek().getValue())) {
+          specifiers.push_back(parseDeclarationSpecifier());
+          continue;
+        } else {
+          break;
+        }
+      default:break;
+    }
+    break;
+  }
+  auto declarator = parseDeclarator();
+  nts<DeclarationAST> declarations;
+  while (lex.peek() != TokenKind::TOKEN_LBRACE) {
+    declarations.push_back(parseDeclaration());
+  }
+  auto compound = parseCompoundStatement();
+  return std::make_unique<FunctionDefinitionAST>(std::move(specifiers),
+                                                 std::move(declarator),
+                                                 std::move(declarations),
+                                                 std::move(compound));
+}
+
+///<compound-statement> ::= { {<declaration>}* {<statement>}* }
+mycc::nt<mycc::CompoundStatementAST> mycc::Parser::parseCompoundStatement() {
+  accept(TokenKind::TOKEN_LBRACE);
+  nts<DeclarationAST> declarations;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_AUTO:
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_EXTERN:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_REGISTER:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STATIC:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_TYPEDEF:
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE:declarations.push_back(parseDeclaration());
+        continue;
+      case TokenKind::TOKEN_IDENTIFIER:
+        if (isIdentiferAType(lex.peek().getValue())) {
+          declarations.push_back(parseDeclaration());
+          continue;
+        } else {
+          break;
+        }
+      default:break;
+    }
+    break;
+  }
+
+  nts<StatementAST> statements;
+  while (lex.peek() != TokenKind::TOKEN_RBRACE) {
+    statements.push_back(parseStatement());
+  }
+  accept(TokenKind::TOKEN_RBRACE);
+  return std::make_unique<CompoundStatementAST>(std::move(declarations), std::move(statements));
+}
+
+///<statement> ::= <labeled-statement>
+///              | <expression-statement>
+///              | <compound-statement>
+///              | <selection-statement>
+///              | <iteration-statement>
+///              | <jump-statement>
+mycc::nt<mycc::StatementAST> mycc::Parser::parseStatement() {
+  switch (lex.peek().getKind()) {
+    case TokenKind::TOKEN_CASE:
+    case TokenKind::TOKEN_DEFAULT:
+    case TokenKind::TOKEN_IDENTIFIER:
+      if (lex.peek(1).getKind() == TokenKind::TOKEN_COLON) {
+        return std::make_unique<StatementAST>(parseLabeledStatement());
+      } else {
+        return std::make_unique<StatementAST>(parseExpressionStatement());
+      }
+    case TokenKind::TOKEN_LBRACE:return std::make_unique<StatementAST>(parseCompoundStatement());
+    case TokenKind::TOKEN_IF:
+    case TokenKind::TOKEN_SWITCH:return std::make_unique<StatementAST>(parseSelectionStatement());
+    case TokenKind::TOKEN_DO:
+    case TokenKind::TOKEN_FOR:
+    case TokenKind::TOKEN_WHILE:return std::make_unique<StatementAST>(parseIterationStatement());
+    case TokenKind::TOKEN_BREAK:
+    case TokenKind::TOKEN_CONTINUE:
+    case TokenKind::TOKEN_GOTO:
+    case TokenKind::TOKEN_RETURN:return std::make_unique<StatementAST>(parseJumpStatement());
+    default:return std::make_unique<StatementAST>(parseExpressionStatement());
+  }
+}
+
+///<labeled-statement> ::= <identifier> : <statement>
+///                      | case <constant-expression> : <statement>
+///                      | default : <statement>
+mycc::nt<mycc::LabeledStatementAST> mycc::Parser::parseLabeledStatement() {
+  if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
+    auto id = parseIdentifer();
+    accept(TokenKind::TOKEN_COLON);
+    return std::make_unique<LabeledStatementAST>(std::move(id), parseStatement());
+  } else if (expect(TokenKind::TOKEN_CASE)) {
+    auto exp = parseConstantExpression();
+    accept(TokenKind::TOKEN_COLON);
+    return std::make_unique<LabeledStatementAST>(std::move(exp), parseStatement());
+  } else if (expect(TokenKind::TOKEN_DEFAULT)) {
+    accept(TokenKind::TOKEN_COLON);
+    return std::make_unique<LabeledStatementAST>(parseStatement());
+  } else {
+    throw parseError(R"(labeled statement expects "case", "default" or an identifer)");
+  }
+  return mycc::nt<mycc::LabeledStatementAST>();
+}
+
+

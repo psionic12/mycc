@@ -50,7 +50,6 @@ class AST {
     CHARACTER_CONSTANT,
     FLOATING_CONSTANT,
     ENUMERATION_CONSTANT,
-    ASSIGNMENT_OPERATOR,
     PARAMETER_LIST,
     PARAMETER_DECLARATION,
     ENUMERATOR_LIST,
@@ -104,13 +103,6 @@ class IdentifierAST : public AST {
       : AST(AST::Kind::IDENTIFIER), value(std::move(value)) {}
  private:
   std::string value;
-};
-class AssignmentOperatorAST : public AST {
- public:
-  AssignmentOperatorAST(AssignmentOp op)
-      : AST(AST::Kind::ASSIGNMENT_OPERATOR), op(op) {}
- private:
-  AssignmentOp op;
 };
 class StructOrUnionAST : public AST {
  public:
@@ -177,13 +169,12 @@ class StatementAST : public AST {
 };
 class InitializerListAST : public AST {
  public:
-  InitializerListAST(nt<InitializerAST>) : AST(AST::Kind::INITIALIZER_LIST, 0) {}
-  InitializerListAST(nt<InitializerListAST>, nt<InitializerAST>) : AST(AST::Kind::INITIALIZER_LIST, 1) {}
+  InitializerListAST(nts<InitializerAST>) : AST(AST::Kind::INITIALIZER_LIST) {}
 };
 class InitializerAST : public AST {
  public:
   InitializerAST(nt<AssignmentExpressionAST>) : AST(AST::Kind::INITIALIZER, 0) {}
-  InitializerAST(nt<InitializerListAST>, bool multiple) : AST(AST::Kind::INITIALIZER, multiple ? 2 : 1) {}
+  InitializerAST(nt<InitializerListAST>) : AST(AST::Kind::INITIALIZER, 1) {}
 };
 class InitDeclaratorAST : public AST {
  public:
@@ -205,8 +196,7 @@ class ParameterDeclarationAST : public AST {
 };
 class ParameterListAST : public AST {
  public:
-  ParameterListAST(nt<ParameterDeclarationAST>) : AST(AST::Kind::PARAMETER_LIST, 0) {}
-  ParameterListAST(nt<ParameterListAST>, nt<ParameterDeclarationAST>) : AST(AST::Kind::PARAMETER_LIST, 1) {}
+  ParameterListAST(nts<ParameterDeclarationAST>) : AST(AST::Kind::PARAMETER_LIST) {}
 };
 class EnumerationConstantAST : public AST {
  public:
@@ -235,7 +225,7 @@ class AssignmentExpressionAST : public AST {
  public:
   AssignmentExpressionAST(nt<ConditionalExpressionAST>)
       : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0) {}
-  AssignmentExpressionAST(nt<ConditionalExpressionAST>, nt<AssignmentOperatorAST>, nt<AssignmentExpressionAST>)
+  AssignmentExpressionAST(nt<ConditionalExpressionAST>, AssignmentOp, nt<AssignmentExpressionAST>)
       : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 1) {}
   //TODO check is LHS a lvalue
 };
@@ -329,7 +319,7 @@ class DirectDeclaratorAST : public AST {
     PARA_LIST,
     ID,
   };
-  DirectDeclaratorAST(nt<AST> term1, std::vector<std::pair<Term2, nt<AST>>> term2s, bool abstract)
+  DirectDeclaratorAST(nt<AST> term1, std::vector<std::pair<Term2, nt<AST>>> term2s)
       : AST(Kind::DIRECT_DECLARATOR) {}
 };
 class PointerAST : public AST {
@@ -402,7 +392,7 @@ class TypeSpecifierAST : public AST {
   TypeSpecifierAST(ProtoTypeSpecifier type_specifier) : AST(AST::Kind::TYPE_SPECIFIER) {}
   TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier)
       : AST(AST::Kind::TYPE_SPECIFIER, 9) {}
-  TypeSpecifierAST(nt<EnumeratorListAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 10) {}
+  TypeSpecifierAST(nt<EnumSpecifierAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 10) {}
   TypeSpecifierAST(nt<TypedefNameAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER, 11) {}
 };
 class SpecifierQualifierAST : public AST {
@@ -421,11 +411,8 @@ class StorageClassSpecifierAST : public AST {
 };
 class DeclaratorAST : public AST {
  public:
-  DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator, bool abstract)
-      : AST(AST::Kind::DECLARATOR), pointer(std::move(pointer)), dir_decl_tor(std::move(direct_declarator)) {}
- private:
-  nt<PointerAST> pointer;
-  nt<DirectDeclaratorAST> dir_decl_tor;
+  DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator)
+      : AST(AST::Kind::DECLARATOR) {}
 };
 class DeclarationSpecifierAST : public AST {
  public:
@@ -451,7 +438,7 @@ class DeclarationAST : public AST {
 /// {
 class CompoundStatementAST : public AST {
  public:
-  CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements, const SymbolTable &table)
+  CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements)
       : AST(AST::Kind::COMPOUND_STATEMENT),
         decls(std::move(declarations)),
         stats(std::move(statements)),
