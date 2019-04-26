@@ -15,7 +15,7 @@ int main() {
   while (!lex.endOfTokens()) {
     mycc::TokenKind kind = lex.peek().getKind();
     std::string value = lex.peek().getValue();
-    std::cout << enumToString(kind) << "("<< value << ")" << std::endl;
+    std::cout << mycc::Token::enumToString(kind) << "("<< value << ")" << std::endl;
     lex.consumeToken();
   }
 }

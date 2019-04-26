@@ -124,12 +124,8 @@ class TypeQualifierAST : public AST {
 class UnaryOperatorAST : public AST { public:UnaryOperatorAST(UnaryOp op) : AST(AST::Kind::UNARY_OPERATOR) {}};
 class JumpStatementAST : public AST {
  public:
-  enum class JumpType : int {
-    CTN = 1,  // continue
-    BRK = 2,  // break
-  };
   JumpStatementAST(nt<IdentifierAST>) : AST(AST::Kind::JUMP_STATEMENT, 0) {}
-  JumpStatementAST(JumpType type) : AST(AST::Kind::JUMP_STATEMENT, static_cast<int>(type)) {}
+  JumpStatementAST(bool is_continue) : AST(AST::Kind::JUMP_STATEMENT, is_continue ? 1 : 2) {}
   JumpStatementAST(nt<ExpressionAST>) : AST(AST::Kind::JUMP_STATEMENT, 3) {}
 };
 class IterationStatementAST : public AST {
@@ -141,11 +137,10 @@ class IterationStatementAST : public AST {
 };
 class SelectionStatementAST : public AST {
  public:
-  SelectionStatementAST(nt<ExpressionAST>, nt<StatementAST>, bool true_for_if_false_for_switch)
-      : AST(AST::Kind::SELECTION_STATEMENT, true_for_if_false_for_switch ? 0 : 2) {}
+  SelectionStatementAST(nt<ExpressionAST>, nt<StatementAST>, bool is_if)
+      : AST(AST::Kind::SELECTION_STATEMENT, is_if ? 0 : 2) {}
   SelectionStatementAST(nt<ExpressionAST>, nt<StatementAST>, nt<StatementAST>)
       : AST(AST::Kind::SELECTION_STATEMENT, 1) {}
-  SelectionStatementAST(nt<ExpressionAST>, nt<StatementAST>) : AST(AST::Kind::SELECTION_STATEMENT, 2) {}
 };
 class ExpressionStatementAST : public AST {
  public:
@@ -240,37 +235,23 @@ class PrimaryExpressionAST : public AST {
 };
 class PostfixExpressionAST : public AST {
  public:
-  enum class RelationalType : int {
-    DOT = 3,
-    ARROW = 4,
-    PLUSPLUS = 5,
-    MINMIN = 6,
-
-  };
-  PostfixExpressionAST(nt<PrimaryExpressionAST>) : AST(AST::Kind::POSTFIX_EXPRESSION, 0) {}
-  PostfixExpressionAST(nt<PostfixExpressionAST>, nt<ExpressionAST>) : AST(AST::Kind::POSTFIX_EXPRESSION, 1) {}
-  PostfixExpressionAST(nt<PrimaryExpressionAST>, nt<AssignmentExpressionAST>) : AST(AST::Kind::POSTFIX_EXPRESSION, 2) {}
-  PostfixExpressionAST(nt<PrimaryExpressionAST>, nt<IdentifierAST>, RelationalType type)
-      : AST(AST::Kind::POSTFIX_EXPRESSION, static_cast<int>(type)) {}
-  PostfixExpressionAST(nt<PrimaryExpressionAST>, RelationalType type)
-      : AST(AST::Kind::POSTFIX_EXPRESSION, static_cast<int>(type)) {}
+  PostfixExpressionAST(nt<PrimaryExpressionAST> primary, std::vector<std::pair<int, nt<AST>>> terms) : AST(AST::Kind::POSTFIX_EXPRESSION, 0) {}
 };
 class TypeNameAST : public AST {
  public:
-  TypeNameAST(nts<SpecifierQualifierAST>, nts<DeclaratorAST>)
-      : AST(AST::Kind::TYPE_NAME) {}
+  TypeNameAST(nts<SpecifierQualifierAST>, nt<DeclaratorAST>) : AST(AST::Kind::TYPE_NAME) {}
 };
 class UnaryExpressionAST : public AST {
  public:
   enum class PrefixType : int {
     PLUSPLUS = 1,
-    MINMIN = 2,
+    SUBSUB = 2,
     SIZE_OF = 4,
   };
   UnaryExpressionAST(nt<PostfixExpressionAST>) : AST(AST::Kind::UNARY_EXPRESSION, 0) {}
   UnaryExpressionAST(nt<UnaryExpressionAST>, PrefixType type)
       : AST(AST::Kind::UNARY_EXPRESSION, static_cast<int>(type)) {}
-  UnaryExpressionAST(nt<UnaryOperatorAST>, nt<CastExpressionAST>) : AST(AST::Kind::UNARY_EXPRESSION) {}
+  UnaryExpressionAST(UnaryOp op, nt<CastExpressionAST>) : AST(AST::Kind::UNARY_EXPRESSION) {}
   UnaryExpressionAST(nt<TypeNameAST>) : AST(AST::Kind::UNARY_EXPRESSION) {}
 };
 class CastExpressionAST : public AST {
@@ -426,7 +407,7 @@ class DeclarationSpecifierAST : public AST {
 class DeclarationAST : public AST {
  public:
   DeclarationAST(nts<DeclarationSpecifierAST> declaration_specifiers,
-                 nts<InitDeclaratorAST> init_declarators)
+                 nts<InitDeclaratorAST> init_declarators, bool external = false)
       : AST(AST::Kind::DECLARATION),
         decl_specs(std::move(declaration_specifiers)),
         init_dec_tors(std::move(init_declarators)) {}
@@ -441,10 +422,8 @@ class CompoundStatementAST : public AST {
   CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements)
       : AST(AST::Kind::COMPOUND_STATEMENT),
         decls(std::move(declarations)),
-        stats(std::move(statements)),
-        table(table) {}
+        stats(std::move(statements)) {}
  private:
-  const SymbolTable &table;
   nts<DeclarationAST> decls;
   nts<StatementAST> stats;
 

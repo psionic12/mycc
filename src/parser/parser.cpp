@@ -13,7 +13,7 @@ bool mycc::Parser::expect(mycc::TokenKind kind) {
 }
 const std::string &mycc::Parser::accept(mycc::TokenKind kind) {
   if (lex.peek() != kind) {
-    throw parseError(std::string("except ").append(enumToString(kind)));
+    throw parseError(std::string("except ").append(Token::enumToString(kind)));
   } else {
     const std::string &name = lex.peek().getValue();
     lex.consumeToken();
@@ -391,7 +391,7 @@ mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression(in
 }
 
 /// <declaration> ::=  {<declaration-specifier>}+ {<init-declarator>}* ;
-mycc::nt<mycc::DeclarationAST> mycc::Parser::parseDeclaration() {
+mycc::nt<mycc::DeclarationAST> mycc::Parser::parseDeclaration(bool external) {
   nts<DeclarationSpecifierAST> specifiers;
   do {
     specifiers.push_back(parseDeclarationSpecifier());
@@ -433,7 +433,7 @@ mycc::nt<mycc::DeclarationAST> mycc::Parser::parseDeclaration() {
     break;
   }
   accept(TokenKind::TOKEN_SEMI);
-  return std::make_unique<DeclarationAST>(std::move(specifiers), std::move(init_decls));
+  return std::make_unique<DeclarationAST>(std::move(specifiers), std::move(init_decls), external);
 }
 
 ///<declaration-specifier> ::= <storage-class-specifier>
@@ -1014,7 +1014,227 @@ mycc::nt<mycc::LabeledStatementAST> mycc::Parser::parseLabeledStatement() {
   } else {
     throw parseError(R"(labeled statement expects "case", "default" or an identifer)");
   }
-  return mycc::nt<mycc::LabeledStatementAST>();
 }
+
+///<expression-statement> ::= {<expression>}? ;
+mycc::nt<mycc::ExpressionStatementAST> mycc::Parser::parseExpressionStatement() {
+  nt<ExpressionAST> exp = nullptr;
+  if (!expect(TokenKind::TOKEN_SEMI)) {
+    exp = parseExpression();
+    accept(TokenKind::TOKEN_SEMI);
+  }
+  return std::make_unique<ExpressionStatementAST>(std::move(exp));
+}
+
+///<selection-statement> ::= if ( <expression> ) <statement>
+///                        | if ( <expression> ) <statement> else <statement>
+///                        | switch ( <expression> ) <statement>
+mycc::nt<mycc::SelectionStatementAST> mycc::Parser::parseSelectionStatement() {
+  if (expect(TokenKind::TOKEN_IF)) {
+    accept(TokenKind::TOKEN_LPAREN);
+    auto condition = parseExpression();
+    accept(TokenKind::TOKEN_RPAREN);
+    auto if_statement = parseStatement();
+    if (expect(TokenKind::TOKEN_ELSE)) {
+      return std::make_unique<SelectionStatementAST>(std::move(condition), std::move(if_statement), parseStatement());
+    } else {
+      return std::make_unique<SelectionStatementAST>(std::move(condition), std::move(if_statement), true);
+    }
+  } else {
+    accept(TokenKind::TOKEN_SWITCH);
+    accept(TokenKind::TOKEN_LPAREN);
+    auto exp = parseExpression();
+    accept(TokenKind::TOKEN_RPAREN);
+    return std::make_unique<SelectionStatementAST>(std::move(exp), parseStatement(), false);
+  }
+}
+
+///<iteration-statement> ::= while ( <expression> ) <statement>
+///                        | do <statement> while ( <expression> ) ;
+///                        | for ( {<expression>}? ; {<expression>}? ; {<expression>}? ) <statement>
+mycc::nt<mycc::IterationStatementAST> mycc::Parser::parseIterationStatement() {
+  if (expect(TokenKind::TOKEN_WHILE)) {
+    accept(TokenKind::TOKEN_LPAREN);
+    auto exp = parseExpression();
+    accept(TokenKind::TOKEN_RPAREN);
+    return std::make_unique<IterationStatementAST>(std::move(exp), parseStatement());
+  } else if (expect(TokenKind::TOKEN_DO)) {
+    auto statement = parseStatement();
+    accept(TokenKind::TOKEN_WHILE);
+    accept(TokenKind::TOKEN_LPAREN);
+    auto exp = parseExpression();
+    accept(TokenKind::TOKEN_RPAREN);
+    accept(TokenKind::TOKEN_SEMI);
+    return std::make_unique<IterationStatementAST>(std::move(statement), std::move(exp));
+  } else {
+    accept(TokenKind::TOKEN_FOR);
+    accept(TokenKind::TOKEN_LPAREN);
+    nt<ExpressionAST> term1 = nullptr;
+    nt<ExpressionAST> term2 = nullptr;
+    nt<ExpressionAST> term3 = nullptr;
+    if (!expect(TokenKind::TOKEN_SEMI)) {
+      term1 = parseExpression();
+      accept(TokenKind::TOKEN_SEMI);
+    }
+    if (!expect(TokenKind::TOKEN_SEMI)) {
+      term2 = parseExpression();
+      accept(TokenKind::TOKEN_SEMI);
+    }
+    if (!expect(TokenKind::TOKEN_RPAREN)) {
+      term3 = parseExpression();
+      accept(TokenKind::TOKEN_RPAREN);
+    }
+    return std::make_unique<IterationStatementAST>(std::move(term1),
+                                                   std::move(term2),
+                                                   std::move(term3),
+                                                   parseStatement());
+  }
+}
+
+///<jump-statement> ::= goto <identifier> ;
+///                   | continue ;
+///                   | break ;
+///                   | return {<expression>}? ;
+mycc::nt<mycc::JumpStatementAST> mycc::Parser::parseJumpStatement() {
+  if (expect(TokenKind::TOKEN_GOTO)) {
+    auto id = parseIdentifer();
+    accept(TokenKind::TOKEN_SEMI);
+    return std::make_unique<JumpStatementAST>(std::move(id));
+  } else if (expect(TokenKind::TOKEN_RETURN)) {
+    nt<ExpressionAST> exp = nullptr;
+    if (!expect(TokenKind::TOKEN_SEMI)) {
+      exp = parseExpression();
+      accept(TokenKind::TOKEN_SEMI);
+    }
+    return std::make_unique<JumpStatementAST>(std::move(exp));
+  } else {
+    bool is_continue;
+    if (expect(TokenKind::TOKEN_CONTINUE)) {
+      is_continue = true;
+    } else {
+      accept(TokenKind::TOKEN_BREAK);
+      is_continue = false;
+    }
+    return std::make_unique<JumpStatementAST>(is_continue);
+  }
+}
+
+///<constant-expression> ::= <conditional-expression>
+mycc::nt<mycc::ConstantExpressionAST> mycc::Parser::parseConstantExpression() {
+  return std::make_unique<ConstantExpressionAST>(parseConditionalExpression());
+}
+
+///<cast-expression> ::= <unary-expression>
+///                    | ( <type-name> ) <cast-expression>
+mycc::nt<mycc::CastExpressionAST> mycc::Parser::parseCastExpression() {
+  if (lex.peek() == TokenKind::TOKEN_LPAREN
+      && lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
+      && isIdentiferAType(lex.peek(1).getValue())) {
+    accept(TokenKind::TOKEN_LPAREN);
+    auto type_name = parseTypeName();
+    accept(TokenKind::TOKEN_RPAREN);
+    return std::make_unique<CastExpressionAST>(std::move(type_name), parseCastExpression());
+  } else {
+    return std::make_unique<CastExpressionAST>(parseUnaryExpression());
+  }
+}
+
+///<unary-expression> ::= <postfix-expression>
+///                     | ++ <unary-expression>
+///                     | -- <unary-expression>
+///                     | <unary-operator> <cast-expression>
+///                     | sizeof <unary-expression>
+///                     | sizeof <type-name>
+mycc::nt<mycc::UnaryExpressionAST> mycc::Parser::parseUnaryExpression() {
+  if (expect(TokenKind::TOKEN_PLUSPLUS)) {
+    return std::make_unique<UnaryExpressionAST>(parseUnaryExpression(), UnaryExpressionAST::PrefixType::PLUSPLUS);
+  } else if (expect(TokenKind::TOKEN_SUBSUB)) {
+    return std::make_unique<UnaryExpressionAST>(parseUnaryExpression(), UnaryExpressionAST::PrefixType::SUBSUB);
+  } else if (expect(TokenKind::TOKEN_SIZEOF)) {
+    return std::make_unique<UnaryExpressionAST>(parseUnaryExpression(), UnaryExpressionAST::PrefixType::SIZE_OF);
+  } else if (lex.peek() == TokenKind::TOKEN_BANG
+      || lex.peek() == TokenKind::TOKEN_AMP
+      || lex.peek() == TokenKind::TOKEN_STAR
+      || lex.peek() == TokenKind::TOKEN_PLUS
+      || lex.peek() == TokenKind::TOKEN_SUB
+      || lex.peek() == TokenKind::TOKEN_TILDE) {
+    return std::make_unique<UnaryExpressionAST>(parseUnaryOperator(), parseCastExpression());
+  } else {
+    return std::make_unique<UnaryExpressionAST>(parsePostfixExpression());
+  }
+}
+
+///<postfix-expression> ::= <primary-expression>
+//                       | <postfix-expression> [ <expression> ]
+//                       | <postfix-expression> ( {<assignment-expression>}* )
+//                       | <postfix-expression> . <identifier>
+//                       | <postfix-expression> -> <identifier>
+//                       | <postfix-expression> ++
+//                       | <postfix-expression> --
+mycc::nt<mycc::PostfixExpressionAST> mycc::Parser::parsePostfixExpression() {
+  auto primary = parsePrimaryExpression();
+  std::vector<std::pair<int, nt<AST>>> terms;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_LBRACKET:lex.consumeToken();
+        terms.emplace_back(1, parseExpression());
+        accept(TokenKind::TOKEN_RBRACKET);
+      case TokenKind::TOKEN_LPAREN:lex.consumeToken();
+        while (!expect(TokenKind::TOKEN_RPAREN)) {
+          terms.emplace_back(2, parseAssignmentExpression());
+        }
+      case TokenKind::TOKEN_DOT:lex.consumeToken();
+        terms.emplace_back(3, parseIdentifer());
+      case TokenKind::TOKEN_ARROW:lex.consumeToken();
+        terms.emplace_back(4, parseIdentifer());
+      case TokenKind::TOKEN_PLUSPLUS:lex.consumeToken();
+        terms.emplace_back(5, parseIdentifer());
+      case TokenKind::TOKEN_SUBSUB:lex.consumeToken();
+        terms.emplace_back(6, parseIdentifer());
+      default:return std::make_unique<PostfixExpressionAST>(std::move(primary), std::move(terms));
+    }
+  }
+}
+
+///<type-name> ::= {<specifier-qualifier>}+ {<abstract-declarator>}?
+mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
+  nts<SpecifierQualifierAST> qualifiers;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_IDENTIFIER:
+        if (!isIdentiferAType(lex.peek().getValue())) {
+          break;
+        }
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE:qualifiers.push_back(parseSpecifierQualifier());
+        continue;
+      default:break;
+    }
+    break;
+  }
+
+  switch (lex.peek().getKind()) {
+    case TokenKind ::TOKEN_LPAREN:
+    case TokenKind ::TOKEN_STAR:
+    case TokenKind ::TOKEN_LBRACKET:
+      return std::make_unique<TypeNameAST>(std::move(qualifiers), parseDeclarator());
+    default:
+      return std::make_unique<TypeNameAST>(std::move(qualifiers), nullptr);
+  }
+}
+
+
 
 

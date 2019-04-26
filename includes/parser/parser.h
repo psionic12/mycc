@@ -42,7 +42,6 @@ class Parser {
   nt<UnaryExpressionAST> parseUnaryExpression();
   nt<PostfixExpressionAST> parsePostfixExpression();
   nt<PrimaryExpressionAST> parsePrimaryExpression();
-  nt<ConstantAST> parseConstant();
   nt<ExpressionAST> parseExpression();
   nt<AssignmentExpressionAST> parseAssignmentExpression();
   AssignmentOp parseAssignmentOperator();
@@ -55,7 +54,7 @@ class Parser {
   nt<EnumeratorListAST> parseEnumeratorList();
   nt<EnumeratorAST> parseEnumerator();
   nt<TypedefNameAST> parseTypedefName();
-  nt<DeclarationAST> parseDeclaration();
+  nt<DeclarationAST> parseDeclaration(bool external = false);
   nt<InitDeclaratorAST> parseInitDeclarator();
   nt<InitializerAST> parseInitializer();
   nt<InitializerListAST> parseInitializerList();
