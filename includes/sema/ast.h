@@ -90,7 +90,7 @@ class ExpressionAST;
 class ConditionalExpressionAST;
 class UnaryExpressionAST;
 class PointerAST;
-class DeclarationSpecifierAST;
+class DeclarationSpecifiersAST;
 class ParameterTypeListAST;
 class AssignmentExpressionAST;
 class InitializerAST;
@@ -187,7 +187,7 @@ class EnumeratorListAST : public AST {
 };
 class ParameterDeclarationAST : public AST {
  public:
-  ParameterDeclarationAST(nts<DeclarationSpecifierAST>, nt<DeclaratorAST>) : AST(AST::Kind::PARAMETER_DECLARATION) {}
+  ParameterDeclarationAST(nt<DeclarationSpecifiersAST>, nt<DeclaratorAST>) : AST(AST::Kind::PARAMETER_DECLARATION) {}
 };
 class ParameterListAST : public AST {
  public:
@@ -235,7 +235,8 @@ class PrimaryExpressionAST : public AST {
 };
 class PostfixExpressionAST : public AST {
  public:
-  PostfixExpressionAST(nt<PrimaryExpressionAST> primary, std::vector<std::pair<int, nt<AST>>> terms) : AST(AST::Kind::POSTFIX_EXPRESSION, 0) {}
+  PostfixExpressionAST(nt<PrimaryExpressionAST> primary, std::vector<std::pair<int, nt<AST>>> terms)
+      : AST(AST::Kind::POSTFIX_EXPRESSION, 0) {}
 };
 class TypeNameAST : public AST {
  public:
@@ -395,25 +396,29 @@ class DeclaratorAST : public AST {
   DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator)
       : AST(AST::Kind::DECLARATOR) {}
 };
-class DeclarationSpecifierAST : public AST {
+class DeclarationSpecifiersAST : public AST {
  public:
-  DeclarationSpecifierAST(StorageSpecifier specifier)
-      : AST(AST::Kind::DECLARATION_SPECIFIER, 0) {}
-  DeclarationSpecifierAST(nt<TypeSpecifierAST> specifier)
-      : AST(AST::Kind::DECLARATION_SPECIFIER, 1) {}
-  DeclarationSpecifierAST(nt<TypeQualifierAST> specifier)
-      : AST(AST::Kind::DECLARATION_SPECIFIER, 2) {}
+
+  DeclarationSpecifiersAST(std::vector<StorageSpecifier> storage_specifiers,
+                           nts<TypeSpecifierAST> type_specifiers,
+                           nts<TypeQualifierAST> type_qualifiers)
+      : AST(AST::Kind::DECLARATION_SPECIFIER),
+        storage_specifiers(std::move(storage_specifiers)),
+        type_specifiers(std::move(type_specifiers)),
+        type_qualifiers(std::move(type_qualifiers)) {}
+  const std::vector<StorageSpecifier> storage_specifiers;
+  const nts<TypeSpecifierAST> type_specifiers;
+  const nts<TypeQualifierAST> type_qualifiers;
+
 };
 class DeclarationAST : public AST {
  public:
-  DeclarationAST(nts<DeclarationSpecifierAST> declaration_specifiers,
+  DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                  nts<InitDeclaratorAST> init_declarators, bool external = false)
-      : AST(AST::Kind::DECLARATION),
-        decl_specs(std::move(declaration_specifiers)),
-        init_dec_tors(std::move(init_declarators)) {}
+      : AST(AST::Kind::DECLARATION) {}
   bool isType() const;
  private:
-  nts<DeclarationSpecifierAST> decl_specs;
+  nts<DeclarationSpecifiersAST> decl_specs;
   nts<InitDeclaratorAST> init_dec_tors;
 };
 /// {
@@ -430,17 +435,12 @@ class CompoundStatementAST : public AST {
 };
 class FunctionDefinitionAST : public AST {
  public:
-  FunctionDefinitionAST(nts<DeclarationSpecifierAST> declaration_spcifiers,
+  FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declaration_spcifiers,
                         nt<DeclaratorAST> declarator,
                         nts<DeclarationAST> declarations,
                         nt<CompoundStatementAST> compound_statement)
-      : AST(AST::Kind::FUNCTION_DEFINITION), decl_specs(std::move(declaration_spcifiers)),
-        decl_tor(std::move(declarator)), decls(std::move(declarations)), stat(std::move(compound_statement)) {}
- private:
-  nts<DeclarationSpecifierAST> decl_specs;
-  nt<DeclaratorAST> decl_tor;
-  nts<DeclarationAST> decls;
-  nt<CompoundStatementAST> stat;
+      : AST(AST::Kind::FUNCTION_DEFINITION) {}
+
 };
 class ExternalDeclarationAST : public AST {
  public:
@@ -453,12 +453,7 @@ class ExternalDeclarationAST : public AST {
 };
 class TranslationUnitAST : public AST {
  public:
-  TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations, const SymbolTable &table)
-      : AST(AST::Kind::TRANSLATION_UNIT), decls(std::move(external_declarations)),
-        table(table) {}
- private:
-  const SymbolTable &table;
-  nts<ExternalDeclarationAST> decls;
+  TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations) : AST(AST::Kind::TRANSLATION_UNIT) {};
 };
 } //namespace mycc
 #endif //MYCCPILER_AST_H

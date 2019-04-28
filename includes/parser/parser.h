@@ -3,7 +3,7 @@
 
 #include <fstream>
 #include <memory>
-#include <ast/ast.h>
+#include <sema/ast.h>
 #include <lex/lex.h>
 #include <sema/SymbolTable.h>
 #include <sema/operator.h>
@@ -23,7 +23,7 @@ class Parser {
   SymbolTable *pTable;
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
-  nt<DeclarationSpecifierAST> parseDeclarationSpecifier();
+  nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers();
   StorageSpecifier parseStorageClassSpecifier();
   nt<TypeSpecifierAST> parseTypeSpecifier();
   nt<StructOrUnionSpecifierAST> parseStructOrUnionSpecifier();

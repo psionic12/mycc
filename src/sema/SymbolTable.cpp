@@ -1,5 +1,5 @@
 #include <sema/SymbolTable.h>
-#include <ast/ast.h>
+#include <sema/ast.h>
 mycc::SymbolTable::SymbolTable(const std::string &name, const SymbolTable &father)
     : name(name), father(father) {}
 mycc::SymbolTable::SymbolTable(const std::string &name) : name(name), father(*this) {}

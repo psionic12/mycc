@@ -101,13 +101,11 @@ bool mycc::Parser::isIdentiferAType(const std::string &name) {
 /// <translation-unit> ::= {<external-declaration>}*
 mycc::nt<mycc::TranslationUnitAST>
 mycc::Parser::parseTranslationUnit() {
-  tables.emplace_back("TranslationUnit");
-  pTable = &tables.back();
   mycc::nts<ExternalDeclarationAST> declarations;
   while (lex.peek() != TokenKind::TOKEN_EOF) {
     declarations.push_back(parseExternalDeclaration());
   }
-  return std::make_unique<TranslationUnitAST>(std::move(declarations), *pTable);
+  return std::make_unique<TranslationUnitAST>(std::move(declarations));
 }
 
 ///<external-declaration> ::= <function-definition>
@@ -392,34 +390,7 @@ mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression(in
 
 /// <declaration> ::=  {<declaration-specifier>}+ {<init-declarator>}* ;
 mycc::nt<mycc::DeclarationAST> mycc::Parser::parseDeclaration(bool external) {
-  nts<DeclarationSpecifierAST> specifiers;
-  do {
-    specifiers.push_back(parseDeclarationSpecifier());
-    switch (lex.peek().getKind()) {
-      case TokenKind::TOKEN_IDENTIFIER:if (!isIdentiferAType(lex.peek().getValue())) break;
-      case TokenKind::TOKEN_AUTO:
-      case TokenKind::TOKEN_CHAR:
-      case TokenKind::TOKEN_CONST:
-      case TokenKind::TOKEN_DOUBLE:
-      case TokenKind::TOKEN_ENUM:
-      case TokenKind::TOKEN_EXTERN:
-      case TokenKind::TOKEN_FLOAT:
-      case TokenKind::TOKEN_INT:
-      case TokenKind::TOKEN_LONG:
-      case TokenKind::TOKEN_REGISTER:
-      case TokenKind::TOKEN_SHORT:
-      case TokenKind::TOKEN_SIGNED:
-      case TokenKind::TOKEN_STATIC:
-      case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_TYPEDEF:
-      case TokenKind::TOKEN_UNION:
-      case TokenKind::TOKEN_UNSIGNED:
-      case TokenKind::TOKEN_VOID:
-      case TokenKind::TOKEN_VOLATILE:continue;
-      default:break;
-    }
-    break;
-  } while (true);
+  auto specifiers = parseDeclarationSpecifiers();
 
   nts<InitDeclaratorAST> init_decls;
   while (true) {
@@ -439,33 +410,44 @@ mycc::nt<mycc::DeclarationAST> mycc::Parser::parseDeclaration(bool external) {
 ///<declaration-specifier> ::= <storage-class-specifier>
 ///                          | <type-specifier>
 ///                          | <type-qualifier>
-mycc::nt<mycc::DeclarationSpecifierAST> mycc::Parser::parseDeclarationSpecifier() {
-  switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_AUTO:
-    case TokenKind::TOKEN_EXTERN:
-    case TokenKind::TOKEN_REGISTER:
-    case TokenKind::TOKEN_STATIC:
-    case TokenKind::TOKEN_TYPEDEF:return std::make_unique<DeclarationSpecifierAST>(parseStorageClassSpecifier());
-    case TokenKind::TOKEN_CHAR:
-    case TokenKind::TOKEN_DOUBLE:
-    case TokenKind::TOKEN_ENUM:
-    case TokenKind::TOKEN_FLOAT:
-    case TokenKind::TOKEN_INT:
-    case TokenKind::TOKEN_LONG:
-    case TokenKind::TOKEN_SHORT:
-    case TokenKind::TOKEN_SIGNED:
-    case TokenKind::TOKEN_STRUCT:
-    case TokenKind::TOKEN_IDENTIFIER:
-      if (!isIdentiferAType(lex.peek().getValue())) {
-        throw parseError("except declaration specifier");
-      }
-    case TokenKind::TOKEN_UNION:
-    case TokenKind::TOKEN_UNSIGNED:
-    case TokenKind::TOKEN_VOID:return std::make_unique<DeclarationSpecifierAST>(parseTypeSpecifier());
-    case TokenKind::TOKEN_CONST:
-    case TokenKind::TOKEN_VOLATILE:return std::make_unique<DeclarationSpecifierAST>(parseTypeQualifier());
-    default:throw parseError("except declaration specifier");
+mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifiers() {
+  std::vector<StorageSpecifier> storage_specifiers;
+  nts<TypeSpecifierAST> type_specifiers;
+  nts<TypeQualifierAST> type_qualifiers;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_AUTO:
+      case TokenKind::TOKEN_EXTERN:
+      case TokenKind::TOKEN_REGISTER:
+      case TokenKind::TOKEN_STATIC:
+      case TokenKind::TOKEN_TYPEDEF:storage_specifiers.push_back(parseStorageClassSpecifier());
+        continue;
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_IDENTIFIER:
+        if (!isIdentiferAType(lex.peek().getValue())) {
+          throw parseError("except declaration specifier");
+        }
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:type_specifiers.push_back(parseTypeSpecifier());
+        continue;
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_VOLATILE:type_qualifiers.push_back(parseTypeQualifier());
+      default:break;
+    }
+    break;
   }
+  return std::make_unique<DeclarationSpecifiersAST>(std::move(storage_specifiers),
+                                                   std::move(type_specifiers),
+                                                   std::move(type_qualifiers));
 }
 
 ///<init-declarator> ::= <declarator>
@@ -638,33 +620,7 @@ mycc::nt<mycc::ParameterListAST> mycc::Parser::parseParameterList() {
 ///                          | {<declaration-specifier>}+ <abstract-declarator>
 ///                          | {<declaration-specifier>}+
 mycc::nt<mycc::ParameterDeclarationAST> mycc::Parser::parseParameterDeclaration() {
-  nts<DeclarationSpecifierAST> ds;
-  do {
-    ds.emplace_back(parseDeclarationSpecifier());
-    switch (lex.peek().getKind()) {
-      case TokenKind::TOKEN_AUTO:
-      case TokenKind::TOKEN_CHAR:
-      case TokenKind::TOKEN_CONST:
-      case TokenKind::TOKEN_DOUBLE:
-      case TokenKind::TOKEN_ENUM:
-      case TokenKind::TOKEN_EXTERN:
-      case TokenKind::TOKEN_FLOAT:
-      case TokenKind::TOKEN_INT:
-      case TokenKind::TOKEN_LONG:
-      case TokenKind::TOKEN_REGISTER:
-      case TokenKind::TOKEN_SHORT:
-      case TokenKind::TOKEN_SIGNED:
-      case TokenKind::TOKEN_STATIC:
-      case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_IDENTIFIER:if (!isIdentiferAType(lex.peek().getValue())) break;
-      case TokenKind::TOKEN_TYPEDEF:
-      case TokenKind::TOKEN_UNION:
-      case TokenKind::TOKEN_UNSIGNED:
-      case TokenKind::TOKEN_VOID:
-      case TokenKind::TOKEN_VOLATILE:continue;
-    }
-    break;
-  } while (true);
+  auto ds = parseDeclarationSpecifiers();
 
   nt<DeclaratorAST> declarator;
   switch (lex.peek().getKind()) {
@@ -873,41 +829,9 @@ mycc::nt<mycc::InitializerListAST> mycc::Parser::parseInitializerList() {
 }
 
 ///<function-definition> ::= {<declaration-specifier>}* <declarator> {<declaration>}* <compound-statement>
+// we use {<declaration-specifier>}+ here
 mycc::nt<mycc::FunctionDefinitionAST> mycc::Parser::parseFunctionDefinition() {
-  nts<DeclarationSpecifierAST> specifiers;
-  while (true) {
-    switch (lex.peek().getKind()) {
-      case TokenKind::TOKEN_AUTO:
-      case TokenKind::TOKEN_CHAR:
-      case TokenKind::TOKEN_CONST:
-      case TokenKind::TOKEN_DOUBLE:
-      case TokenKind::TOKEN_ENUM:
-      case TokenKind::TOKEN_EXTERN:
-      case TokenKind::TOKEN_FLOAT:
-      case TokenKind::TOKEN_INT:
-      case TokenKind::TOKEN_LONG:
-      case TokenKind::TOKEN_REGISTER:
-      case TokenKind::TOKEN_SHORT:
-      case TokenKind::TOKEN_SIGNED:
-      case TokenKind::TOKEN_STATIC:
-      case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_TYPEDEF:
-      case TokenKind::TOKEN_UNION:
-      case TokenKind::TOKEN_UNSIGNED:
-      case TokenKind::TOKEN_VOID:
-      case TokenKind::TOKEN_VOLATILE:specifiers.push_back(parseDeclarationSpecifier());
-        continue;
-      case TokenKind::TOKEN_IDENTIFIER:
-        if (isIdentiferAType(lex.peek().getValue())) {
-          specifiers.push_back(parseDeclarationSpecifier());
-          continue;
-        } else {
-          break;
-        }
-      default:break;
-    }
-    break;
-  }
+  auto specifiers = parseDeclarationSpecifiers();
   auto declarator = parseDeclarator();
   nts<DeclarationAST> declarations;
   while (lex.peek() != TokenKind::TOKEN_LBRACE) {
@@ -1226,12 +1150,10 @@ mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
   }
 
   switch (lex.peek().getKind()) {
-    case TokenKind ::TOKEN_LPAREN:
-    case TokenKind ::TOKEN_STAR:
-    case TokenKind ::TOKEN_LBRACKET:
-      return std::make_unique<TypeNameAST>(std::move(qualifiers), parseDeclarator());
-    default:
-      return std::make_unique<TypeNameAST>(std::move(qualifiers), nullptr);
+    case TokenKind::TOKEN_LPAREN:
+    case TokenKind::TOKEN_STAR:
+    case TokenKind::TOKEN_LBRACKET:return std::make_unique<TypeNameAST>(std::move(qualifiers), parseDeclarator());
+    default:return std::make_unique<TypeNameAST>(std::move(qualifiers), nullptr);
   }
 }
 
