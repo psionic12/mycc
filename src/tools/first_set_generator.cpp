@@ -1,26 +1,26 @@
 #include <regex>
 #include <iostream>
 #include "first_set_generator.h"
-mycc::Symbol::Symbol(long type, bool nullable)
+mycc_first_set::Symbol::Symbol(long type, bool nullable)
     : none_terminal(true), type(type), nullable(nullable) {}
-mycc::Symbol::Symbol(const char *src) : none_terminal(false), nullable(false) {
+mycc_first_set::Symbol::Symbol(const char *src) : none_terminal(false), nullable(false) {
   std::strcpy(name, src);
 }
-bool mycc::Symbol::isNone_terminal() const {
+bool mycc_first_set::Symbol::isNone_terminal() const {
   return none_terminal;
 }
-long mycc::Symbol::getType() const {
+long mycc_first_set::Symbol::getType() const {
   return type;
 }
-const char *mycc::Symbol::getName() const {
+const char *mycc_first_set::Symbol::getName() const {
   return name;
 }
-bool mycc::Symbol::isNullable() const {
+bool mycc_first_set::Symbol::isNullable() const {
   return nullable;
 }
-mycc::Productions
+mycc_first_set::Productions
 
-mycc::FirstSetGenerator::ToProductions(std::ifstream &in,
+mycc_first_set::FirstSetGenerator::ToProductions(std::ifstream &in,
                                        std::unordered_map<std::string, NoneTerminalId> &none_terminal_map) {
   ProductionId current_production = -1;
   NoneTerminalId current_none_terminal = -1;
@@ -76,7 +76,7 @@ mycc::FirstSetGenerator::ToProductions(std::ifstream &in,
   }
   return productions;
 }
-mycc::FirstSets mycc::FirstSetGenerator::getFirstSets(const mycc::Productions &productions,
+mycc_first_set::FirstSets mycc_first_set::FirstSetGenerator::getFirstSets(const mycc_first_set::Productions &productions,
                                                       long size) {
   std::vector<std::set<std::string>> first_sets(size);
   bool changed;
@@ -103,8 +103,8 @@ mycc::FirstSets mycc::FirstSetGenerator::getFirstSets(const mycc::Productions &p
   } while (changed);
   return first_sets;
 }
-mycc::FirstSets mycc::FirstSetGenerator::getProductionFirstSets(const mycc::Productions &productions,
-                                                                const mycc::FirstSets &first_sets) {
+mycc_first_set::FirstSets mycc_first_set::FirstSetGenerator::getProductionFirstSets(const mycc_first_set::Productions &productions,
+                                                                const mycc_first_set::FirstSets &first_sets) {
   FirstSets production_first_sets;
   for (auto production : productions) {
     production_first_sets.emplace_back();

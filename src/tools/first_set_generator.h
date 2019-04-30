@@ -4,7 +4,7 @@
 #include <vector>
 #include <set>
 #include <fstream>
-namespace mycc {
+namespace mycc_first_set {
 class Symbol {
  public:
   Symbol(long, bool);
@@ -35,5 +35,5 @@ class FirstSetGenerator {
   static FirstSets getFirstSets(const Productions&, long size);
   static FirstSets getProductionFirstSets(const Productions&, const FirstSets&);
 };
-} //namespace mycc
+} //namespace mycc_first_set
 #endif //MYCCPILER_FIRST_SET_GENERATOR_H

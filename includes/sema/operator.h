@@ -67,6 +67,11 @@ enum class StructOrUnion {
   kUNION,
 };
 
+enum class TypeQuailifier {
+  kCONST,
+  kVOLATILE,
+};
+
 } //namespace mycc
 
 #endif //MYCCPILER_OPERATOR_H

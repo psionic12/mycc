@@ -7,6 +7,7 @@
 #include <memory>
 #include <sema/operator.h>
 #include <sema/SymbolTable.h>
+#include <tokens/token.h>
 
 namespace mycc {
 class AST {
@@ -99,16 +100,15 @@ class StatementAST;
 class StringAST : public AST { public:StringAST(std::string value) : AST(AST::Kind::STRING) {}};
 class IdentifierAST : public AST {
  public:
-  IdentifierAST(std::string value)
-      : AST(AST::Kind::IDENTIFIER), value(std::move(value)) {}
+  IdentifierAST(Token token)
+      : AST(AST::Kind::IDENTIFIER), token(std::move(token)) {}
  private:
-  std::string value;
+  Token token;
 };
 class StructOrUnionAST : public AST {
  public:
-  StructOrUnionAST(bool is_struct) : AST(AST::Kind::STRUCT_OR_UNION), is_struct(is_struct) {}
- private:
-  bool is_struct;
+  StructOrUnionAST(StructOrUnion struct_or_union) : AST(AST::Kind::STRUCT_OR_UNION) {}
+
 };
 class TypedefNameAST : public AST {
  public:
@@ -171,11 +171,8 @@ class InitializerAST : public AST {
   InitializerAST(nt<AssignmentExpressionAST>) : AST(AST::Kind::INITIALIZER, 0) {}
   InitializerAST(nt<InitializerListAST>) : AST(AST::Kind::INITIALIZER, 1) {}
 };
-class InitDeclaratorAST : public AST {
- public:
-  InitDeclaratorAST(nt<DeclaratorAST>) : AST(AST::Kind::INIT_DECLARATOR, 0) {}
-  InitDeclaratorAST(nt<DeclaratorAST>, nt<InitializerAST>) : AST(AST::Kind::INIT_DECLARATOR, 1) {}
-};
+
+typedef std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> InitDeclarators;
 class EnumeratorAST : public AST {
  public:
   EnumeratorAST(nt<IdentifierAST>) : AST(AST::Kind::ENUMERATOR, 0) {}
@@ -414,12 +411,12 @@ class DeclarationSpecifiersAST : public AST {
 class DeclarationAST : public AST {
  public:
   DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
-                 nts<InitDeclaratorAST> init_declarators, bool external = false)
+                 InitDeclarators init_declarators)
       : AST(AST::Kind::DECLARATION) {}
   bool isType() const;
  private:
   nts<DeclarationSpecifiersAST> decl_specs;
-  nts<InitDeclaratorAST> init_dec_tors;
+  InitDeclarators init_dec_tors;
 };
 /// {
 class CompoundStatementAST : public AST {
@@ -439,15 +436,20 @@ class FunctionDefinitionAST : public AST {
                         nt<DeclaratorAST> declarator,
                         nts<DeclarationAST> declarations,
                         nt<CompoundStatementAST> compound_statement)
-      : AST(AST::Kind::FUNCTION_DEFINITION) {}
+      : AST(AST::Kind::FUNCTION_DEFINITION),
+        declaration_spcifiers(std::move(declaration_spcifiers)),
+        declarator(std::move(declarator)),
+        declarations(std::move(declarations)),
+        compound_statement(std::move(compound_statement)) {}
+  const nt<DeclarationSpecifiersAST> declaration_spcifiers;
+  const nt<DeclaratorAST> declarator;
+  const nts<DeclarationAST> declarations;
+  const nt<CompoundStatementAST> compound_statement;
 
 };
 class ExternalDeclarationAST : public AST {
  public:
-  explicit ExternalDeclarationAST(nt<FunctionDefinitionAST> def)
-      : AST(AST::Kind::EXTERNAL_DECLARATION, 0), def_or_decl(std::move(def)) {}
-  explicit ExternalDeclarationAST(nt<DeclarationAST> decl)
-      : AST(AST::Kind::EXTERNAL_DECLARATION, 1), def_or_decl(std::move(decl)) {}
+  explicit ExternalDeclarationAST(nt<AST> def);
  private:
   nt<AST> def_or_decl;
 };

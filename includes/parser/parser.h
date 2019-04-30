@@ -23,7 +23,7 @@ class Parser {
   SymbolTable *pTable;
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
-  nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers();
+  nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers(bool external = false);
   StorageSpecifier parseStorageClassSpecifier();
   nt<TypeSpecifierAST> parseTypeSpecifier();
   nt<StructOrUnionSpecifierAST> parseStructOrUnionSpecifier();
@@ -54,8 +54,8 @@ class Parser {
   nt<EnumeratorListAST> parseEnumeratorList();
   nt<EnumeratorAST> parseEnumerator();
   nt<TypedefNameAST> parseTypedefName();
-  nt<DeclarationAST> parseDeclaration(bool external = false);
-  nt<InitDeclaratorAST> parseInitDeclarator();
+  nts<DeclarationAST> parseDeclarations();
+  InitDeclarators parseInitDeclarators();
   nt<InitializerAST> parseInitializer();
   nt<InitializerListAST> parseInitializerList();
   nt<CompoundStatementAST> parseCompoundStatement();
