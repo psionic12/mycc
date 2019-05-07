@@ -149,7 +149,7 @@ class EnumeratedType : public Type {
                  std::vector<std::pair<std::string, int>> named_values,
                  bool is_const,
                  bool is_volatile)
-      : Type(TypeKind::kEnumerated, is_const, is_volatile), name(std::(name)), named_values(std::move(named_values)) {}
+      : Type(TypeKind::kEnumerated, is_const, is_volatile), name(std::move(name)), named_values(std::move(named_values)) {}
   bool isComplete() override {
     return true;
   }

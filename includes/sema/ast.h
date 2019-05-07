@@ -40,6 +40,7 @@ class AST {
     EXPRESSION,
     CAST_EXPRESSION,
     UNARY_EXPRESSION,
+    LOGICAL_OR_EXPRESSION,
     TYPE_NAME,
     POSTFIX_EXPRESSION,
     UNARY_OPERATOR,
@@ -263,8 +264,9 @@ class ExpressionAST : public AST {
 };
 class LogicalOrExpressionAST : public AST {
  public:
-  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, InfixOp op, nt<LogicalOrExpressionAST> right);
-  LogicalOrExpressionAST(nt<CastExpressionAST> leaf);
+  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, InfixOp op, nt<LogicalOrExpressionAST> right)
+      : AST(AST::Kind::LOGICAL_OR_EXPRESSION) {};
+  LogicalOrExpressionAST(nt<CastExpressionAST> leaf) : AST(AST::Kind::LOGICAL_OR_EXPRESSION) {};
 };
 class ConditionalExpressionAST : public AST {
  public:
@@ -364,7 +366,8 @@ class EnumSpecifierAST : public AST {
 };
 class StructOrUnionSpecifierAST : public AST {
  public:
-  StructOrUnionSpecifierAST(StructOrUnion type, nt<IdentifierAST> id, nts<StructDeclarationAST> declarations);
+  StructOrUnionSpecifierAST(StructOrUnion type, nt<IdentifierAST> id, nts<StructDeclarationAST> declarations)
+      : AST(AST::Kind::DECLARATION) {};
 };
 class TypeSpecifierAST : public AST {
  public:
@@ -411,9 +414,7 @@ class DeclarationSpecifiersAST : public AST {
 class DeclarationAST : public AST {
  public:
   DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
-                 InitDeclarators init_declarators)
-      : AST(AST::Kind::DECLARATION) {}
-  bool isType() const;
+                 InitDeclarators init_declarators) : AST(AST::Kind::DECLARATION) {};
  private:
   nts<DeclarationSpecifiersAST> decl_specs;
   InitDeclarators init_dec_tors;
@@ -449,7 +450,7 @@ class FunctionDefinitionAST : public AST {
 };
 class ExternalDeclarationAST : public AST {
  public:
-  explicit ExternalDeclarationAST(nt<AST> def);
+  explicit ExternalDeclarationAST(nt<AST> def) : AST(AST::Kind::EXTERNAL_DECLARATION) {};
  private:
   nt<AST> def_or_decl;
 };

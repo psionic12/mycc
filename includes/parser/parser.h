@@ -19,8 +19,7 @@ class Parser {
  private:
   std::ifstream &in;
   Lex lex;
-  std::vector<SymbolTable> tables;
-  SymbolTable *pTable;
+  SymbolStack symbol_stack;
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
   nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers(bool external = false);
@@ -65,14 +64,13 @@ class Parser {
   nt<SelectionStatementAST> parseSelectionStatement();
   nt<IterationStatementAST> parseIterationStatement();
   nt<JumpStatementAST> parseJumpStatement();
-  nt<IdentifierAST> parseIdentifer();
+  nt<IdentifierAST> parseIdentifier();
   InfixOp isInfixOp(TokenKind kind);
 
   const std::string &accept(TokenKind kind);
   bool expect(TokenKind kind);
   std::runtime_error parseError(const std::string msg);
   int precedence(InfixOp op);
-  bool isIdentiferAType(const std::string& name);
 };
 
 #endif //MYCCPILER_PARSER_H

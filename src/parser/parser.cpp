@@ -90,14 +90,6 @@ mycc::InfixOp mycc::Parser::isInfixOp(TokenKind kind) {
   return op;
 }
 
-bool mycc::Parser::isIdentiferAType(const std::string &name) {
-  try {
-    return pTable->lookup(name).isType();
-  } catch (SymbolNotFoundException) {
-    return false;
-  }
-}
-
 /// <translation-unit> ::= {<external-declaration>}*
 mycc::nt<mycc::TranslationUnitAST>
 mycc::Parser::parseTranslationUnit() {
@@ -143,9 +135,9 @@ mycc::nt<mycc::ExternalDeclarationAST> mycc::Parser::parseExternalDeclaration() 
 
 /// <typedef-name> ::= <identifier>
 mycc::nt<mycc::TypedefNameAST> mycc::Parser::parseTypedefName() {
-  return std::make_unique<mycc::TypedefNameAST>(parseIdentifer());
+  return std::make_unique<mycc::TypedefNameAST>(parseIdentifier());
 }
-mycc::nt<mycc::IdentifierAST> mycc::Parser::parseIdentifer() {
+mycc::nt<mycc::IdentifierAST> mycc::Parser::parseIdentifier() {
   if (lex.peek() != TokenKind::TOKEN_IDENTIFIER) {
     throw parseError("expected identifier");
   } else {
@@ -245,11 +237,11 @@ mycc::nt<mycc::TypeQualifierAST> mycc::Parser::parseTypeQualifier() {
 
 /// id
 mycc::nt<mycc::EnumeratorAST> mycc::Parser::parseEnumerator() {
-  auto id = parseIdentifer();
+  auto id = parseIdentifier();
   if (expect(TokenKind::TOKEN_EQ)) {
     //TODO <constant-expression>
   } else {
-    return std::make_unique<mycc::EnumeratorAST>(parseIdentifer());
+    return std::make_unique<mycc::EnumeratorAST>(parseIdentifier());
   }
 }
 
@@ -273,7 +265,7 @@ mycc::nt<mycc::EnumeratorListAST> mycc::Parser::parseEnumeratorList() {
 mycc::nt<mycc::EnumSpecifierAST> mycc::Parser::parseEnumSpecifier() {
   accept(TokenKind::TOKEN_ENUM);
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
-    auto id = parseIdentifer();
+    auto id = parseIdentifier();
     if (expect(TokenKind::TOKEN_LBRACE)) {
       auto p = std::make_unique<mycc::EnumSpecifierAST>(parseEnumeratorList());
       accept(TokenKind::TOKEN_RBRACE);
@@ -305,7 +297,7 @@ mycc::nt<mycc::EnumSpecifierAST> mycc::Parser::parseEnumSpecifier() {
 // we don't distinguish whether an identifier is a enumeraition constant or not, we put this on the sema phrase.
 mycc::nt<mycc::PrimaryExpressionAST> mycc::Parser::parsePrimaryExpression() {
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_IDENTIFIER:return std::make_unique<PrimaryExpressionAST>(parseIdentifer());
+    case TokenKind::TOKEN_IDENTIFIER:return std::make_unique<PrimaryExpressionAST>(parseIdentifier());
     case TokenKind::TOKEN_INT_CONSTANT: {
       auto c = std::make_unique<PrimaryExpressionAST>(std::make_unique<IntegerConstantAST>(lex.peek().getValue()));
       lex.consumeToken();
@@ -440,7 +432,7 @@ mycc::nts<mycc::DeclarationAST> mycc::Parser::parseDeclarations() {
         accept(TokenKind::TOKEN_SEMI);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (isIdentiferAType(lex.peek().getValue())) {
+        if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookup(lex.peek().getValue())) {
           declarations.push_back(std::make_unique<DeclarationAST>(parseDeclarationSpecifiers(),
                                                                   parseInitDeclarators()));
           continue;
@@ -482,7 +474,7 @@ mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifier
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_IDENTIFIER:
-        if (!isIdentiferAType(lex.peek().getValue())) {
+        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookup(lex.peek().getValue())) {
           throw parseError("except declaration specifier");
         }
       case TokenKind::TOKEN_UNION:
@@ -576,13 +568,13 @@ mycc::nt<mycc::PointerAST> mycc::Parser::parsePointer() {
 mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
   nt<AST> term1;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
-    term1 = parseIdentifer();
+    term1 = parseIdentifier();
   } else if (lex.peek() == TokenKind::TOKEN_LPAREN
       && (lex.peek(1) == TokenKind::TOKEN_LPAREN
           || lex.peek(1) == TokenKind::TOKEN_STAR
           || lex.peek(1) == TokenKind::TOKEN_LBRACKET
           || (lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-              && !isIdentiferAType(lex.peek(1).getValue())))) {
+              && mycc::SymbolKind::TYPEDEF != symbol_stack.lookup(lex.peek(1).getValue())))) {
     lex.consumeToken();
     term1 = parseDeclarator();
     accept(TokenKind::TOKEN_RPAREN);
@@ -641,11 +633,11 @@ mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
                               parseParameterTypeList());
           break;
         case TokenKind::TOKEN_IDENTIFIER:
-          if (isIdentiferAType(lex.peek().getValue())) {
+          if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookup(lex.peek().getValue())) {
             term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST, parseParameterTypeList());
           } else {
             do {
-              term2s.emplace_back(DirectDeclaratorAST::Term2::ID, parseIdentifer());
+              term2s.emplace_back(DirectDeclaratorAST::Term2::ID, parseIdentifier());
             } while (lex.peek() == TokenKind::TOKEN_IDENTIFIER);
           }
           break;
@@ -750,7 +742,7 @@ mycc::nt<mycc::TypeSpecifierAST> mycc::Parser::parseTypeSpecifier() {
     case TokenKind::TOKEN_UNION:return std::make_unique<TypeSpecifierAST>(parseStructOrUnionSpecifier());
     case TokenKind::TOKEN_ENUM:return std::make_unique<TypeSpecifierAST>(parseEnumSpecifier());
     case TokenKind::TOKEN_IDENTIFIER:
-      if (isIdentiferAType(lex.peek().getValue())) {
+      if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookup(lex.peek().getValue())) {
         return std::make_unique<TypeSpecifierAST>(parseTypedefName());
       }
     default:throw parseError("expected type specifier");
@@ -773,7 +765,7 @@ mycc::nt<mycc::StructOrUnionSpecifierAST> mycc::Parser::parseStructOrUnionSpecif
   }
   nt<IdentifierAST> id = nullptr;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
-    id = parseIdentifer();
+    id = parseIdentifier();
   }
   accept(TokenKind::TOKEN_LBRACE);
   nts<StructDeclarationAST> declarations;
@@ -821,7 +813,7 @@ mycc::nt<mycc::StructDeclarationAST> mycc::Parser::parseStructDeclaration() {
       case TokenKind::TOKEN_SHORT:
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_IDENTIFIER:if (!isIdentiferAType(lex.peek().getValue())) break;
+      case TokenKind::TOKEN_IDENTIFIER:if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookup(lex.peek().getValue())) break;
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_UNSIGNED:
       case TokenKind::TOKEN_VOID:
@@ -955,7 +947,7 @@ mycc::nt<mycc::StatementAST> mycc::Parser::parseStatement() {
 ///                      | default : <statement>
 mycc::nt<mycc::LabeledStatementAST> mycc::Parser::parseLabeledStatement() {
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
-    auto id = parseIdentifer();
+    auto id = parseIdentifier();
     accept(TokenKind::TOKEN_COLON);
     return std::make_unique<LabeledStatementAST>(std::move(id), parseStatement());
   } else if (expect(TokenKind::TOKEN_CASE)) {
@@ -1051,7 +1043,7 @@ mycc::nt<mycc::IterationStatementAST> mycc::Parser::parseIterationStatement() {
 ///                   | return {<expression>}? ;
 mycc::nt<mycc::JumpStatementAST> mycc::Parser::parseJumpStatement() {
   if (expect(TokenKind::TOKEN_GOTO)) {
-    auto id = parseIdentifer();
+    auto id = parseIdentifier();
     accept(TokenKind::TOKEN_SEMI);
     return std::make_unique<JumpStatementAST>(std::move(id));
   } else if (expect(TokenKind::TOKEN_RETURN)) {
@@ -1083,7 +1075,7 @@ mycc::nt<mycc::ConstantExpressionAST> mycc::Parser::parseConstantExpression() {
 mycc::nt<mycc::CastExpressionAST> mycc::Parser::parseCastExpression() {
   if (lex.peek() == TokenKind::TOKEN_LPAREN
       && lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-      && isIdentiferAType(lex.peek(1).getValue())) {
+      && mycc::SymbolKind::TYPEDEF == symbol_stack.lookup(lex.peek(1).getValue())) {
     accept(TokenKind::TOKEN_LPAREN);
     auto type_name = parseTypeName();
     accept(TokenKind::TOKEN_RPAREN);
@@ -1138,13 +1130,13 @@ mycc::nt<mycc::PostfixExpressionAST> mycc::Parser::parsePostfixExpression() {
           terms.emplace_back(2, parseAssignmentExpression());
         }
       case TokenKind::TOKEN_DOT:lex.consumeToken();
-        terms.emplace_back(3, parseIdentifer());
+        terms.emplace_back(3, parseIdentifier());
       case TokenKind::TOKEN_ARROW:lex.consumeToken();
-        terms.emplace_back(4, parseIdentifer());
+        terms.emplace_back(4, parseIdentifier());
       case TokenKind::TOKEN_PLUSPLUS:lex.consumeToken();
-        terms.emplace_back(5, parseIdentifer());
+        terms.emplace_back(5, parseIdentifier());
       case TokenKind::TOKEN_SUBSUB:lex.consumeToken();
-        terms.emplace_back(6, parseIdentifer());
+        terms.emplace_back(6, parseIdentifier());
       default:return std::make_unique<PostfixExpressionAST>(std::move(primary), std::move(terms));
     }
   }
@@ -1166,7 +1158,7 @@ mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_IDENTIFIER:
-        if (!isIdentiferAType(lex.peek().getValue())) {
+        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookup(lex.peek().getValue())) {
           break;
         }
       case TokenKind::TOKEN_UNION:
