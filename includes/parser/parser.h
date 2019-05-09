@@ -73,5 +73,14 @@ class Parser {
   int precedence(InfixOp op);
 };
 
+class ParserException : public std::exception {
+ public:
+  ParserException(Token token, std::string error);
+  const char *what() const noexcept override;
+ private:
+  Token token;
+  std::string error;
+};
+
 #endif //MYCCPILER_PARSER_H
 } //namespace mycc

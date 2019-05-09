@@ -58,6 +58,7 @@ class SymbolStack {
   void leaveScope(ScopeKind kind);
   void insert(std::string name, Symbol symbol);
   const Symbol &lookup(const std::string &name);
+  SymbolKind lookupTest(const std::string &name);
  private:
   std::vector<std::pair<SymbolTable, ScopeKind>> stack;
 };

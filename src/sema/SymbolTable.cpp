@@ -7,7 +7,7 @@ void mycc::SymbolStack::leaveScope(ScopeKind kind) {
   stack.pop_back();
 }
 void mycc::SymbolStack::insert(std::string name, Symbol symbol) {
-  SymbolTable* table;
+  SymbolTable *table;
   ScopeKind kind;
   // insert label to the nearest function scope
   if (symbol.getKind() == SymbolKind::LABEL) {
@@ -34,7 +34,7 @@ void mycc::SymbolStack::insert(std::string name, Symbol symbol) {
 }
 const mycc::Symbol &mycc::SymbolStack::lookup(const std::string &name) {
   for (auto it = stack.rbegin(); it != stack.rend(); ++it) {
-    const SymbolTable& table = it->first;
+    const SymbolTable &table = it->first;
     try {
       return table.at(name);
     } catch (const std::out_of_range &) {
@@ -42,6 +42,9 @@ const mycc::Symbol &mycc::SymbolStack::lookup(const std::string &name) {
     }
   }
   throw SymbolNotFoundException();
+}
+mycc::SymbolKind mycc::SymbolStack::lookupTest(const std::string &name) {
+  return std::isupper(name[0]) ? SymbolKind::TYPEDEF : SymbolKind::OBEJECT;
 }
 bool mycc::Symbol::operator==(mycc::SymbolKind kind) const {
   return this->kind == kind;

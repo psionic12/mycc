@@ -11,6 +11,7 @@ class Lex {
   void consumeToken();
   bool endOfTokens();
   TokenKind lookupTokens(const std::initializer_list<TokenKind> &tokens);
+  void throwLexError(std::string error, TokenKind kind);
  private:
   bool end_of_tokens;
   bool eof_consumed;
@@ -29,7 +30,6 @@ class Lex {
   std::streampos tokenStart;
   std::streampos tokenEnd;
   void makeToken(TokenKind kind, std::string value = "");
-  void throwLexError(std::string error, TokenKind kind);
 };
 
 class LexException : public std::exception {

@@ -21,7 +21,6 @@ const std::string &mycc::Parser::accept(mycc::TokenKind kind) {
   }
 }
 std::runtime_error mycc::Parser::parseError(const std::string msg) {
-  //TODO finish this
   return std::runtime_error(msg);
 }
 int mycc::Parser::precedence(mycc::InfixOp op) {
@@ -358,7 +357,7 @@ mycc::nt<mycc::AssignmentExpressionAST> mycc::Parser::parseAssignmentExpression(
     case TokenKind::TOKEN_CARETEQ:
     case TokenKind::TOKEN_BAREQ:
       return std::make_unique<AssignmentExpressionAST>(std::move(LHS),
-                                                       parseAssignmentOperator(),
+                                                       Operator<AssignmentOp>(parseAssignmentOperator(), lex.peek()),
                                                        parseAssignmentExpression());
     default:return std::make_unique<AssignmentExpressionAST>(std::move(LHS));
   }
@@ -396,7 +395,9 @@ mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression(in
     } else {
       lex.consumeToken();
       auto term2 = parseLogicalOrExpression(prec);
-      term1 = std::make_unique<LogicalOrExpressionAST>(std::move(term1), op, std::move(term2));
+      term1 = std::make_unique<LogicalOrExpressionAST>(std::move(term1),
+                                                       Operator<InfixOp>(op, lex.peek()),
+                                                       std::move(term2));
     }
 
   }
@@ -432,7 +433,7 @@ mycc::nts<mycc::DeclarationAST> mycc::Parser::parseDeclarations() {
         accept(TokenKind::TOKEN_SEMI);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookup(lex.peek().getValue())) {
+        if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
           declarations.push_back(std::make_unique<DeclarationAST>(parseDeclarationSpecifiers(),
                                                                   parseInitDeclarators()));
           continue;
@@ -450,11 +451,12 @@ mycc::nts<mycc::DeclarationAST> mycc::Parser::parseDeclarations() {
 ///                          | <type-specifier>
 ///                          | <type-qualifier>
 mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifiers(bool external) {
-  std::vector<StorageSpecifier> storage_specifiers;
+  std::vector<Operator<StorageSpecifier>> storage_specifiers;
   nts<TypeSpecifierAST> type_specifiers;
   nts<TypeQualifierAST> type_qualifiers;
   while (true) {
-    switch (lex.peek().getKind()) {
+    TokenKind kind = lex.peek().getKind();
+    switch (kind) {
       case TokenKind::TOKEN_AUTO:
       case TokenKind::TOKEN_REGISTER:
         if (external)
@@ -462,8 +464,12 @@ mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifier
               "The storage-class specifiers auto and register shall not appear in the declaration specifiers in an external declaration.");
       case TokenKind::TOKEN_EXTERN:
       case TokenKind::TOKEN_STATIC:
-      case TokenKind::TOKEN_TYPEDEF:storage_specifiers.push_back(parseStorageClassSpecifier());
+      case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(),lex.peek());
         continue;
+      case TokenKind::TOKEN_IDENTIFIER:
+        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
+          break;
+        }
       case TokenKind::TOKEN_CHAR:
       case TokenKind::TOKEN_DOUBLE:
       case TokenKind::TOKEN_ENUM:
@@ -473,10 +479,6 @@ mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifier
       case TokenKind::TOKEN_SHORT:
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_IDENTIFIER:
-        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookup(lex.peek().getValue())) {
-          throw parseError("except declaration specifier");
-        }
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_UNSIGNED:
       case TokenKind::TOKEN_VOID:type_specifiers.push_back(parseTypeSpecifier());
@@ -574,7 +576,7 @@ mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
           || lex.peek(1) == TokenKind::TOKEN_STAR
           || lex.peek(1) == TokenKind::TOKEN_LBRACKET
           || (lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-              && mycc::SymbolKind::TYPEDEF != symbol_stack.lookup(lex.peek(1).getValue())))) {
+              && mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek(1).getValue())))) {
     lex.consumeToken();
     term1 = parseDeclarator();
     accept(TokenKind::TOKEN_RPAREN);
@@ -633,7 +635,7 @@ mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
                               parseParameterTypeList());
           break;
         case TokenKind::TOKEN_IDENTIFIER:
-          if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookup(lex.peek().getValue())) {
+          if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
             term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST, parseParameterTypeList());
           } else {
             do {
@@ -697,11 +699,16 @@ mycc::nt<mycc::ParameterDeclarationAST> mycc::Parser::parseParameterDeclaration(
 ///                            | typedef
 mycc::StorageSpecifier mycc::Parser::parseStorageClassSpecifier() {
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_AUTO:return StorageSpecifier::kAUTO;
-    case TokenKind::TOKEN_REGISTER:return StorageSpecifier::kREGISTER;
-    case TokenKind::TOKEN_STATIC:return StorageSpecifier::kSTATIC;
-    case TokenKind::TOKEN_EXTERN:return StorageSpecifier::kEXTERN;
-    case TokenKind::TOKEN_TYPEDEF:return StorageSpecifier::kTYPEDEF;
+    case TokenKind::TOKEN_AUTO:lex.consumeToken();
+      return StorageSpecifier::kAUTO;
+    case TokenKind::TOKEN_REGISTER:lex.consumeToken();
+      return StorageSpecifier::kREGISTER;
+    case TokenKind::TOKEN_STATIC:lex.consumeToken();
+      return StorageSpecifier::kSTATIC;
+    case TokenKind::TOKEN_EXTERN:lex.consumeToken();
+      return StorageSpecifier::kEXTERN;
+    case TokenKind::TOKEN_TYPEDEF:lex.consumeToken();
+      return StorageSpecifier::kTYPEDEF;
     default:throw parseError("expected storage class specifier");
   }
 }
@@ -719,34 +726,40 @@ mycc::StorageSpecifier mycc::Parser::parseStorageClassSpecifier() {
 //                   | <enum-specifier>
 //                   | <typedef-name>
 mycc::nt<mycc::TypeSpecifierAST> mycc::Parser::parseTypeSpecifier() {
+  ProtoTypeSpecifier specifier;
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_VOID:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kVOID);
-    case TokenKind::TOKEN_CHAR:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kCHAR);
-    case TokenKind::TOKEN_SHORT:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kSHORT);
-    case TokenKind::TOKEN_INT:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kINT);
-    case TokenKind::TOKEN_LONG:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kLONG);
-    case TokenKind::TOKEN_FLOAT:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kFLOAT);
-    case TokenKind::TOKEN_DOUBLE:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kDOUBLE);
-    case TokenKind::TOKEN_SIGNED:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kSIGNED);
-    case TokenKind::TOKEN_UNSIGNED:lex.consumeToken();
-      return std::make_unique<TypeSpecifierAST>(ProtoTypeSpecifier::kUNSIGNED);
+    case TokenKind::TOKEN_VOID:specifier = (ProtoTypeSpecifier::kVOID);
+      goto handle_proto_type;
+    case TokenKind::TOKEN_CHAR:specifier = (ProtoTypeSpecifier::kCHAR);
+      goto handle_proto_type;
+    case TokenKind::TOKEN_SHORT:specifier = (ProtoTypeSpecifier::kSHORT);
+      goto handle_proto_type;
+    case TokenKind::TOKEN_INT:specifier = (ProtoTypeSpecifier::kINT);
+      goto handle_proto_type;
+    case TokenKind::TOKEN_LONG:specifier = (ProtoTypeSpecifier::kLONG);
+      goto handle_proto_type;
+    case TokenKind::TOKEN_FLOAT:specifier = (ProtoTypeSpecifier::kFLOAT);
+      goto handle_proto_type;
+    case TokenKind::TOKEN_DOUBLE:specifier = (ProtoTypeSpecifier::kDOUBLE);
+      goto handle_proto_type;
+    case TokenKind::TOKEN_SIGNED:specifier = (ProtoTypeSpecifier::kSIGNED);
+      goto handle_proto_type;
+    case TokenKind::TOKEN_UNSIGNED:specifier = (ProtoTypeSpecifier::kUNSIGNED);
+      goto handle_proto_type;
     case TokenKind::TOKEN_STRUCT:
     case TokenKind::TOKEN_UNION:return std::make_unique<TypeSpecifierAST>(parseStructOrUnionSpecifier());
     case TokenKind::TOKEN_ENUM:return std::make_unique<TypeSpecifierAST>(parseEnumSpecifier());
     case TokenKind::TOKEN_IDENTIFIER:
-      if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookup(lex.peek().getValue())) {
+      if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
         return std::make_unique<TypeSpecifierAST>(parseTypedefName());
       }
     default:throw parseError("expected type specifier");
   }
+  handle_proto_type:
+  auto ast = std::make_unique<TypeSpecifierAST>(Operator<ProtoTypeSpecifier>(specifier, lex.peek()));
+  lex.consumeToken();
+  return std::move(ast);
+
 }
 
 ///<struct-or-union-specifier> ::= <struct-or-union> <identifier> { {<struct-declaration>}+ }
@@ -813,7 +826,8 @@ mycc::nt<mycc::StructDeclarationAST> mycc::Parser::parseStructDeclaration() {
       case TokenKind::TOKEN_SHORT:
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_IDENTIFIER:if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookup(lex.peek().getValue())) break;
+      case TokenKind::TOKEN_IDENTIFIER:
+        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue()))break;
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_UNSIGNED:
       case TokenKind::TOKEN_VOID:
@@ -1075,7 +1089,7 @@ mycc::nt<mycc::ConstantExpressionAST> mycc::Parser::parseConstantExpression() {
 mycc::nt<mycc::CastExpressionAST> mycc::Parser::parseCastExpression() {
   if (lex.peek() == TokenKind::TOKEN_LPAREN
       && lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-      && mycc::SymbolKind::TYPEDEF == symbol_stack.lookup(lex.peek(1).getValue())) {
+      && mycc::SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek(1).getValue())) {
     accept(TokenKind::TOKEN_LPAREN);
     auto type_name = parseTypeName();
     accept(TokenKind::TOKEN_RPAREN);
@@ -1104,7 +1118,8 @@ mycc::nt<mycc::UnaryExpressionAST> mycc::Parser::parseUnaryExpression() {
       || lex.peek() == TokenKind::TOKEN_PLUS
       || lex.peek() == TokenKind::TOKEN_SUB
       || lex.peek() == TokenKind::TOKEN_TILDE) {
-    return std::make_unique<UnaryExpressionAST>(parseUnaryOperator(), parseCastExpression());
+    return std::make_unique<UnaryExpressionAST>(Operator<UnaryOp>(parseUnaryOperator(), lex.peek()),
+                                                parseCastExpression());
   } else {
     return std::make_unique<UnaryExpressionAST>(parsePostfixExpression());
   }
@@ -1158,7 +1173,7 @@ mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_IDENTIFIER:
-        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookup(lex.peek().getValue())) {
+        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
           break;
         }
       case TokenKind::TOKEN_UNION:
@@ -1179,6 +1194,10 @@ mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
   }
 }
 
-
-
-
+mycc::ParserException::ParserException(mycc::Token token, std::string error) :
+    token(std::move(token)), error(std::move(error)) {
+  this->error.append("\n").append(token.getTokenInLine());
+}
+const char *mycc::ParserException::what() const noexcept {
+  return error.c_str();
+}

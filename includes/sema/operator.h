@@ -1,6 +1,7 @@
 #ifndef MYCCPILER_OPERATOR_H
 #define MYCCPILER_OPERATOR_H
 
+#include <tokens/token.h>
 namespace mycc {
 enum class InfixOp {
   BARBAR,
@@ -70,6 +71,14 @@ enum class StructOrUnion {
 enum class TypeQuailifier {
   kCONST,
   kVOLATILE,
+};
+
+template<typename T>
+class Operator {
+ public:
+  Operator(T type, const Token &token) : token(token), type(type) {}
+  const Token &token;
+  const T type;
 };
 
 } //namespace mycc
