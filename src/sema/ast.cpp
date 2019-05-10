@@ -194,7 +194,7 @@ mycc::IterationStatementAST::IterationStatementAST(mycc::nt<mycc::ExpressionAST>
 mycc::JumpStatementAST::JumpStatementAST(mycc::nt<mycc::IdentifierAST>) : AST(AST::Kind::JUMP_STATEMENT, 0) {}
 mycc::JumpStatementAST::JumpStatementAST(bool is_continue) : AST(AST::Kind::JUMP_STATEMENT, is_continue ? 1 : 2) {}
 mycc::JumpStatementAST::JumpStatementAST(mycc::nt<mycc::ExpressionAST>) : AST(AST::Kind::JUMP_STATEMENT, 3) {}
-mycc::TypeQualifierAST::TypeQualifierAST(bool is_const) : AST(AST::Kind::TYPE_QUALIFIER) {}
+mycc::TypeQualifierAST::TypeQualifierAST(Operator<TypeQuailifier> op) : AST(AST::Kind::TYPE_QUALIFIER) {}
 mycc::TypedefNameAST::TypedefNameAST(mycc::nt<mycc::IdentifierAST> identifier)
     : AST(AST::Kind::TYPEDEF_NAME), id(std::move(identifier)) {}
 mycc::StructOrUnionAST::StructOrUnionAST(mycc::StructOrUnion struct_or_union) : AST(AST::Kind::STRUCT_OR_UNION) {}

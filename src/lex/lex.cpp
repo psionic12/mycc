@@ -1,7 +1,12 @@
 #include <lex/lex.h>
 #include <fstream>
 mycc::Lex::Lex(std::ifstream &ifstream)
-    : in(ifstream), currentLineNumber(1), currentLine(in.tellg()), current(0) {
+    : in(ifstream),
+      currentLineNumber(1),
+      currentLine(ifstream.tellg()),
+      current(0),
+      end_of_tokens(false),
+      eof_consumed(false) {
   while (!eof_consumed) {
     getToken();
   }
@@ -464,8 +469,7 @@ void mycc::Lex::scanNumber() {
       case '9':value += (char) in.get();
         tokenEnd = in.tellg();
         break;
-      default:
-        return makeToken(kind, std::move(value));
+      default:return makeToken(kind, std::move(value));
     }
   } while (true);
 }
@@ -521,7 +525,7 @@ void mycc::Lex::consumeToken() {
   }
 }
 const mycc::Token &
-mycc::Lex::peek(unsigned long offsite) {
+mycc::Lex::peek(long offsite) {
   return tokens[current + offsite];
 }
 void mycc::Lex::makeToken(mycc::TokenKind kind, std::string value) {

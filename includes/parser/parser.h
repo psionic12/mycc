@@ -11,6 +11,14 @@
 namespace mycc {
 
 class NotAInfixOpException {};
+class ParserException : public std::exception {
+ public:
+  ParserException(std::string error, const Token &token);
+  const char *what() const noexcept override;
+ private:
+  const Token &token;
+  std::string error;
+};
 
 class Parser {
  public:
@@ -69,17 +77,8 @@ class Parser {
 
   const std::string &accept(TokenKind kind);
   bool expect(TokenKind kind);
-  std::runtime_error parseError(const std::string msg);
+  ParserException parseError(const std::string msg);
   int precedence(InfixOp op);
-};
-
-class ParserException : public std::exception {
- public:
-  ParserException(Token token, std::string error);
-  const char *what() const noexcept override;
- private:
-  Token token;
-  std::string error;
 };
 
 #endif //MYCCPILER_PARSER_H

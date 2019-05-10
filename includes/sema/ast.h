@@ -123,7 +123,7 @@ class TypedefNameAST : public AST {
 class TypeQualifierAST : public AST {
  public:
   // true for const, false for volatile
-  TypeQualifierAST(bool is_const);
+  TypeQualifierAST(Operator<TypeQuailifier> op);
 };
 class UnaryOperatorAST : public AST { public:UnaryOperatorAST(UnaryOp op) : AST(AST::Kind::UNARY_OPERATOR) {}};
 class JumpStatementAST : public AST {

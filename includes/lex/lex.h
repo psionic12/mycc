@@ -7,7 +7,7 @@ namespace mycc {
 class Lex {
  public:
   Lex(std::ifstream &ifstream);
-  const Token &peek(unsigned long offsite = 0);
+  const Token &peek(long offsite = 0);
   void consumeToken();
   bool endOfTokens();
   TokenKind lookupTokens(const std::initializer_list<TokenKind> &tokens);
@@ -15,20 +15,20 @@ class Lex {
  private:
   bool end_of_tokens;
   bool eof_consumed;
-  void getToken();
-  std::ifstream &in;
-  void scanIdent();
-  void scanNumber();
-  void scanCharConstant();
-  void scanStringConstant();
-  void skipLineComment();
-  void skipBlockComment();
   std::vector<Token> tokens;
   std::size_t current;
   long currentLineNumber;
   std::streampos currentLine;
   std::streampos tokenStart;
   std::streampos tokenEnd;
+  std::ifstream &in;
+  void getToken();
+  void scanIdent();
+  void scanNumber();
+  void scanCharConstant();
+  void scanStringConstant();
+  void skipLineComment();
+  void skipBlockComment();
   void makeToken(TokenKind kind, std::string value = "");
 };
 

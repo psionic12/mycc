@@ -160,6 +160,7 @@ class Token {
   }
   std::string getTokenInLine() const {
     std::streampos current_pos = ifstream.tellg();
+    ifstream.clear();
     ifstream.seekg(getPosition().line);
     std::string s1;
     std::string s2("\n");

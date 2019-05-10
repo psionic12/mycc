@@ -20,8 +20,8 @@ const std::string &mycc::Parser::accept(mycc::TokenKind kind) {
     return name;
   }
 }
-std::runtime_error mycc::Parser::parseError(const std::string msg) {
-  return std::runtime_error(msg);
+mycc::ParserException mycc::Parser::parseError(const std::string msg) {
+  return ParserException(msg, lex.peek(-1));
 }
 int mycc::Parser::precedence(mycc::InfixOp op) {
   switch (op) {
@@ -216,25 +216,21 @@ mycc::AssignmentOp mycc::Parser::parseAssignmentOperator() {
 
 ///<type-qualifier> ::= const
 ///                   | volatile
-
-/// const volatile
 mycc::nt<mycc::TypeQualifierAST> mycc::Parser::parseTypeQualifier() {
-  bool is_const;
+  TypeQuailifier quailifier;
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_CONST:is_const = true;
+    case TokenKind::TOKEN_CONST:quailifier = TypeQuailifier::kCONST;
       break;
-    case TokenKind::TOKEN_VOLATILE:is_const = false;
+    case TokenKind::TOKEN_VOLATILE:quailifier = TypeQuailifier::kVOLATILE;
       break;
     default:throw parseError(R"(type qualifier expected "const" or "volatile")");
   }
   lex.consumeToken();
-  return std::make_unique<mycc::TypeQualifierAST>(is_const);
+  return std::make_unique<mycc::TypeQualifierAST>(Operator<TypeQuailifier>(quailifier, lex.peek()));
 }
 
 ///<enumerator> ::= <identifier>
 ///               | <identifier> = <constant-expression>
-
-/// id
 mycc::nt<mycc::EnumeratorAST> mycc::Parser::parseEnumerator() {
   auto id = parseIdentifier();
   if (expect(TokenKind::TOKEN_EQ)) {
@@ -246,8 +242,6 @@ mycc::nt<mycc::EnumeratorAST> mycc::Parser::parseEnumerator() {
 
 ///<enumerator-list> ::= <enumerator>
 ///                    | <enumerator-list> , <enumerator>
-
-/// id
 mycc::nt<mycc::EnumeratorListAST> mycc::Parser::parseEnumeratorList() {
   nts<EnumeratorAST> list;
   do {
@@ -259,8 +253,6 @@ mycc::nt<mycc::EnumeratorListAST> mycc::Parser::parseEnumeratorList() {
 ///<enum-specifier> ::= enum <identifier> { <enumerator-list> }
 ///                   | enum { <enumerator-list> }
 ///                   | enum <identifier>
-
-/// enum
 mycc::nt<mycc::EnumSpecifierAST> mycc::Parser::parseEnumSpecifier() {
   accept(TokenKind::TOKEN_ENUM);
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
@@ -464,7 +456,7 @@ mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifier
               "The storage-class specifiers auto and register shall not appear in the declaration specifiers in an external declaration.");
       case TokenKind::TOKEN_EXTERN:
       case TokenKind::TOKEN_STATIC:
-      case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(),lex.peek());
+      case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), lex.peek());
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
         if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
@@ -1194,8 +1186,8 @@ mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
   }
 }
 
-mycc::ParserException::ParserException(mycc::Token token, std::string error) :
-    token(std::move(token)), error(std::move(error)) {
+mycc::ParserException::ParserException(std::string error, const mycc::Token &token) :
+    token(token), error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
 }
 const char *mycc::ParserException::what() const noexcept {
