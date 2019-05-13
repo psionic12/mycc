@@ -3,7 +3,7 @@
 #include <fstream>
 #include <tokens/token.h>
 #include <vector>
-namespace mycc {
+
 class Lex {
  public:
   Lex(std::ifstream &ifstream);
@@ -40,5 +40,4 @@ class LexException : public std::exception {
   Token token;
   std::string error;
 };
-} //namespace mycc
 #endif //MYCCPILER_LEX_H

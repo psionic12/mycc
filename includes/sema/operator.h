@@ -2,7 +2,6 @@
 #define MYCCPILER_OPERATOR_H
 
 #include <tokens/token.h>
-namespace mycc {
 enum class InfixOp {
   BARBAR,
   AMPAMP,
@@ -80,7 +79,5 @@ class Operator {
   const Token &token;
   const T type;
 };
-
-} //namespace mycc
 
 #endif //MYCCPILER_OPERATOR_H

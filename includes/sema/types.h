@@ -6,7 +6,6 @@
 #include <string>
 #include "operator.h"
 
-namespace mycc {
 enum class TypeKind {
   kChar,
   kShortInt,
@@ -40,6 +39,7 @@ class Type {
   TypeKind getTypeKind() {
     return kind;
   }
+  virtual ~Type() = 0;
  private:
   TypeKind kind;
 
@@ -194,6 +194,5 @@ class Pointer : public Type {
  private:
   std::unique_ptr<Type> member;
 };
-} //namespace mycc
 
 #endif //MYCCPILER_TYPES_H

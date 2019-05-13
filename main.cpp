@@ -9,6 +9,6 @@ int main() {
   std::ifstream testFile;
   testFile.open("test.c");
 
-  auto parser = mycc::Parser(testFile);
+  auto parser = Parser(testFile);
   auto tr = parser.parseTranslationUnit();
 }

@@ -1,207 +1,207 @@
 #include <sema/ast.h>
 #include <iostream>
 static int indent;
-mycc::TranslationUnitAST::TranslationUnitAST(mycc::nts<mycc::ExternalDeclarationAST> external_declarations)
+TranslationUnitAST::TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations)
     : AST(AST::Kind::TRANSLATION_UNIT) {}
-mycc::ExternalDeclarationAST::ExternalDeclarationAST(mycc::nt<mycc::AST> def) : AST(AST::Kind::EXTERNAL_DECLARATION) {}
-mycc::FunctionDefinitionAST::FunctionDefinitionAST(mycc::nt<mycc::DeclarationSpecifiersAST> declaration_spcifiers,
-                                                   mycc::nt<mycc::DeclaratorAST> declarator,
-                                                   mycc::nts<mycc::DeclarationAST> declarations,
-                                                   mycc::nt<mycc::CompoundStatementAST> compound_statement)
+ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def) : AST(AST::Kind::EXTERNAL_DECLARATION) {}
+FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declaration_spcifiers,
+                                                   nt<DeclaratorAST> declarator,
+                                                   nts<DeclarationAST> declarations,
+                                                   nt<CompoundStatementAST> compound_statement)
     : AST(AST::Kind::FUNCTION_DEFINITION),
       declaration_spcifiers(std::move(declaration_spcifiers)),
       declarator(std::move(declarator)),
       declarations(std::move(declarations)),
       compound_statement(std::move(compound_statement)) {}
-mycc::CompoundStatementAST::CompoundStatementAST(mycc::nts<mycc::DeclarationAST> declarations,
-                                                 mycc::nts<mycc::StatementAST> statements)
+CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
+                                                 nts<StatementAST> statements)
     : AST(AST::Kind::COMPOUND_STATEMENT),
       decls(std::move(declarations)),
       stats(std::move(statements)) {}
-mycc::DeclarationAST::DeclarationAST(mycc::nt<mycc::DeclarationSpecifiersAST> declaration_specifiers,
-                                     mycc::InitDeclarators init_declarators) : AST(AST::Kind::DECLARATION) {}
-mycc::DeclarationSpecifiersAST::DeclarationSpecifiersAST(std::vector<mycc::Operator<mycc::StorageSpecifier>> storage_specifiers,
-                                                         mycc::nts<mycc::TypeSpecifierAST> type_specifiers,
-                                                         mycc::nts<mycc::TypeQualifierAST> type_qualifiers)
+DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
+                                     InitDeclarators init_declarators) : AST(AST::Kind::DECLARATION) {}
+DeclarationSpecifiersAST::DeclarationSpecifiersAST(std::vector<Operator<StorageSpecifier>> storage_specifiers,
+                                                         nts<TypeSpecifierAST> type_specifiers,
+                                                         nts<TypeQualifierAST> type_qualifiers)
     : AST(AST::Kind::DECLARATION_SPECIFIER),
       storage_specifiers(std::move(storage_specifiers)),
       type_specifiers(std::move(type_specifiers)),
       type_qualifiers(std::move(type_qualifiers)) {}
-mycc::DeclaratorAST::DeclaratorAST(mycc::nt<mycc::PointerAST> pointer,
-                                   mycc::nt<mycc::DirectDeclaratorAST> direct_declarator)
+DeclaratorAST::DeclaratorAST(nt<PointerAST> pointer,
+                                   nt<DirectDeclaratorAST> direct_declarator)
     : AST(AST::Kind::DECLARATOR) {}
-mycc::StorageClassSpecifierAST::StorageClassSpecifierAST(mycc::Operator<mycc::StorageSpecifier> storage_speicifier)
+StorageClassSpecifierAST::StorageClassSpecifierAST(Operator<StorageSpecifier> storage_speicifier)
     : AST(AST::Kind::STORAGE_CLASS_SPECIFIER) {}
-mycc::SpecifierQualifierAST::SpecifierQualifierAST(mycc::nt<mycc::TypeQualifierAST> speciler)
+SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeQualifierAST> speciler)
     : AST(AST::Kind::SPECIFIER_QUALIFIER, 1),
       spec(std::move(speciler)) {}
-mycc::SpecifierQualifierAST::SpecifierQualifierAST(mycc::nt<mycc::TypeSpecifierAST> speciler)
+SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeSpecifierAST> speciler)
     : AST(AST::Kind::SPECIFIER_QUALIFIER, 0),
       spec(std::move(speciler)) {}
-mycc::TypeSpecifierAST::TypeSpecifierAST(mycc::Operator<mycc::ProtoTypeSpecifier> type_specifier)
+TypeSpecifierAST::TypeSpecifierAST(Operator<ProtoTypeSpecifier> type_specifier)
     : AST(AST::Kind::TYPE_SPECIFIER) {}
-mycc::TypeSpecifierAST::TypeSpecifierAST(mycc::nt<mycc::StructOrUnionSpecifierAST> specifier)
+TypeSpecifierAST::TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier)
     : AST(AST::Kind::TYPE_SPECIFIER, 9) {}
-mycc::TypeSpecifierAST::TypeSpecifierAST(mycc::nt<mycc::EnumSpecifierAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER,
+TypeSpecifierAST::TypeSpecifierAST(nt<EnumSpecifierAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER,
                                                                                            10) {}
-mycc::TypeSpecifierAST::TypeSpecifierAST(mycc::nt<mycc::TypedefNameAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER,
+TypeSpecifierAST::TypeSpecifierAST(nt<TypedefNameAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER,
                                                                                          11) {}
-mycc::StructOrUnionSpecifierAST::StructOrUnionSpecifierAST(mycc::StructOrUnion type,
-                                                           mycc::nt<mycc::IdentifierAST> id,
-                                                           mycc::nts<mycc::StructDeclarationAST> declarations)
+StructOrUnionSpecifierAST::StructOrUnionSpecifierAST(StructOrUnion type,
+                                                           nt<IdentifierAST> id,
+                                                           nts<StructDeclarationAST> declarations)
     : AST(AST::Kind::DECLARATION) {}
-mycc::EnumSpecifierAST::EnumSpecifierAST(mycc::nt<mycc::IdentifierAST> identifier,
-                                         mycc::nt<mycc::EnumeratorListAST> enumeratorList)
+EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier,
+                                         nt<EnumeratorListAST> enumeratorList)
     : AST(AST::Kind::ENUM_SPECIFIER), id(std::move(identifier)), enum_list(std::move(enumeratorList)) {}
-mycc::EnumSpecifierAST::EnumSpecifierAST(mycc::nt<mycc::EnumeratorListAST> enumeratorList)
+EnumSpecifierAST::EnumSpecifierAST(nt<EnumeratorListAST> enumeratorList)
     : AST(AST::Kind::ENUM_SPECIFIER), id(nullptr), enum_list(std::move(enumeratorList)) {}
-mycc::EnumSpecifierAST::EnumSpecifierAST(mycc::nt<mycc::IdentifierAST> identifier)
+EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier)
     : AST(AST::Kind::ENUM_SPECIFIER), id(std::move(identifier)), enum_list() {}
-mycc::StructDeclarationAST::StructDeclarationAST(mycc::nts<mycc::SpecifierQualifierAST> specifier_qualifier,
-                                                 mycc::nt<mycc::StructDeclaratorListAST> struct_declarator_list)
+StructDeclarationAST::StructDeclarationAST(nts<SpecifierQualifierAST> specifier_qualifier,
+                                                 nt<StructDeclaratorListAST> struct_declarator_list)
     : AST(AST::Kind::STRUCT_DECLARATION),
       spec_qual(std::move(specifier_qualifier)),
       decl_tor_list(std::move(struct_declarator_list)) {}
-mycc::StructDeclaratorListAST::StructDeclaratorListAST(mycc::nts<mycc::StructDeclaratorAST> struct_declarators) : AST(
+StructDeclaratorListAST::StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators) : AST(
     AST::Kind::STRUCT_DECLARATOR_LIST) {}
-mycc::StructDeclaratorAST::StructDeclaratorAST(mycc::nt<mycc::DeclaratorAST> declarator)
+StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST> declarator)
     : AST(AST::Kind::STRUCT_DECLARATOR, 0),
       declarator(std::move(declarator)),
       constant_expression(nullptr) {}
-mycc::StructDeclaratorAST::StructDeclaratorAST(mycc::nt<mycc::DeclaratorAST> declarator,
-                                               mycc::nt<mycc::ConstantExpressionAST> constant_expression)
+StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST> declarator,
+                                               nt<ConstantExpressionAST> constant_expression)
     : AST(AST::Kind::STRUCT_DECLARATOR, 1),
       declarator(std::move(declarator)),
       constant_expression(nullptr) {}
-mycc::StructDeclaratorAST::StructDeclaratorAST(mycc::nt<mycc::ConstantExpressionAST> constant_expression)
+StructDeclaratorAST::StructDeclaratorAST(nt<ConstantExpressionAST> constant_expression)
     : AST(AST::Kind::STRUCT_DECLARATOR, 2),
       declarator(nullptr),
       constant_expression(std::move(constant_expression)) {}
-mycc::ConstantExpressionAST::ConstantExpressionAST(mycc::nt<mycc::ConditionalExpressionAST> conditional_expression)
+ConstantExpressionAST::ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression)
     : AST(AST::Kind::CONSTANT_EXPRESSION), conditional_expression(std::move(conditional_expression)) {}
-mycc::PointerAST::PointerAST(mycc::nts<mycc::TypeQualifierAST> type_qualifiers, mycc::nt<mycc::PointerAST> pointer)
+PointerAST::PointerAST(nts<TypeQualifierAST> type_qualifiers, nt<PointerAST> pointer)
     : AST(AST::Kind::POINTER), type_qualifiers(std::move(type_qualifiers)), pointer(std::move(pointer)) {}
-mycc::DirectDeclaratorAST::DirectDeclaratorAST(mycc::nt<mycc::AST> term1,
-                                               std::vector<std::pair<mycc::DirectDeclaratorAST::Term2,
-                                                                     mycc::nt<mycc::AST>>> term2s)
+DirectDeclaratorAST::DirectDeclaratorAST(nt<AST> term1,
+                                               std::vector<std::pair<DirectDeclaratorAST::Term2,
+                                                                     nt<AST>>> term2s)
     : AST(Kind::DIRECT_DECLARATOR) {}
-mycc::ParameterTypeListAST::ParameterTypeListAST(mycc::nt<mycc::ParameterListAST> parameter_list, bool hasMultiple)
+ParameterTypeListAST::ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple)
     : AST(AST::Kind::PARAMETER_TYPE_LIST, hasMultiple ? 1 : 0), parameter_list(std::move(parameter_list)) {}
-mycc::ConditionalExpressionAST::ConditionalExpressionAST(mycc::nt<mycc::LogicalOrExpressionAST> logical_or_expression)
+ConditionalExpressionAST::ConditionalExpressionAST(nt<LogicalOrExpressionAST> logical_or_expression)
     : AST(AST::Kind::CONDITIONAL_EXPRESSION, 0),
       logical_or_expression(std::move(logical_or_expression)) {}
-mycc::ConditionalExpressionAST::ConditionalExpressionAST(mycc::nt<mycc::LogicalOrExpressionAST> logical_or_expression,
-                                                         mycc::nt<mycc::ExpressionAST> expression,
-                                                         mycc::nt<mycc::ConditionalExpressionAST> conditional_expression)
+ConditionalExpressionAST::ConditionalExpressionAST(nt<LogicalOrExpressionAST> logical_or_expression,
+                                                         nt<ExpressionAST> expression,
+                                                         nt<ConditionalExpressionAST> conditional_expression)
     : AST(AST::Kind::CONDITIONAL_EXPRESSION, 1),
       logical_or_expression(std::move(logical_or_expression)),
       expression(std::move(expression)),
       conditional_expression(std::move(
           conditional_expression)) {}
-mycc::LogicalOrExpressionAST::LogicalOrExpressionAST(mycc::nt<mycc::LogicalOrExpressionAST> left,
-                                                     mycc::Operator<mycc::InfixOp> op,
-                                                     mycc::nt<mycc::LogicalOrExpressionAST> right)
+LogicalOrExpressionAST::LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left,
+                                                     Operator<InfixOp> op,
+                                                     nt<LogicalOrExpressionAST> right)
     : AST(AST::Kind::LOGICAL_OR_EXPRESSION) {}
-mycc::LogicalOrExpressionAST::LogicalOrExpressionAST(mycc::nt<mycc::CastExpressionAST> leaf)
+LogicalOrExpressionAST::LogicalOrExpressionAST(nt<CastExpressionAST> leaf)
     : AST(AST::Kind::LOGICAL_OR_EXPRESSION) {}
-mycc::ExpressionAST::ExpressionAST(mycc::nts<mycc::AssignmentExpressionAST>) : AST(AST::Kind::EXPRESSION, 0) {}
-mycc::CastExpressionAST::CastExpressionAST(mycc::nt<mycc::UnaryExpressionAST>) : AST(AST::Kind::CAST_EXPRESSION, 0) {}
-mycc::CastExpressionAST::CastExpressionAST(mycc::nt<mycc::TypeNameAST>, mycc::nt<mycc::CastExpressionAST>)
+ExpressionAST::ExpressionAST(nts<AssignmentExpressionAST>) : AST(AST::Kind::EXPRESSION, 0) {}
+CastExpressionAST::CastExpressionAST(nt<UnaryExpressionAST>) : AST(AST::Kind::CAST_EXPRESSION, 0) {}
+CastExpressionAST::CastExpressionAST(nt<TypeNameAST>, nt<CastExpressionAST>)
     : AST(AST::Kind::CAST_EXPRESSION, 1) {}
-mycc::UnaryExpressionAST::UnaryExpressionAST(mycc::nt<mycc::TypeNameAST>) : AST(AST::Kind::UNARY_EXPRESSION) {}
-mycc::UnaryExpressionAST::UnaryExpressionAST(mycc::Operator<mycc::UnaryOp> op, mycc::nt<mycc::CastExpressionAST>)
+UnaryExpressionAST::UnaryExpressionAST(nt<TypeNameAST>) : AST(AST::Kind::UNARY_EXPRESSION) {}
+UnaryExpressionAST::UnaryExpressionAST(Operator<UnaryOp> op, nt<CastExpressionAST>)
     : AST(AST::Kind::UNARY_EXPRESSION) {}
-mycc::UnaryExpressionAST::UnaryExpressionAST(mycc::nt<mycc::UnaryExpressionAST>,
-                                             mycc::UnaryExpressionAST::PrefixType type)
+UnaryExpressionAST::UnaryExpressionAST(nt<UnaryExpressionAST>,
+                                             UnaryExpressionAST::PrefixType type)
     : AST(AST::Kind::UNARY_EXPRESSION, static_cast<int>(type)) {}
-mycc::UnaryExpressionAST::UnaryExpressionAST(mycc::nt<mycc::PostfixExpressionAST>) : AST(AST::Kind::UNARY_EXPRESSION,
+UnaryExpressionAST::UnaryExpressionAST(nt<PostfixExpressionAST>) : AST(AST::Kind::UNARY_EXPRESSION,
                                                                                          0) {}
-mycc::TypeNameAST::TypeNameAST(mycc::nts<mycc::SpecifierQualifierAST>, mycc::nt<mycc::DeclaratorAST>)
+TypeNameAST::TypeNameAST(nts<SpecifierQualifierAST>, nt<DeclaratorAST>)
     : AST(AST::Kind::TYPE_NAME) {}
-mycc::PostfixExpressionAST::PostfixExpressionAST(mycc::nt<mycc::PrimaryExpressionAST> primary,
-                                                 std::vector<std::pair<int, mycc::nt<mycc::AST>>> terms)
+PostfixExpressionAST::PostfixExpressionAST(nt<PrimaryExpressionAST> primary,
+                                                 std::vector<std::pair<int, nt<AST>>> terms)
     : AST(AST::Kind::POSTFIX_EXPRESSION, 0) {}
-mycc::PrimaryExpressionAST::PrimaryExpressionAST(mycc::nt<mycc::IdentifierAST>) : AST(AST::Kind::PRIMARY_EXPRESSION,
+PrimaryExpressionAST::PrimaryExpressionAST(nt<IdentifierAST>) : AST(AST::Kind::PRIMARY_EXPRESSION,
                                                                                       0) {}
-mycc::PrimaryExpressionAST::PrimaryExpressionAST(mycc::nt<mycc::IntegerConstantAST>)
+PrimaryExpressionAST::PrimaryExpressionAST(nt<IntegerConstantAST>)
     : AST(AST::Kind::PRIMARY_EXPRESSION, 1) {}
-mycc::PrimaryExpressionAST::PrimaryExpressionAST(mycc::nt<mycc::FloatingConstantAST>)
+PrimaryExpressionAST::PrimaryExpressionAST(nt<FloatingConstantAST>)
     : AST(AST::Kind::PRIMARY_EXPRESSION, 1) {}
-mycc::PrimaryExpressionAST::PrimaryExpressionAST(mycc::nt<mycc::CharacterConstantAST>)
+PrimaryExpressionAST::PrimaryExpressionAST(nt<CharacterConstantAST>)
     : AST(AST::Kind::PRIMARY_EXPRESSION, 1) {}
-mycc::PrimaryExpressionAST::PrimaryExpressionAST(mycc::nt<mycc::StringAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 2) {}
-mycc::PrimaryExpressionAST::PrimaryExpressionAST(mycc::nt<mycc::ExpressionAST>) : AST(AST::Kind::PRIMARY_EXPRESSION,
+PrimaryExpressionAST::PrimaryExpressionAST(nt<StringAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 2) {}
+PrimaryExpressionAST::PrimaryExpressionAST(nt<ExpressionAST>) : AST(AST::Kind::PRIMARY_EXPRESSION,
                                                                                       3) {}
-mycc::AssignmentExpressionAST::AssignmentExpressionAST(mycc::nt<mycc::ConditionalExpressionAST>)
+AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>)
     : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0) {}
-mycc::AssignmentExpressionAST::AssignmentExpressionAST(mycc::nt<mycc::ConditionalExpressionAST>,
-                                                       mycc::Operator<mycc::AssignmentOp>,
-                                                       mycc::nt<mycc::AssignmentExpressionAST>)
+AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>,
+                                                       Operator<AssignmentOp>,
+                                                       nt<AssignmentExpressionAST>)
     : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 1) {}
-mycc::ConstantAST::ConstantAST(mycc::nt<mycc::IntegerConstantAST>) : AST(AST::Kind::CONSTANT, 0) {}
-mycc::ConstantAST::ConstantAST(mycc::nt<mycc::CharacterConstantAST>) : AST(AST::Kind::CONSTANT, 1) {}
-mycc::ConstantAST::ConstantAST(mycc::nt<mycc::FloatingConstantAST>) : AST(AST::Kind::CONSTANT, 2) {}
-mycc::ConstantAST::ConstantAST(mycc::nt<mycc::EnumerationConstantAST>) : AST(AST::Kind::CONSTANT, 3) {}
-mycc::CharacterConstantAST::CharacterConstantAST(std::string)
+ConstantAST::ConstantAST(nt<IntegerConstantAST>) : AST(AST::Kind::CONSTANT, 0) {}
+ConstantAST::ConstantAST(nt<CharacterConstantAST>) : AST(AST::Kind::CONSTANT, 1) {}
+ConstantAST::ConstantAST(nt<FloatingConstantAST>) : AST(AST::Kind::CONSTANT, 2) {}
+ConstantAST::ConstantAST(nt<EnumerationConstantAST>) : AST(AST::Kind::CONSTANT, 3) {}
+CharacterConstantAST::CharacterConstantAST(std::string)
     : AST(AST::Kind::CHARACTER_CONSTANT) {}
-mycc::FloatingConstantAST::FloatingConstantAST(std::string)
+FloatingConstantAST::FloatingConstantAST(std::string)
     : AST(AST::Kind::FLOATING_CONSTANT) {}
-mycc::EnumerationConstantAST::EnumerationConstantAST(mycc::nt<mycc::IdentifierAST>)
+EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST>)
     : AST(AST::Kind::ENUMERATION_CONSTANT) {}
-mycc::ParameterListAST::ParameterListAST(mycc::nts<mycc::ParameterDeclarationAST>) : AST(AST::Kind::PARAMETER_LIST) {}
-mycc::ParameterDeclarationAST::ParameterDeclarationAST(mycc::nt<mycc::DeclarationSpecifiersAST>,
-                                                       mycc::nt<mycc::DeclaratorAST>)
+ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST>) : AST(AST::Kind::PARAMETER_LIST) {}
+ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST>,
+                                                       nt<DeclaratorAST>)
     : AST(AST::Kind::PARAMETER_DECLARATION) {}
-mycc::EnumeratorListAST::EnumeratorListAST(mycc::nts<mycc::EnumeratorAST> &&) : AST(AST::Kind::ENUMERATOR_LIST) {}
-mycc::EnumeratorAST::EnumeratorAST(mycc::nt<mycc::IdentifierAST>) : AST(AST::Kind::ENUMERATOR, 0) {}
-mycc::EnumeratorAST::EnumeratorAST(mycc::nt<mycc::IdentifierAST>, mycc::nt<mycc::ConstantExpressionAST>)
+EnumeratorListAST::EnumeratorListAST(nts<EnumeratorAST> &&) : AST(AST::Kind::ENUMERATOR_LIST) {}
+EnumeratorAST::EnumeratorAST(nt<IdentifierAST>) : AST(AST::Kind::ENUMERATOR, 0) {}
+EnumeratorAST::EnumeratorAST(nt<IdentifierAST>, nt<ConstantExpressionAST>)
     : AST(AST::Kind::ENUMERATOR, 1) {}
-mycc::InitializerAST::InitializerAST(mycc::nt<mycc::AssignmentExpressionAST>) : AST(AST::Kind::INITIALIZER, 0) {}
-mycc::InitializerAST::InitializerAST(mycc::nt<mycc::InitializerListAST>) : AST(AST::Kind::INITIALIZER, 1) {}
-mycc::InitializerListAST::InitializerListAST(mycc::nts<mycc::InitializerAST>) : AST(AST::Kind::INITIALIZER_LIST) {}
-mycc::StatementAST::StatementAST(mycc::nt<mycc::LabeledStatementAST>) : AST(AST::Kind::STATEMENT, 0) {}
-mycc::StatementAST::StatementAST(mycc::nt<mycc::ExpressionStatementAST>) : AST(AST::Kind::STATEMENT, 1) {}
-mycc::StatementAST::StatementAST(mycc::nt<mycc::CompoundStatementAST>) : AST(AST::Kind::STATEMENT, 2) {}
-mycc::StatementAST::StatementAST(mycc::nt<mycc::SelectionStatementAST>) : AST(AST::Kind::STATEMENT, 3) {}
-mycc::StatementAST::StatementAST(mycc::nt<mycc::IterationStatementAST>) : AST(AST::Kind::STATEMENT, 4) {}
-mycc::StatementAST::StatementAST(mycc::nt<mycc::JumpStatementAST>) : AST(AST::Kind::STATEMENT, 5) {}
-mycc::LabeledStatementAST::LabeledStatementAST(mycc::nt<mycc::IdentifierAST>, mycc::nt<mycc::StatementAST>)
+InitializerAST::InitializerAST(nt<AssignmentExpressionAST>) : AST(AST::Kind::INITIALIZER, 0) {}
+InitializerAST::InitializerAST(nt<InitializerListAST>) : AST(AST::Kind::INITIALIZER, 1) {}
+InitializerListAST::InitializerListAST(nts<InitializerAST>) : AST(AST::Kind::INITIALIZER_LIST) {}
+StatementAST::StatementAST(nt<LabeledStatementAST>) : AST(AST::Kind::STATEMENT, 0) {}
+StatementAST::StatementAST(nt<ExpressionStatementAST>) : AST(AST::Kind::STATEMENT, 1) {}
+StatementAST::StatementAST(nt<CompoundStatementAST>) : AST(AST::Kind::STATEMENT, 2) {}
+StatementAST::StatementAST(nt<SelectionStatementAST>) : AST(AST::Kind::STATEMENT, 3) {}
+StatementAST::StatementAST(nt<IterationStatementAST>) : AST(AST::Kind::STATEMENT, 4) {}
+StatementAST::StatementAST(nt<JumpStatementAST>) : AST(AST::Kind::STATEMENT, 5) {}
+LabeledStatementAST::LabeledStatementAST(nt<IdentifierAST>, nt<StatementAST>)
     : AST(AST::Kind::LABELED_STATEMENT, 0) {}
-mycc::LabeledStatementAST::LabeledStatementAST(mycc::nt<mycc::ConstantExpressionAST>, mycc::nt<mycc::StatementAST>)
+LabeledStatementAST::LabeledStatementAST(nt<ConstantExpressionAST>, nt<StatementAST>)
     : AST(AST::Kind::LABELED_STATEMENT, 1) {}
-mycc::LabeledStatementAST::LabeledStatementAST(mycc::nt<mycc::StatementAST>) : AST(AST::Kind::LABELED_STATEMENT, 2) {}
-mycc::ExpressionStatementAST::ExpressionStatementAST(mycc::nt<mycc::ExpressionAST>)
+LabeledStatementAST::LabeledStatementAST(nt<StatementAST>) : AST(AST::Kind::LABELED_STATEMENT, 2) {}
+ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST>)
     : AST(AST::Kind::EXPRESSION_STATEMENT) {}
-mycc::SelectionStatementAST::SelectionStatementAST(mycc::nt<mycc::ExpressionAST>,
-                                                   mycc::nt<mycc::StatementAST>,
+SelectionStatementAST::SelectionStatementAST(nt<ExpressionAST>,
+                                                   nt<StatementAST>,
                                                    bool is_if)
     : AST(AST::Kind::SELECTION_STATEMENT, is_if ? 0 : 2) {}
-mycc::SelectionStatementAST::SelectionStatementAST(mycc::nt<mycc::ExpressionAST>,
-                                                   mycc::nt<mycc::StatementAST>,
-                                                   mycc::nt<mycc::StatementAST>)
+SelectionStatementAST::SelectionStatementAST(nt<ExpressionAST>,
+                                                   nt<StatementAST>,
+                                                   nt<StatementAST>)
     : AST(AST::Kind::SELECTION_STATEMENT, 1) {}
-mycc::IterationStatementAST::IterationStatementAST(mycc::nt<mycc::ExpressionAST>, mycc::nt<mycc::StatementAST>) : AST(
+IterationStatementAST::IterationStatementAST(nt<ExpressionAST>, nt<StatementAST>) : AST(
     AST::Kind::ITERATION_STATEMENT,
     0) {}
-mycc::IterationStatementAST::IterationStatementAST(mycc::nt<mycc::StatementAST>, mycc::nt<mycc::ExpressionAST>) : AST(
+IterationStatementAST::IterationStatementAST(nt<StatementAST>, nt<ExpressionAST>) : AST(
     AST::Kind::ITERATION_STATEMENT,
     1) {}
-mycc::IterationStatementAST::IterationStatementAST(mycc::nt<mycc::ExpressionAST>,
-                                                   mycc::nt<mycc::ExpressionAST>,
-                                                   mycc::nt<mycc::ExpressionAST>,
-                                                   mycc::nt<mycc::StatementAST>)
+IterationStatementAST::IterationStatementAST(nt<ExpressionAST>,
+                                                   nt<ExpressionAST>,
+                                                   nt<ExpressionAST>,
+                                                   nt<StatementAST>)
     : AST(AST::Kind::ITERATION_STATEMENT, 2) {}
-mycc::JumpStatementAST::JumpStatementAST(mycc::nt<mycc::IdentifierAST>) : AST(AST::Kind::JUMP_STATEMENT, 0) {}
-mycc::JumpStatementAST::JumpStatementAST(bool is_continue) : AST(AST::Kind::JUMP_STATEMENT, is_continue ? 1 : 2) {}
-mycc::JumpStatementAST::JumpStatementAST(mycc::nt<mycc::ExpressionAST>) : AST(AST::Kind::JUMP_STATEMENT, 3) {}
-mycc::TypeQualifierAST::TypeQualifierAST(Operator<TypeQuailifier> op) : AST(AST::Kind::TYPE_QUALIFIER) {}
-mycc::TypedefNameAST::TypedefNameAST(mycc::nt<mycc::IdentifierAST> identifier)
+JumpStatementAST::JumpStatementAST(nt<IdentifierAST>) : AST(AST::Kind::JUMP_STATEMENT, 0) {}
+JumpStatementAST::JumpStatementAST(bool is_continue) : AST(AST::Kind::JUMP_STATEMENT, is_continue ? 1 : 2) {}
+JumpStatementAST::JumpStatementAST(nt<ExpressionAST>) : AST(AST::Kind::JUMP_STATEMENT, 3) {}
+TypeQualifierAST::TypeQualifierAST(Operator<TypeQuailifier> op) : AST(AST::Kind::TYPE_QUALIFIER) {}
+TypedefNameAST::TypedefNameAST(nt<IdentifierAST> identifier)
     : AST(AST::Kind::TYPEDEF_NAME), id(std::move(identifier)) {}
-mycc::StructOrUnionAST::StructOrUnionAST(mycc::StructOrUnion struct_or_union) : AST(AST::Kind::STRUCT_OR_UNION) {}
-mycc::IdentifierAST::IdentifierAST(mycc::Token token)
+StructOrUnionAST::StructOrUnionAST(StructOrUnion struct_or_union) : AST(AST::Kind::STRUCT_OR_UNION) {}
+IdentifierAST::IdentifierAST(Token token)
     : AST(AST::Kind::IDENTIFIER), token(std::move(token)) {}
-mycc::StringAST::StringAST(std::string value) : AST(AST::Kind::STRING) {}
-mycc::AST::AST(mycc::AST::Kind kind, int id) : kind(kind), pro_id(id) {
+StringAST::StringAST(std::string value) : AST(AST::Kind::STRING) {}
+AST::AST(AST::Kind kind, int id) : kind(kind), pro_id(id) {
   ++indent;
   for (int i = 0; i <= indent; ++i) {
     std::cout << "  ";
@@ -209,8 +209,7 @@ mycc::AST::AST(mycc::AST::Kind kind, int id) : kind(kind), pro_id(id) {
   std::cout << toString() << std::endl;
   --indent;
 }
-const char *mycc::AST::toString() {
-  using namespace mycc;
+const char *AST::toString() {
   switch (kind) {
     case AST::Kind::TRANSLATION_UNIT:return "TRANSLATION_UNIT";
     case AST::Kind::EXTERNAL_DECLARATION:return "EXTERNAL_DECLARATION";

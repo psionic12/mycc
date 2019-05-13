@@ -8,8 +8,6 @@
 #include <sema/SymbolTable.h>
 #include <sema/operator.h>
 
-namespace mycc {
-
 class NotAInfixOpException {};
 class ParserException : public std::exception {
  public:
@@ -82,4 +80,3 @@ class Parser {
 };
 
 #endif //MYCCPILER_PARSER_H
-} //namespace mycc

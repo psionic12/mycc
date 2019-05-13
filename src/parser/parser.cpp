@@ -1,9 +1,9 @@
 #include <memory>
 #include <parser/parser.h>
 #include <tokens/token.h>
-mycc::Parser::Parser(std::ifstream &ifstream)
+Parser::Parser(std::ifstream &ifstream)
     : in(ifstream), lex(ifstream) {}
-bool mycc::Parser::expect(mycc::TokenKind kind) {
+bool Parser::expect(TokenKind kind) {
   if (lex.peek() == kind) {
     lex.consumeToken();
     return true;
@@ -11,7 +11,7 @@ bool mycc::Parser::expect(mycc::TokenKind kind) {
     return false;
   }
 }
-const std::string &mycc::Parser::accept(mycc::TokenKind kind) {
+const std::string &Parser::accept(TokenKind kind) {
   if (lex.peek() != kind) {
     throw parseError(std::string("except ").append(Token::enumToString(kind)));
   } else {
@@ -20,10 +20,10 @@ const std::string &mycc::Parser::accept(mycc::TokenKind kind) {
     return name;
   }
 }
-mycc::ParserException mycc::Parser::parseError(const std::string msg) {
+ParserException Parser::parseError(const std::string msg) {
   return ParserException(msg, lex.peek(-1));
 }
-int mycc::Parser::precedence(mycc::InfixOp op) {
+int Parser::precedence(InfixOp op) {
   switch (op) {
     case InfixOp::BARBAR:return 1;
     case InfixOp::AMPAMP:return 2;
@@ -45,7 +45,7 @@ int mycc::Parser::precedence(mycc::InfixOp op) {
     case InfixOp::PERCENT:return 10;
   }
 }
-mycc::InfixOp mycc::Parser::isInfixOp(TokenKind kind) {
+InfixOp Parser::isInfixOp(TokenKind kind) {
   InfixOp op;
   switch (kind) {
     case TokenKind::TOKEN_BARBAR:op = InfixOp::BARBAR;
@@ -90,9 +90,9 @@ mycc::InfixOp mycc::Parser::isInfixOp(TokenKind kind) {
 }
 
 /// <translation-unit> ::= {<external-declaration>}*
-mycc::nt<mycc::TranslationUnitAST>
-mycc::Parser::parseTranslationUnit() {
-  mycc::nts<ExternalDeclarationAST> declarations;
+nt<TranslationUnitAST>
+Parser::parseTranslationUnit() {
+  nts<ExternalDeclarationAST> declarations;
   while (lex.peek() != TokenKind::TOKEN_EOF) {
     declarations.push_back(parseExternalDeclaration());
   }
@@ -101,7 +101,7 @@ mycc::Parser::parseTranslationUnit() {
 
 ///<external-declaration> ::= <function-definition>
 ///                         | <declaration>
-mycc::nt<mycc::ExternalDeclarationAST> mycc::Parser::parseExternalDeclaration() {
+nt<ExternalDeclarationAST> Parser::parseExternalDeclaration() {
   // conflict, we merge to productions.
   //<declaration> 		  ::= {<declaration-specifier>}+ {<init-declarator>}* ;
   //<function-definition> ::= {<declaration-specifier>}+ <declarator> 		  {<declaration>}* <compound-statement>
@@ -111,7 +111,7 @@ mycc::nt<mycc::ExternalDeclarationAST> mycc::Parser::parseExternalDeclaration() 
   if (init_declarators.empty() || init_declarators.size() > 1 || init_declarators.back().second != nullptr) {
     accept(TokenKind::TOKEN_SEMI);
     auto declaration = std::make_unique<DeclarationAST>(std::move(specifiers), std::move(init_declarators));
-    return std::make_unique<mycc::ExternalDeclarationAST>(std::move(declaration));
+    return std::make_unique<ExternalDeclarationAST>(std::move(declaration));
   } else {
     // only one declarator, we don't know what's this, continue parsing
     auto declarations = parseDeclarations();
@@ -122,27 +122,27 @@ mycc::nt<mycc::ExternalDeclarationAST> mycc::Parser::parseExternalDeclaration() 
                                                                          std::move(declarator),
                                                                          std::move(declarations),
                                                                          parseCompoundStatement());
-      return std::make_unique<mycc::ExternalDeclarationAST>(std::move(function_definition));
+      return std::make_unique<ExternalDeclarationAST>(std::move(function_definition));
     } else {
       // this is a declaration
       accept(TokenKind::TOKEN_SEMI);
       auto declaration = std::make_unique<DeclarationAST>(std::move(specifiers), std::move(init_declarators));
-      return std::make_unique<mycc::ExternalDeclarationAST>(std::move(declaration));
+      return std::make_unique<ExternalDeclarationAST>(std::move(declaration));
     }
   }
 }
 
 /// <typedef-name> ::= <identifier>
-mycc::nt<mycc::TypedefNameAST> mycc::Parser::parseTypedefName() {
-  return std::make_unique<mycc::TypedefNameAST>(parseIdentifier());
+nt<TypedefNameAST> Parser::parseTypedefName() {
+  return std::make_unique<TypedefNameAST>(parseIdentifier());
 }
-mycc::nt<mycc::IdentifierAST> mycc::Parser::parseIdentifier() {
+nt<IdentifierAST> Parser::parseIdentifier() {
   if (lex.peek() != TokenKind::TOKEN_IDENTIFIER) {
     throw parseError("expected identifier");
   } else {
     Token token = lex.peek();
     lex.consumeToken();
-    return std::make_unique<mycc::IdentifierAST>(std::move(token));
+    return std::make_unique<IdentifierAST>(std::move(token));
   }
 }
 
@@ -152,7 +152,7 @@ mycc::nt<mycc::IdentifierAST> mycc::Parser::parseIdentifier() {
 ///                   | -
 ///                   | ~
 ///                   | !
-mycc::UnaryOp mycc::Parser::parseUnaryOperator() {
+UnaryOp Parser::parseUnaryOperator() {
   UnaryOp op;
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_AMP:op = UnaryOp::AMP;
@@ -182,7 +182,7 @@ mycc::UnaryOp mycc::Parser::parseUnaryOperator() {
 ///                        | &=
 ///                        | ^=
 ///                        | |=
-mycc::AssignmentOp mycc::Parser::parseAssignmentOperator() {
+AssignmentOp Parser::parseAssignmentOperator() {
   AssignmentOp op;
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_EQ:op = AssignmentOp::EQ;
@@ -216,7 +216,7 @@ mycc::AssignmentOp mycc::Parser::parseAssignmentOperator() {
 
 ///<type-qualifier> ::= const
 ///                   | volatile
-mycc::nt<mycc::TypeQualifierAST> mycc::Parser::parseTypeQualifier() {
+nt<TypeQualifierAST> Parser::parseTypeQualifier() {
   TypeQuailifier quailifier;
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_CONST:quailifier = TypeQuailifier::kCONST;
@@ -226,46 +226,46 @@ mycc::nt<mycc::TypeQualifierAST> mycc::Parser::parseTypeQualifier() {
     default:throw parseError(R"(type qualifier expected "const" or "volatile")");
   }
   lex.consumeToken();
-  return std::make_unique<mycc::TypeQualifierAST>(Operator<TypeQuailifier>(quailifier, lex.peek()));
+  return std::make_unique<TypeQualifierAST>(Operator<TypeQuailifier>(quailifier, lex.peek()));
 }
 
 ///<enumerator> ::= <identifier>
 ///               | <identifier> = <constant-expression>
-mycc::nt<mycc::EnumeratorAST> mycc::Parser::parseEnumerator() {
+nt<EnumeratorAST> Parser::parseEnumerator() {
   auto id = parseIdentifier();
   if (expect(TokenKind::TOKEN_EQ)) {
-    //TODO <constant-expression>
+    return std::make_unique<EnumeratorAST>(std::move(id), parseConstantExpression());
   } else {
-    return std::make_unique<mycc::EnumeratorAST>(parseIdentifier());
+    return std::make_unique<EnumeratorAST>(std::move(id));
   }
 }
 
 ///<enumerator-list> ::= <enumerator>
 ///                    | <enumerator-list> , <enumerator>
-mycc::nt<mycc::EnumeratorListAST> mycc::Parser::parseEnumeratorList() {
+nt<EnumeratorListAST> Parser::parseEnumeratorList() {
   nts<EnumeratorAST> list;
   do {
     list.emplace_back(parseEnumerator());
   } while (expect(TokenKind::TOKEN_COMMA));
-  return std::make_unique<mycc::EnumeratorListAST>(std::move(list));
+  return std::make_unique<EnumeratorListAST>(std::move(list));
 }
 
 ///<enum-specifier> ::= enum <identifier> { <enumerator-list> }
 ///                   | enum { <enumerator-list> }
 ///                   | enum <identifier>
-mycc::nt<mycc::EnumSpecifierAST> mycc::Parser::parseEnumSpecifier() {
+nt<EnumSpecifierAST> Parser::parseEnumSpecifier() {
   accept(TokenKind::TOKEN_ENUM);
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     auto id = parseIdentifier();
     if (expect(TokenKind::TOKEN_LBRACE)) {
-      auto p = std::make_unique<mycc::EnumSpecifierAST>(parseEnumeratorList());
+      auto p = std::make_unique<EnumSpecifierAST>(parseEnumeratorList());
       accept(TokenKind::TOKEN_RBRACE);
       return p;
     } else {
-      return std::make_unique<mycc::EnumSpecifierAST>(std::move(id));
+      return std::make_unique<EnumSpecifierAST>(std::move(id));
     }
   } else if (expect(TokenKind::TOKEN_LBRACE)) {
-    auto p = std::make_unique<mycc::EnumSpecifierAST>(parseEnumeratorList());
+    auto p = std::make_unique<EnumSpecifierAST>(parseEnumeratorList());
     accept(TokenKind::TOKEN_RBRACE);
     return p;
   } else {
@@ -286,7 +286,7 @@ mycc::nt<mycc::EnumSpecifierAST> mycc::Parser::parseEnumSpecifier() {
 
 
 // we don't distinguish whether an identifier is a enumeraition constant or not, we put this on the sema phrase.
-mycc::nt<mycc::PrimaryExpressionAST> mycc::Parser::parsePrimaryExpression() {
+nt<PrimaryExpressionAST> Parser::parsePrimaryExpression() {
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_IDENTIFIER:return std::make_unique<PrimaryExpressionAST>(parseIdentifier());
     case TokenKind::TOKEN_INT_CONSTANT: {
@@ -321,7 +321,7 @@ mycc::nt<mycc::PrimaryExpressionAST> mycc::Parser::parsePrimaryExpression() {
 
 ///<expression> ::= <assignment-expression>
 ///               | <expression> , <assignment-expression>
-mycc::nt<mycc::ExpressionAST> mycc::Parser::parseExpression() {
+nt<ExpressionAST> Parser::parseExpression() {
   nts<AssignmentExpressionAST> list;
   do {
     list.emplace_back(parseAssignmentExpression());
@@ -331,7 +331,7 @@ mycc::nt<mycc::ExpressionAST> mycc::Parser::parseExpression() {
 
 ///<assignment-expression> ::= <conditional-expression>
 ///                          | <unary-expression> <assignment-operator> <assignment-expression>
-mycc::nt<mycc::AssignmentExpressionAST> mycc::Parser::parseAssignmentExpression() {
+nt<AssignmentExpressionAST> Parser::parseAssignmentExpression() {
   // considers <unary-expression> as <conditional-expression> for consistency,
   // check whether the LHS is l-value on sema phrase.
   auto LHS = parseConditionalExpression();
@@ -358,7 +358,7 @@ mycc::nt<mycc::AssignmentExpressionAST> mycc::Parser::parseAssignmentExpression(
 ///<conditional-expression> ::= <logical-or-expression>
 ///                           | <logical-or-expression> ? <expression> : <conditional-expression>
 
-mycc::nt<mycc::ConditionalExpressionAST> mycc::Parser::parseConditionalExpression() {
+nt<ConditionalExpressionAST> Parser::parseConditionalExpression() {
   auto LHS = parseLogicalOrExpression();
   if (expect(TokenKind::TOKEN_QUES)) {
     auto exp = parseExpression();
@@ -372,7 +372,7 @@ mycc::nt<mycc::ConditionalExpressionAST> mycc::Parser::parseConditionalExpressio
 
 // Traditional top down parsing will not work in parsing logical expressions.
 // All logical expressions can be abstract as <term> <infixop> <term>
-mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression(int calling_prec) {
+nt<LogicalOrExpressionAST> Parser::parseLogicalOrExpression(int calling_prec) {
   auto term1 = std::make_unique<LogicalOrExpressionAST>(parseCastExpression());
   while (true) {
     InfixOp op;
@@ -397,7 +397,7 @@ mycc::nt<mycc::LogicalOrExpressionAST> mycc::Parser::parseLogicalOrExpression(in
 }
 
 /// <declaration> ::=  {<declaration-specifier>}+ {<init-declarator>}* ;
-mycc::nts<mycc::DeclarationAST> mycc::Parser::parseDeclarations() {
+nts<DeclarationAST> Parser::parseDeclarations() {
   nts<DeclarationAST> declarations;
   while (true) {
     switch (lex.peek().getKind()) {
@@ -425,7 +425,7 @@ mycc::nts<mycc::DeclarationAST> mycc::Parser::parseDeclarations() {
         accept(TokenKind::TOKEN_SEMI);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
+        if (SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
           declarations.push_back(std::make_unique<DeclarationAST>(parseDeclarationSpecifiers(),
                                                                   parseInitDeclarators()));
           continue;
@@ -442,7 +442,7 @@ mycc::nts<mycc::DeclarationAST> mycc::Parser::parseDeclarations() {
 ///<declaration-specifier> ::= <storage-class-specifier>
 ///                          | <type-specifier>
 ///                          | <type-qualifier>
-mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifiers(bool external) {
+nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers(bool external) {
   std::vector<Operator<StorageSpecifier>> storage_specifiers;
   nts<TypeSpecifierAST> type_specifiers;
   nts<TypeQualifierAST> type_qualifiers;
@@ -459,7 +459,7 @@ mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifier
       case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), lex.peek());
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
+        if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
           break;
         }
       case TokenKind::TOKEN_CHAR:
@@ -492,7 +492,7 @@ mycc::nt<mycc::DeclarationSpecifiersAST> mycc::Parser::parseDeclarationSpecifier
 /// init-declarator-list:
 ///                  init-declarator
 ///                  init-declarator-list , init-declarator
-mycc::InitDeclarators mycc::Parser::parseInitDeclarators() {
+InitDeclarators Parser::parseInitDeclarators() {
 
   std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> init_declarators;
   while (true) {
@@ -517,19 +517,20 @@ mycc::InitDeclarators mycc::Parser::parseInitDeclarators() {
 ///<abstract-declarator> ::= <pointer>
 ///                        | <pointer>    <direct-abstract-declarator>
 ///                        |              <direct-abstract-declarator>
-mycc::nt<mycc::DeclaratorAST> mycc::Parser::parseDeclarator() {
+nt<DeclaratorAST> Parser::parseDeclarator() {
   nt<PointerAST> pointer = nullptr;
   if (lex.peek() == TokenKind::TOKEN_STAR) {
     pointer = parsePointer();
   }
   nt<DirectDeclaratorAST> dd = nullptr;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER || lex.peek() == TokenKind::TOKEN_LPAREN) {
-    return std::make_unique<DeclaratorAST>(std::move(pointer), parseDirectDeclarator());
+    dd = parseDirectDeclarator();
   }
+  return std::make_unique<DeclaratorAST>(std::move(pointer), std::move(dd));
 }
 
 ///<pointer> ::= * {<type-qualifier>}* {<pointer>}?
-mycc::nt<mycc::PointerAST> mycc::Parser::parsePointer() {
+nt<PointerAST> Parser::parsePointer() {
   accept(TokenKind::TOKEN_STAR);
   nts<TypeQualifierAST> type_qualifiers;
   while (true) {
@@ -559,7 +560,7 @@ mycc::nt<mycc::PointerAST> mycc::Parser::parsePointer() {
 ///       | {<direct-abstract-declarator>}? [ {<constant-expression>}? ]
 ///       | {<direct-abstract-declarator>}? ( {<parameter-type-list>}? )
 
-mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
+nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
   nt<AST> term1;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     term1 = parseIdentifier();
@@ -568,7 +569,7 @@ mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
           || lex.peek(1) == TokenKind::TOKEN_STAR
           || lex.peek(1) == TokenKind::TOKEN_LBRACKET
           || (lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-              && mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek(1).getValue())))) {
+              && SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek(1).getValue())))) {
     lex.consumeToken();
     term1 = parseDeclarator();
     accept(TokenKind::TOKEN_RPAREN);
@@ -627,7 +628,7 @@ mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
                               parseParameterTypeList());
           break;
         case TokenKind::TOKEN_IDENTIFIER:
-          if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
+          if (SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
             term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST, parseParameterTypeList());
           } else {
             do {
@@ -645,7 +646,7 @@ mycc::nt<mycc::DirectDeclaratorAST> mycc::Parser::parseDirectDeclarator() {
 
 ///<parameter-type-list> ::= <parameter-list>
 ///                        | <parameter-list> , ...
-mycc::nt<mycc::ParameterTypeListAST> mycc::Parser::parseParameterTypeList() {
+nt<ParameterTypeListAST> Parser::parseParameterTypeList() {
   auto para_list = parseParameterList();
   bool has_multiple = false;
   if (expect(TokenKind::TOKEN_COMMA)) {
@@ -657,7 +658,7 @@ mycc::nt<mycc::ParameterTypeListAST> mycc::Parser::parseParameterTypeList() {
 
 ///<parameter-list> ::= <parameter-declaration>
 ///                   | <parameter-list> , <parameter-declaration>
-mycc::nt<mycc::ParameterListAST> mycc::Parser::parseParameterList() {
+nt<ParameterListAST> Parser::parseParameterList() {
   nts<ParameterDeclarationAST> decls;
   do {
     decls.emplace_back(parseParameterDeclaration());
@@ -671,7 +672,7 @@ mycc::nt<mycc::ParameterListAST> mycc::Parser::parseParameterList() {
 ///<parameter-declaration> ::= {<declaration-specifier>}+ <declarator>
 ///                          | {<declaration-specifier>}+ <abstract-declarator>
 ///                          | {<declaration-specifier>}+
-mycc::nt<mycc::ParameterDeclarationAST> mycc::Parser::parseParameterDeclaration() {
+nt<ParameterDeclarationAST> Parser::parseParameterDeclaration() {
   auto ds = parseDeclarationSpecifiers();
 
   nt<DeclaratorAST> declarator;
@@ -681,7 +682,7 @@ mycc::nt<mycc::ParameterDeclarationAST> mycc::Parser::parseParameterDeclaration(
     case TokenKind::TOKEN_LBRACKET:declarator = parseDeclarator();
     default:declarator = nullptr;
   }
-  std::make_unique<ParameterDeclarationAST>(std::move(ds), std::move(declarator));
+  return std::make_unique<ParameterDeclarationAST>(std::move(ds), std::move(declarator));
 }
 
 ///<storage-class-specifier> ::= auto
@@ -689,7 +690,7 @@ mycc::nt<mycc::ParameterDeclarationAST> mycc::Parser::parseParameterDeclaration(
 ///                            | static
 ///                            | extern
 ///                            | typedef
-mycc::StorageSpecifier mycc::Parser::parseStorageClassSpecifier() {
+StorageSpecifier Parser::parseStorageClassSpecifier() {
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_AUTO:lex.consumeToken();
       return StorageSpecifier::kAUTO;
@@ -717,7 +718,7 @@ mycc::StorageSpecifier mycc::Parser::parseStorageClassSpecifier() {
 //                   | <struct-or-union-specifier>
 //                   | <enum-specifier>
 //                   | <typedef-name>
-mycc::nt<mycc::TypeSpecifierAST> mycc::Parser::parseTypeSpecifier() {
+nt<TypeSpecifierAST> Parser::parseTypeSpecifier() {
   ProtoTypeSpecifier specifier;
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_VOID:specifier = (ProtoTypeSpecifier::kVOID);
@@ -742,7 +743,7 @@ mycc::nt<mycc::TypeSpecifierAST> mycc::Parser::parseTypeSpecifier() {
     case TokenKind::TOKEN_UNION:return std::make_unique<TypeSpecifierAST>(parseStructOrUnionSpecifier());
     case TokenKind::TOKEN_ENUM:return std::make_unique<TypeSpecifierAST>(parseEnumSpecifier());
     case TokenKind::TOKEN_IDENTIFIER:
-      if (mycc::SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
+      if (SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
         return std::make_unique<TypeSpecifierAST>(parseTypedefName());
       }
     default:throw parseError("expected type specifier");
@@ -757,7 +758,7 @@ mycc::nt<mycc::TypeSpecifierAST> mycc::Parser::parseTypeSpecifier() {
 ///<struct-or-union-specifier> ::= <struct-or-union> <identifier> { {<struct-declaration>}+ }
 ///                              | <struct-or-union> { {<struct-declaration>}+ }
 ///                              | <struct-or-union> <identifier>
-mycc::nt<mycc::StructOrUnionSpecifierAST> mycc::Parser::parseStructOrUnionSpecifier() {
+nt<StructOrUnionSpecifierAST> Parser::parseStructOrUnionSpecifier() {
   StructOrUnion type;
   if (lex.peek() == TokenKind::TOKEN_STRUCT) {
     type = StructOrUnion::kSTRUCT;
@@ -804,7 +805,7 @@ mycc::nt<mycc::StructOrUnionSpecifierAST> mycc::Parser::parseStructOrUnionSpecif
 }
 
 ///<struct-declaration> ::= {<specifier-qualifier>}* <struct-declarator-list>
-mycc::nt<mycc::StructDeclarationAST> mycc::Parser::parseStructDeclaration() {
+nt<StructDeclarationAST> Parser::parseStructDeclaration() {
   nts<SpecifierQualifierAST> qualifiers;
   while (true) {
     switch (lex.peek().getKind()) {
@@ -819,7 +820,7 @@ mycc::nt<mycc::StructDeclarationAST> mycc::Parser::parseStructDeclaration() {
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_IDENTIFIER:
-        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue()))break;
+        if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue()))break;
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_UNSIGNED:
       case TokenKind::TOKEN_VOID:
@@ -834,7 +835,7 @@ mycc::nt<mycc::StructDeclarationAST> mycc::Parser::parseStructDeclaration() {
 
 ///<specifier-qualifier> ::= <type-specifier>
 ///                        | <type-qualifier>
-mycc::nt<mycc::SpecifierQualifierAST> mycc::Parser::parseSpecifierQualifier() {
+nt<SpecifierQualifierAST> Parser::parseSpecifierQualifier() {
   if (lex.peek() == TokenKind::TOKEN_CONST || lex.peek() == TokenKind::TOKEN_VOLATILE) {
     return std::make_unique<SpecifierQualifierAST>(parseTypeQualifier());
   } else {
@@ -844,7 +845,7 @@ mycc::nt<mycc::SpecifierQualifierAST> mycc::Parser::parseSpecifierQualifier() {
 
 ///<struct-declarator-list> ::= <struct-declarator>
 ///                           | <struct-declarator-list> , <struct-declarator>
-mycc::nt<mycc::StructDeclaratorListAST> mycc::Parser::parseStructDeclaratorList() {
+nt<StructDeclaratorListAST> Parser::parseStructDeclaratorList() {
   nts<StructDeclaratorAST> declarators;
   do {
     declarators.push_back(parseStructDeclarator());
@@ -855,7 +856,7 @@ mycc::nt<mycc::StructDeclaratorListAST> mycc::Parser::parseStructDeclaratorList(
 ///<struct-declarator> ::= <declarator>
 ///                      | <declarator> : <constant-expression>
 ///                      | : <constant-expression>
-mycc::nt<mycc::StructDeclaratorAST> mycc::Parser::parseStructDeclarator() {
+nt<StructDeclaratorAST> Parser::parseStructDeclarator() {
   if (expect(TokenKind::TOKEN_COLON)) {
     return std::make_unique<StructDeclaratorAST>(parseConstantExpression());
   } else {
@@ -871,7 +872,7 @@ mycc::nt<mycc::StructDeclaratorAST> mycc::Parser::parseStructDeclarator() {
 ///<initializer> ::= <assignment-expression>
 ///                | { <initializer-list> }
 ///                | { <initializer-list> , }
-mycc::nt<mycc::InitializerAST> mycc::Parser::parseInitializer() {
+nt<InitializerAST> Parser::parseInitializer() {
   if (expect(TokenKind::TOKEN_LBRACE)) {
     auto exp = parseInitializerList();
     expect(TokenKind::TOKEN_COMMA);
@@ -884,7 +885,7 @@ mycc::nt<mycc::InitializerAST> mycc::Parser::parseInitializer() {
 
 ///<initializer-list> ::= <initializer>
 ///                     | <initializer-list> , <initializer>
-mycc::nt<mycc::InitializerListAST> mycc::Parser::parseInitializerList() {
+nt<InitializerListAST> Parser::parseInitializerList() {
   nts<InitializerAST> list;
   do {
     list.push_back(parseInitializer());
@@ -894,7 +895,7 @@ mycc::nt<mycc::InitializerListAST> mycc::Parser::parseInitializerList() {
 
 ///<function-definition> ::= {<declaration-specifier>}* <declarator> {<declaration>}* <compound-statement>
 // we use {<declaration-specifier>}+ here
-mycc::nt<mycc::FunctionDefinitionAST> mycc::Parser::parseFunctionDefinition() {
+nt<FunctionDefinitionAST> Parser::parseFunctionDefinition() {
   auto specifiers = parseDeclarationSpecifiers();
   auto declarator = parseDeclarator();
   auto declarations = parseDeclarations();
@@ -906,7 +907,7 @@ mycc::nt<mycc::FunctionDefinitionAST> mycc::Parser::parseFunctionDefinition() {
 }
 
 ///<compound-statement> ::= { {<declaration>}* {<statement>}* }
-mycc::nt<mycc::CompoundStatementAST> mycc::Parser::parseCompoundStatement() {
+nt<CompoundStatementAST> Parser::parseCompoundStatement() {
   accept(TokenKind::TOKEN_LBRACE);
   auto declarations = parseDeclarations();
 
@@ -924,7 +925,7 @@ mycc::nt<mycc::CompoundStatementAST> mycc::Parser::parseCompoundStatement() {
 ///              | <selection-statement>
 ///              | <iteration-statement>
 ///              | <jump-statement>
-mycc::nt<mycc::StatementAST> mycc::Parser::parseStatement() {
+nt<StatementAST> Parser::parseStatement() {
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_CASE:
     case TokenKind::TOKEN_DEFAULT:
@@ -951,7 +952,7 @@ mycc::nt<mycc::StatementAST> mycc::Parser::parseStatement() {
 ///<labeled-statement> ::= <identifier> : <statement>
 ///                      | case <constant-expression> : <statement>
 ///                      | default : <statement>
-mycc::nt<mycc::LabeledStatementAST> mycc::Parser::parseLabeledStatement() {
+nt<LabeledStatementAST> Parser::parseLabeledStatement() {
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     auto id = parseIdentifier();
     accept(TokenKind::TOKEN_COLON);
@@ -969,7 +970,7 @@ mycc::nt<mycc::LabeledStatementAST> mycc::Parser::parseLabeledStatement() {
 }
 
 ///<expression-statement> ::= {<expression>}? ;
-mycc::nt<mycc::ExpressionStatementAST> mycc::Parser::parseExpressionStatement() {
+nt<ExpressionStatementAST> Parser::parseExpressionStatement() {
   nt<ExpressionAST> exp = nullptr;
   if (!expect(TokenKind::TOKEN_SEMI)) {
     exp = parseExpression();
@@ -981,7 +982,7 @@ mycc::nt<mycc::ExpressionStatementAST> mycc::Parser::parseExpressionStatement() 
 ///<selection-statement> ::= if ( <expression> ) <statement>
 ///                        | if ( <expression> ) <statement> else <statement>
 ///                        | switch ( <expression> ) <statement>
-mycc::nt<mycc::SelectionStatementAST> mycc::Parser::parseSelectionStatement() {
+nt<SelectionStatementAST> Parser::parseSelectionStatement() {
   if (expect(TokenKind::TOKEN_IF)) {
     accept(TokenKind::TOKEN_LPAREN);
     auto condition = parseExpression();
@@ -1004,7 +1005,7 @@ mycc::nt<mycc::SelectionStatementAST> mycc::Parser::parseSelectionStatement() {
 ///<iteration-statement> ::= while ( <expression> ) <statement>
 ///                        | do <statement> while ( <expression> ) ;
 ///                        | for ( {<expression>}? ; {<expression>}? ; {<expression>}? ) <statement>
-mycc::nt<mycc::IterationStatementAST> mycc::Parser::parseIterationStatement() {
+nt<IterationStatementAST> Parser::parseIterationStatement() {
   if (expect(TokenKind::TOKEN_WHILE)) {
     accept(TokenKind::TOKEN_LPAREN);
     auto exp = parseExpression();
@@ -1047,7 +1048,7 @@ mycc::nt<mycc::IterationStatementAST> mycc::Parser::parseIterationStatement() {
 ///                   | continue ;
 ///                   | break ;
 ///                   | return {<expression>}? ;
-mycc::nt<mycc::JumpStatementAST> mycc::Parser::parseJumpStatement() {
+nt<JumpStatementAST> Parser::parseJumpStatement() {
   if (expect(TokenKind::TOKEN_GOTO)) {
     auto id = parseIdentifier();
     accept(TokenKind::TOKEN_SEMI);
@@ -1072,16 +1073,16 @@ mycc::nt<mycc::JumpStatementAST> mycc::Parser::parseJumpStatement() {
 }
 
 ///<constant-expression> ::= <conditional-expression>
-mycc::nt<mycc::ConstantExpressionAST> mycc::Parser::parseConstantExpression() {
+nt<ConstantExpressionAST> Parser::parseConstantExpression() {
   return std::make_unique<ConstantExpressionAST>(parseConditionalExpression());
 }
 
 ///<cast-expression> ::= <unary-expression>
 ///                    | ( <type-name> ) <cast-expression>
-mycc::nt<mycc::CastExpressionAST> mycc::Parser::parseCastExpression() {
+nt<CastExpressionAST> Parser::parseCastExpression() {
   if (lex.peek() == TokenKind::TOKEN_LPAREN
       && lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-      && mycc::SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek(1).getValue())) {
+      && SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek(1).getValue())) {
     accept(TokenKind::TOKEN_LPAREN);
     auto type_name = parseTypeName();
     accept(TokenKind::TOKEN_RPAREN);
@@ -1097,7 +1098,7 @@ mycc::nt<mycc::CastExpressionAST> mycc::Parser::parseCastExpression() {
 ///                     | <unary-operator> <cast-expression>
 ///                     | sizeof <unary-expression>
 ///                     | sizeof <type-name>
-mycc::nt<mycc::UnaryExpressionAST> mycc::Parser::parseUnaryExpression() {
+nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
   if (expect(TokenKind::TOKEN_PLUSPLUS)) {
     return std::make_unique<UnaryExpressionAST>(parseUnaryExpression(), UnaryExpressionAST::PrefixType::PLUSPLUS);
   } else if (expect(TokenKind::TOKEN_SUBSUB)) {
@@ -1124,7 +1125,7 @@ mycc::nt<mycc::UnaryExpressionAST> mycc::Parser::parseUnaryExpression() {
 //                       | <postfix-expression> -> <identifier>
 //                       | <postfix-expression> ++
 //                       | <postfix-expression> --
-mycc::nt<mycc::PostfixExpressionAST> mycc::Parser::parsePostfixExpression() {
+nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
   auto primary = parsePrimaryExpression();
   std::vector<std::pair<int, nt<AST>>> terms;
   while (true) {
@@ -1150,7 +1151,7 @@ mycc::nt<mycc::PostfixExpressionAST> mycc::Parser::parsePostfixExpression() {
 }
 
 ///<type-name> ::= {<specifier-qualifier>}+ {<abstract-declarator>}?
-mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
+nt<TypeNameAST> Parser::parseTypeName() {
   nts<SpecifierQualifierAST> qualifiers;
   while (true) {
     switch (lex.peek().getKind()) {
@@ -1165,7 +1166,7 @@ mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_IDENTIFIER:
-        if (mycc::SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
+        if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
           break;
         }
       case TokenKind::TOKEN_UNION:
@@ -1186,10 +1187,10 @@ mycc::nt<mycc::TypeNameAST> mycc::Parser::parseTypeName() {
   }
 }
 
-mycc::ParserException::ParserException(std::string error, const mycc::Token &token) :
+ParserException::ParserException(std::string error, const Token &token) :
     token(token), error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
 }
-const char *mycc::ParserException::what() const noexcept {
+const char *ParserException::what() const noexcept {
   return error.c_str();
 }

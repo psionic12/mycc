@@ -3,7 +3,6 @@
 #include <string>
 #include <unordered_map>
 #include <fstream>
-namespace mycc {
 enum class TokenKind {
   TOKEN_AUTO,
   TOKEN_REGISTER,
@@ -182,7 +181,7 @@ class Token {
 
     }
   }
-  static const char *enumToString(mycc::TokenKind kind) {
+  static const char *enumToString(TokenKind kind) {
     switch (kind) {
       case TokenKind::TOKEN_REGISTER: return "register";
       case TokenKind::TOKEN_AUTO: return "auto";
@@ -279,5 +278,4 @@ class Token {
   const std::string value;
   std::ifstream &ifstream;
 };
-} //namespace myccompiler
 #endif //MYCCPILER_TOKEN_H

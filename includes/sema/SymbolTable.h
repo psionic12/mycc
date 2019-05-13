@@ -7,7 +7,6 @@
 #include <memory>
 #include "types.h"
 
-namespace mycc {
 class SymbolNotFoundException {};
 class ScopeNotFoundException {};
 class SymbolExsitsException {};
@@ -62,5 +61,4 @@ class SymbolStack {
  private:
   std::vector<std::pair<SymbolTable, ScopeKind>> stack;
 };
-} //namespace mycc
 #endif //MYCCPILER_SYMBOLTABLE_H

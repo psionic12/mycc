@@ -1,6 +1,6 @@
 #include <lex/lex.h>
 #include <fstream>
-mycc::Lex::Lex(std::ifstream &ifstream)
+Lex::Lex(std::ifstream &ifstream)
     : in(ifstream),
       currentLineNumber(1),
       currentLine(ifstream.tellg()),
@@ -11,7 +11,7 @@ mycc::Lex::Lex(std::ifstream &ifstream)
     getToken();
   }
 }
-void mycc::Lex::getToken() {
+void Lex::getToken() {
   while (!eof_consumed) {
     switch (in.peek()) {
       case ' ':
@@ -314,7 +314,7 @@ void mycc::Lex::getToken() {
     }
   }
 }
-void mycc::Lex::scanIdent() {
+void Lex::scanIdent() {
   tokenStart = in.tellg();
   std::string value;
   do {
@@ -395,7 +395,7 @@ void mycc::Lex::scanIdent() {
     }
   } while (true);
 }
-void mycc::Lex::scanNumber() {
+void Lex::scanNumber() {
   tokenStart = in.tellg();
   std::string value;
   TokenKind kind = TokenKind::TOKEN_INT_CONSTANT;
@@ -473,7 +473,7 @@ void mycc::Lex::scanNumber() {
     }
   } while (true);
 }
-void mycc::Lex::scanCharConstant() {
+void Lex::scanCharConstant() {
   tokenStart = in.tellg();
   char c;
   in.ignore();
@@ -516,7 +516,7 @@ void mycc::Lex::scanCharConstant() {
     throwLexError(std::string("unclosed.char.lit"), TokenKind::TOKEN_CHARLITERAL);
   }
 }
-void mycc::Lex::consumeToken() {
+void Lex::consumeToken() {
   if (tokens[current] != TokenKind::TOKEN_EOF) {
     getToken();
     ++current;
@@ -524,17 +524,17 @@ void mycc::Lex::consumeToken() {
     end_of_tokens = true;
   }
 }
-const mycc::Token &
-mycc::Lex::peek(long offsite) {
+const Token &
+Lex::peek(long offsite) {
   return tokens[current + offsite];
 }
-void mycc::Lex::makeToken(mycc::TokenKind kind, std::string value) {
-  return tokens.emplace_back(in,
+void Lex::makeToken(TokenKind kind, std::string value) {
+  tokens.emplace_back(in,
                              Position{currentLineNumber, currentLine, tokenStart, tokenEnd},
                              kind,
                              std::move(value));
 }
-void mycc::Lex::scanStringConstant() {
+void Lex::scanStringConstant() {
   tokenStart = in.tellg();
   in.ignore();
   std::string value;
@@ -571,13 +571,13 @@ void mycc::Lex::scanStringConstant() {
   in.ignore();
   return makeToken(TokenKind::TOKEN_STRINGLITERAL, std::move(value));
 }
-void mycc::Lex::skipLineComment() {
+void Lex::skipLineComment() {
   in.ignore();
   while (in.peek() != '\r' && in.peek() != '\n' && in.peek() != in.eof()) {
     in.ignore();
   }
 }
-void mycc::Lex::skipBlockComment() {
+void Lex::skipBlockComment() {
   in.ignore();
   while (!in.eof()) {
     if (in.get() == '*') {
@@ -587,14 +587,14 @@ void mycc::Lex::skipBlockComment() {
     }
   }
 }
-void mycc::Lex::throwLexError(std::string error, mycc::TokenKind kind) {
+void Lex::throwLexError(std::string error, TokenKind kind) {
   Token token(in, Position{currentLineNumber, currentLine, tokenStart, tokenEnd}, kind);
   throw LexException(std::move(token), std::move(error));
 }
-bool mycc::Lex::endOfTokens() {
+bool Lex::endOfTokens() {
   return end_of_tokens;
 }
-mycc::TokenKind mycc::Lex::lookupTokens(const std::initializer_list<TokenKind> &tokens) {
+TokenKind Lex::lookupTokens(const std::initializer_list<TokenKind> &tokens) {
   for (auto it = this->tokens.begin() + current; it != this->tokens.end(); ++it) {
     for (auto token : tokens) {
       if (*it == token) {
@@ -604,10 +604,10 @@ mycc::TokenKind mycc::Lex::lookupTokens(const std::initializer_list<TokenKind> &
   }
   return TokenKind::TOKEN_UNKNOWN;
 }
-const char *mycc::LexException::what() const noexcept {
+const char *LexException::what() const noexcept {
   return error.c_str();
 }
-mycc::LexException::LexException(Token token, std::string error)
+LexException::LexException(Token token, std::string error)
     : token(std::move(token)), error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
 }

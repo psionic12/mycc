@@ -9,7 +9,6 @@
 #include <sema/SymbolTable.h>
 #include <tokens/token.h>
 
-namespace mycc {
 class AST {
  public:
   enum class Kind {
@@ -403,5 +402,4 @@ class TranslationUnitAST : public AST {
  public:
   TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations);
 };
-} //namespace mycc
 #endif //MYCCPILER_AST_H
