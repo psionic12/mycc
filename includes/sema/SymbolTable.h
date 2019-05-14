@@ -9,7 +9,13 @@
 
 class SymbolNotFoundException {};
 class ScopeNotFoundException {};
-class SymbolExsitsException {};
+class SymbolExistsException {};
+
+enum class Linkage {
+  kExternal,
+  kInternal,
+  kNone,
+};
 
 enum class SymbolKind {
   OBEJECT,
@@ -30,11 +36,14 @@ enum class ScopeKind {
 
 class Symbol {
  public:
-  Symbol(SymbolKind kind, std::unique_ptr<Type> type, int value = 0);
+  Symbol(SymbolKind kind, std::unique_ptr<Type> type, int value = 0, Linkage linkage = Linkage::kNone);
  private:
   std::unique_ptr<Type> type;
   SymbolKind kind;
   int value;
+  Linkage linkage;
+ public:
+  Linkage getLinkage() const;
  public:
   const Type *getType() const {
     return type.get();

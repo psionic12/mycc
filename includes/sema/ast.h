@@ -8,7 +8,14 @@
 #include <sema/operator.h>
 #include <sema/SymbolTable.h>
 #include <tokens/token.h>
-
+class SemaException : public std::exception {
+ public:
+  SemaException(std::string error, const Token &token);
+  const char *what() const noexcept override;
+ private:
+  const Token &token;
+  std::string error;
+};
 class AST {
  public:
   enum class Kind {
@@ -367,10 +374,9 @@ class DeclarationSpecifiersAST : public AST {
 class DeclarationAST : public AST {
  public:
   DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
-                 InitDeclarators init_declarators);;
- private:
-  nts<DeclarationSpecifiersAST> decl_specs;
-  InitDeclarators init_dec_tors;
+                 InitDeclarators init_declarators);
+  const nt<DeclarationSpecifiersAST> declaration_spcifiers;
+  const InitDeclarators init_dec_tors;
 };
 class CompoundStatementAST : public AST {
  public:

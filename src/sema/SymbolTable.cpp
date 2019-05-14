@@ -26,7 +26,7 @@ void SymbolStack::insert(std::string name, Symbol symbol) {
   }
   try {
     table->at(name);
-    throw SymbolExsitsException();
+    throw SymbolExistsException();
   } catch (const std::out_of_range &) {
     table->emplace(std::move(name), std::move(symbol));
   }
@@ -52,9 +52,12 @@ bool Symbol::operator==(SymbolKind kind) const {
 bool Symbol::operator!=(SymbolKind kind) const {
   return !operator==(kind);
 }
-Symbol::Symbol(SymbolKind kind, std::unique_ptr<Type> type, int value)
+Symbol::Symbol(SymbolKind kind, std::unique_ptr<Type> type, int value, Linkage linkage)
     : kind(kind), type(std::move(type)), value(value) {
 
+}
+Linkage Symbol::getLinkage() const {
+  return linkage;
 }
 bool operator==(SymbolKind kind, const Symbol &symbol) {
   return symbol.getKind() == kind;

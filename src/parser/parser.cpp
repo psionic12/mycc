@@ -443,7 +443,8 @@ nts<DeclarationAST> Parser::parseDeclarations() {
 ///                          | <type-specifier>
 ///                          | <type-qualifier>
 nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers(bool external) {
-  std::vector<Operator<StorageSpecifier>> storage_specifiers;
+  std::vector<Operator < StorageSpecifier>>
+  storage_specifiers;
   nts<TypeSpecifierAST> type_specifiers;
   nts<TypeQualifierAST> type_qualifiers;
   while (true) {
@@ -477,6 +478,7 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers(bool external) {
         continue;
       case TokenKind::TOKEN_CONST:
       case TokenKind::TOKEN_VOLATILE:type_qualifiers.push_back(parseTypeQualifier());
+        continue;
       default:break;
     }
     break;
@@ -494,7 +496,7 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers(bool external) {
 ///                  init-declarator-list , init-declarator
 InitDeclarators Parser::parseInitDeclarators() {
 
-  std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> init_declarators;
+  std::vector<std::pair<nt < DeclaratorAST>, nt < InitializerAST>>> init_declarators;
   while (true) {
     switch (lex.peek().getKind()) {
       case TokenKind::TOKEN_IDENTIFIER:
@@ -577,7 +579,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
     term1 = nullptr;
   }
 
-  std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s;
+  std::vector<std::pair<DirectDeclaratorAST::Term2, nt < AST>> > term2s;
   while (lex.peek() == TokenKind::TOKEN_LBRACKET || lex.peek() == TokenKind::TOKEN_LPAREN) {
     if (expect(TokenKind::TOKEN_LBRACKET)) {
       switch (lex.peek().getKind()) {
@@ -819,8 +821,7 @@ nt<StructDeclarationAST> Parser::parseStructDeclaration() {
       case TokenKind::TOKEN_SHORT:
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_IDENTIFIER:
-        if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue()))break;
+      case TokenKind::TOKEN_IDENTIFIER:if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue()))break;
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_UNSIGNED:
       case TokenKind::TOKEN_VOID:
@@ -911,7 +912,7 @@ nt<CompoundStatementAST> Parser::parseCompoundStatement() {
   accept(TokenKind::TOKEN_LBRACE);
   auto declarations = parseDeclarations();
 
-  nts<StatementAST> statements;
+  nts<StatementAST> statements{};
   while (lex.peek() != TokenKind::TOKEN_RBRACE) {
     statements.push_back(parseStatement());
   }
@@ -1127,27 +1128,35 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
 //                       | <postfix-expression> --
 nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
   auto primary = parsePrimaryExpression();
-  std::vector<std::pair<int, nt<AST>>> terms;
+  std::vector<std::pair<int, nt < AST>> > terms;
   while (true) {
     switch (lex.peek().getKind()) {
       case TokenKind::TOKEN_LBRACKET:lex.consumeToken();
         terms.emplace_back(1, parseExpression());
         accept(TokenKind::TOKEN_RBRACKET);
+        continue;
       case TokenKind::TOKEN_LPAREN:lex.consumeToken();
         while (!expect(TokenKind::TOKEN_RPAREN)) {
           terms.emplace_back(2, parseAssignmentExpression());
         }
+        continue;
       case TokenKind::TOKEN_DOT:lex.consumeToken();
         terms.emplace_back(3, parseIdentifier());
+        continue;
       case TokenKind::TOKEN_ARROW:lex.consumeToken();
         terms.emplace_back(4, parseIdentifier());
+        continue;
       case TokenKind::TOKEN_PLUSPLUS:lex.consumeToken();
-        terms.emplace_back(5, parseIdentifier());
+        terms.emplace_back(5, nullptr);
+        continue;
       case TokenKind::TOKEN_SUBSUB:lex.consumeToken();
-        terms.emplace_back(6, parseIdentifier());
-      default:return std::make_unique<PostfixExpressionAST>(std::move(primary), std::move(terms));
+        terms.emplace_back(6, nullptr);
+        continue;
+      default:break;
     }
+    break;
   }
+  return std::make_unique<PostfixExpressionAST>(std::move(primary), std::move(terms));
 }
 
 ///<type-name> ::= {<specifier-qualifier>}+ {<abstract-declarator>}?
