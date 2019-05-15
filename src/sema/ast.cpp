@@ -8,13 +8,14 @@ const char *SemaException::what() const noexcept {
   return error.c_str();
 }
 TranslationUnitAST::TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations)
-    : AST(AST::Kind::TRANSLATION_UNIT) {}
-ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def) : AST(AST::Kind::EXTERNAL_DECLARATION) {
+    : AST(AST::Kind::TRANSLATION_UNIT), external_declarations(std::move(external_declarations)) {}
+ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def)
+    : AST(AST::Kind::EXTERNAL_DECLARATION), def(std::move(def)) {
   const DeclarationSpecifiersAST *ds;
   if (def->getKind() == AST::Kind::FUNCTION_DEFINITION) {
     ds = static_cast<FunctionDefinitionAST *>(def.get())->declaration_spcifiers.get();
   } else {
-    ds = static_cast<DeclarationAST *>(def.get())->declaration_spcifiers.get();
+    ds = static_cast<DeclarationAST *>(def.get())->declaration_specifiers.get();
   }
 
   //The storage-class specifiers auto and register shall not appear in the declaration specifiers in an external declaration.
@@ -25,8 +26,6 @@ ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def) : AST(AST::Kind::EXT
           specifier.token);
     }
   }
-
-
 
 }
 FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declaration_spcifiers,
@@ -41,10 +40,13 @@ FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declar
 CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
                                            nts<StatementAST> statements)
     : AST(AST::Kind::COMPOUND_STATEMENT),
-      decls(std::move(declarations)),
-      stats(std::move(statements)) {}
+      declarations(std::move(declarations)),
+      statements(std::move(statements)) {}
 DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
-                               InitDeclarators init_declarators) : AST(AST::Kind::DECLARATION) {}
+                               InitDeclarators init_declarators)
+    : AST(AST::Kind::DECLARATION),
+      declaration_specifiers(std::move(declaration_specifiers)),
+      init_declarators(std::move(init_declarators)) {}
 DeclarationSpecifiersAST::DeclarationSpecifiersAST(std::vector<Operator<StorageSpecifier>> storage_specifiers,
                                                    nts<TypeSpecifierAST> type_specifiers,
                                                    nts<TypeQualifierAST> type_qualifiers)
@@ -54,27 +56,29 @@ DeclarationSpecifiersAST::DeclarationSpecifiersAST(std::vector<Operator<StorageS
       type_qualifiers(std::move(type_qualifiers)) {}
 DeclaratorAST::DeclaratorAST(nt<PointerAST> pointer,
                              nt<DirectDeclaratorAST> direct_declarator)
-    : AST(AST::Kind::DECLARATOR) {}
+    : AST(AST::Kind::DECLARATOR), pointer(std::move(pointer)), direct_declarator(std::move(direct_declarator)) {}
 StorageClassSpecifierAST::StorageClassSpecifierAST(Operator<StorageSpecifier> storage_speicifier)
-    : AST(AST::Kind::STORAGE_CLASS_SPECIFIER) {}
+    : AST(AST::Kind::STORAGE_CLASS_SPECIFIER), storage_speicifier(storage_speicifier) {}
 SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeQualifierAST> speciler)
     : AST(AST::Kind::SPECIFIER_QUALIFIER, 1),
       spec(std::move(speciler)) {}
 SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeSpecifierAST> speciler)
     : AST(AST::Kind::SPECIFIER_QUALIFIER, 0),
       spec(std::move(speciler)) {}
-TypeSpecifierAST::TypeSpecifierAST(Operator<ProtoTypeSpecifier> type_specifier)
-    : AST(AST::Kind::TYPE_SPECIFIER) {}
+ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Operator<ProtoTypeSpecifier> specifier)
+    : AST(AST::Kind::PROTO_TYPE_SPECIFIER), Operator<ProtoTypeSpecifier>(specifier), specifier(specifier) {}
+TypeSpecifierAST::TypeSpecifierAST(Operator<ProtoTypeSpecifier> specifier)
+    : AST(AST::Kind::TYPE_SPECIFIER), specifier(std::make_unique<ProtoTypeSpecifierAST>(specifier)) {}
 TypeSpecifierAST::TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier)
-    : AST(AST::Kind::TYPE_SPECIFIER, 9) {}
+    : AST(AST::Kind::TYPE_SPECIFIER, 9), specifier(std::move(specifier)) {}
 TypeSpecifierAST::TypeSpecifierAST(nt<EnumSpecifierAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER,
-                                                                         10) {}
+                                                                         10), specifier(std::move(specifier)) {}
 TypeSpecifierAST::TypeSpecifierAST(nt<TypedefNameAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER,
-                                                                       11) {}
+                                                                       11), specifier(std::move(specifier)) {}
 StructOrUnionSpecifierAST::StructOrUnionSpecifierAST(StructOrUnion type,
                                                      nt<IdentifierAST> id,
                                                      nts<StructDeclarationAST> declarations)
-    : AST(AST::Kind::DECLARATION) {}
+    : AST(AST::Kind::DECLARATION), type(type), id(std::move(id)), declarations(std::move(declarations)) {}
 EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier,
                                    nt<EnumeratorListAST> enumeratorList)
     : AST(AST::Kind::ENUM_SPECIFIER), id(std::move(identifier)), enum_list(std::move(enumeratorList)) {}
@@ -85,10 +89,10 @@ EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier)
 StructDeclarationAST::StructDeclarationAST(nts<SpecifierQualifierAST> specifier_qualifier,
                                            nt<StructDeclaratorListAST> struct_declarator_list)
     : AST(AST::Kind::STRUCT_DECLARATION),
-      spec_qual(std::move(specifier_qualifier)),
-      decl_tor_list(std::move(struct_declarator_list)) {}
+      specifier_qualifier(std::move(specifier_qualifier)),
+      struct_declarator_list(std::move(struct_declarator_list)) {}
 StructDeclaratorListAST::StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators) : AST(
-    AST::Kind::STRUCT_DECLARATOR_LIST) {}
+    AST::Kind::STRUCT_DECLARATOR_LIST), struct_declarators(std::move(struct_declarators)) {}
 StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST> declarator)
     : AST(AST::Kind::STRUCT_DECLARATOR, 0),
       declarator(std::move(declarator)),
@@ -107,9 +111,8 @@ ConstantExpressionAST::ConstantExpressionAST(nt<ConditionalExpressionAST> condit
 PointerAST::PointerAST(nts<TypeQualifierAST> type_qualifiers, nt<PointerAST> pointer)
     : AST(AST::Kind::POINTER), type_qualifiers(std::move(type_qualifiers)), pointer(std::move(pointer)) {}
 DirectDeclaratorAST::DirectDeclaratorAST(nt<AST> term1,
-                                         std::vector<std::pair<DirectDeclaratorAST::Term2,
-                                                               nt<AST>>> term2s)
-    : AST(Kind::DIRECT_DECLARATOR) {}
+                                         std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s)
+    : AST(Kind::DIRECT_DECLARATOR), term1(std::move(term1)), term2s(std::move(term2s)) {}
 ParameterTypeListAST::ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple)
     : AST(AST::Kind::PARAMETER_TYPE_LIST, hasMultiple ? 1 : 0), parameter_list(std::move(parameter_list)) {}
 ConditionalExpressionAST::ConditionalExpressionAST(nt<LogicalOrExpressionAST> logical_or_expression)
@@ -126,28 +129,42 @@ ConditionalExpressionAST::ConditionalExpressionAST(nt<LogicalOrExpressionAST> lo
 LogicalOrExpressionAST::LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left,
                                                Operator<InfixOp> op,
                                                nt<LogicalOrExpressionAST> right)
-    : AST(AST::Kind::LOGICAL_OR_EXPRESSION) {}
+    : AST(AST::Kind::LOGICAL_OR_EXPRESSION, 0),
+      left(std::move(left)),
+      op(std::make_unique<Operator<InfixOp>>(op)),
+      right(std::move(right)) {}
 LogicalOrExpressionAST::LogicalOrExpressionAST(nt<CastExpressionAST> leaf)
-    : AST(AST::Kind::LOGICAL_OR_EXPRESSION) {}
-ExpressionAST::ExpressionAST(nts<AssignmentExpressionAST>) : AST(AST::Kind::EXPRESSION, 0) {}
-CastExpressionAST::CastExpressionAST(nt<UnaryExpressionAST>) : AST(AST::Kind::CAST_EXPRESSION, 0) {}
-CastExpressionAST::CastExpressionAST(nt<TypeNameAST>, nt<CastExpressionAST>)
-    : AST(AST::Kind::CAST_EXPRESSION, 1) {}
-UnaryExpressionAST::UnaryExpressionAST(nt<TypeNameAST>) : AST(AST::Kind::UNARY_EXPRESSION) {}
-UnaryExpressionAST::UnaryExpressionAST(Operator<UnaryOp> op, nt<CastExpressionAST>)
-    : AST(AST::Kind::UNARY_EXPRESSION) {}
-UnaryExpressionAST::UnaryExpressionAST(nt<UnaryExpressionAST>,
+    : AST(AST::Kind::LOGICAL_OR_EXPRESSION, 1), left(std::move(leaf)), op(nullptr), right(nullptr) {}
+ExpressionAST::ExpressionAST(nts<AssignmentExpressionAST> assignment_expression)
+    : AST(AST::Kind::EXPRESSION, 0),
+      assignment_expression(std::move(
+          assignment_expression)) {}
+CastExpressionAST::CastExpressionAST(nt<UnaryExpressionAST> unary_expression)
+    : AST(AST::Kind::CAST_EXPRESSION, 0),
+      unary_expression(std::move(
+          unary_expression)),
+      type_name(nullptr),
+      cast_expression(nullptr) {}
+CastExpressionAST::CastExpressionAST(nt<TypeNameAST> type_name, nt<CastExpressionAST> cast_expression)
+    : AST(AST::Kind::CAST_EXPRESSION, 1),
+      unary_expression(nullptr),
+      type_name(std::move(type_name)),
+      cast_expression(std::move(cast_expression)) {}
+UnaryExpressionAST::UnaryExpressionAST(nt<TypeNameAST> type_name) : AST(AST::Kind::UNARY_EXPRESSION, 5) {}
+UnaryExpressionAST::UnaryExpressionAST(Operator<UnaryOp> op, nt<CastExpressionAST> cast_expression)
+    : AST(AST::Kind::UNARY_EXPRESSION, 3) {}
+UnaryExpressionAST::UnaryExpressionAST(nt<UnaryExpressionAST> unary_expression,
                                        UnaryExpressionAST::PrefixType type)
     : AST(AST::Kind::UNARY_EXPRESSION, static_cast<int>(type)) {}
-UnaryExpressionAST::UnaryExpressionAST(nt<PostfixExpressionAST>) : AST(AST::Kind::UNARY_EXPRESSION,
-                                                                       0) {}
-TypeNameAST::TypeNameAST(nts<SpecifierQualifierAST>, nt<DeclaratorAST>)
-    : AST(AST::Kind::TYPE_NAME) {}
+UnaryExpressionAST::UnaryExpressionAST(nt<PostfixExpressionAST> postfix_expression)
+    : AST(AST::Kind::UNARY_EXPRESSION, 0) {}
+TypeNameAST::TypeNameAST(nts<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator)
+    : AST(AST::Kind::TYPE_NAME), specifier(std::move(specifier)), declarator(std::move(declarator)) {}
 PostfixExpressionAST::PostfixExpressionAST(nt<PrimaryExpressionAST> primary,
                                            std::vector<std::pair<int, nt<AST>>> terms)
-    : AST(AST::Kind::POSTFIX_EXPRESSION, 0) {}
-PrimaryExpressionAST::PrimaryExpressionAST(nt<IdentifierAST>) : AST(AST::Kind::PRIMARY_EXPRESSION,
-                                                                    0) {}
+    : AST(AST::Kind::POSTFIX_EXPRESSION, 0), primary(std::move(primary)), terms(std::move(terms)) {}
+PrimaryExpressionAST::PrimaryExpressionAST(nt<IdentifierAST>)
+    : AST(AST::Kind::PRIMARY_EXPRESSION, 0) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<IntegerConstantAST>)
     : AST(AST::Kind::PRIMARY_EXPRESSION, 1) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<FloatingConstantAST>)
@@ -157,12 +174,13 @@ PrimaryExpressionAST::PrimaryExpressionAST(nt<CharacterConstantAST>)
 PrimaryExpressionAST::PrimaryExpressionAST(nt<StringAST>) : AST(AST::Kind::PRIMARY_EXPRESSION, 2) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<ExpressionAST>) : AST(AST::Kind::PRIMARY_EXPRESSION,
                                                                     3) {}
-AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>)
-    : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0) {}
-AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>,
-                                                 Operator<AssignmentOp>,
-                                                 nt<AssignmentExpressionAST>)
-    : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 1) {}
+AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression)
+    : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0), conditional_expression(std::move(conditional_expression)) {}
+AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression,
+                                                 Operator<AssignmentOp> op,
+                                                 nt<AssignmentExpressionAST> assignment_expression)
+    : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 1), conditional_expression(std::move(conditional_expression)),
+      op(std::make_unique<Operator<AssignmentOp>>(op)), assignment_expression(std::move(assignment_expression)) {}
 ConstantAST::ConstantAST(nt<IntegerConstantAST>) : AST(AST::Kind::CONSTANT, 0) {}
 ConstantAST::ConstantAST(nt<CharacterConstantAST>) : AST(AST::Kind::CONSTANT, 1) {}
 ConstantAST::ConstantAST(nt<FloatingConstantAST>) : AST(AST::Kind::CONSTANT, 2) {}
@@ -172,31 +190,40 @@ CharacterConstantAST::CharacterConstantAST(std::string)
 FloatingConstantAST::FloatingConstantAST(std::string)
     : AST(AST::Kind::FLOATING_CONSTANT) {}
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST>)
-    : AST(AST::Kind::ENUMERATION_CONSTANT) {}
-ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST>) : AST(AST::Kind::PARAMETER_LIST) {}
-ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST>,
-                                                 nt<DeclaratorAST>)
-    : AST(AST::Kind::PARAMETER_DECLARATION) {}
-EnumeratorListAST::EnumeratorListAST(nts<EnumeratorAST> &&) : AST(AST::Kind::ENUMERATOR_LIST) {}
-EnumeratorAST::EnumeratorAST(nt<IdentifierAST>) : AST(AST::Kind::ENUMERATOR, 0) {}
-EnumeratorAST::EnumeratorAST(nt<IdentifierAST>, nt<ConstantExpressionAST>)
-    : AST(AST::Kind::ENUMERATOR, 1) {}
-InitializerAST::InitializerAST(nt<AssignmentExpressionAST>) : AST(AST::Kind::INITIALIZER, 0) {}
-InitializerAST::InitializerAST(nt<InitializerListAST>) : AST(AST::Kind::INITIALIZER, 1) {}
-InitializerListAST::InitializerListAST(nts<InitializerAST>) : AST(AST::Kind::INITIALIZER_LIST) {}
-StatementAST::StatementAST(nt<LabeledStatementAST>) : AST(AST::Kind::STATEMENT, 0) {}
-StatementAST::StatementAST(nt<ExpressionStatementAST>) : AST(AST::Kind::STATEMENT, 1) {}
-StatementAST::StatementAST(nt<CompoundStatementAST>) : AST(AST::Kind::STATEMENT, 2) {}
-StatementAST::StatementAST(nt<SelectionStatementAST>) : AST(AST::Kind::STATEMENT, 3) {}
-StatementAST::StatementAST(nt<IterationStatementAST>) : AST(AST::Kind::STATEMENT, 4) {}
-StatementAST::StatementAST(nt<JumpStatementAST>) : AST(AST::Kind::STATEMENT, 5) {}
-LabeledStatementAST::LabeledStatementAST(nt<IdentifierAST>, nt<StatementAST>)
-    : AST(AST::Kind::LABELED_STATEMENT, 0) {}
-LabeledStatementAST::LabeledStatementAST(nt<ConstantExpressionAST>, nt<StatementAST>)
-    : AST(AST::Kind::LABELED_STATEMENT, 1) {}
-LabeledStatementAST::LabeledStatementAST(nt<StatementAST>) : AST(AST::Kind::LABELED_STATEMENT, 2) {}
-ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST>)
-    : AST(AST::Kind::EXPRESSION_STATEMENT) {}
+    : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
+ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration)
+    : AST(AST::Kind::PARAMETER_LIST), parameter_declaration(std::move(parameter_declaration)) {}
+ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
+                                                 nt<DeclaratorAST> declarator)
+    : AST(AST::Kind::PARAMETER_DECLARATION), declaration_specifiers(std::move(declaration_specifiers)),
+      declarator(std::move(declarator)) {}
+EnumeratorListAST::EnumeratorListAST(nts<EnumeratorAST> enumerator)
+    : AST(AST::Kind::ENUMERATOR_LIST), enumerator(std::move(enumerator)) {}
+EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id) : AST(AST::Kind::ENUMERATOR, 0), id(std::move(id)) {}
+EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id, nt<ConstantExpressionAST> constant_expression)
+    : AST(AST::Kind::ENUMERATOR, 1), constant_expression(std::move(constant_expression)) {}
+InitializerAST::InitializerAST(nt<AssignmentExpressionAST> assignment_expression)
+    : AST(AST::Kind::INITIALIZER, 0), ast(std::move(assignment_expression)) {}
+InitializerAST::InitializerAST(nt<InitializerListAST> initializer_list)
+    : AST(AST::Kind::INITIALIZER, 1), ast(std::move(initializer_list)) {}
+InitializerListAST::InitializerListAST(nts<InitializerAST> initializer)
+    : AST(AST::Kind::INITIALIZER_LIST), initializer(std::move(initializer)) {}
+StatementAST::StatementAST(nt<LabeledStatementAST> ast) : AST(AST::Kind::STATEMENT, 0), ast(std::move(ast)) {}
+StatementAST::StatementAST(nt<ExpressionStatementAST> ast) : AST(AST::Kind::STATEMENT, 1), ast(std::move(ast)) {}
+StatementAST::StatementAST(nt<CompoundStatementAST> ast) : AST(AST::Kind::STATEMENT, 2), ast(std::move(ast)) {}
+StatementAST::StatementAST(nt<SelectionStatementAST> ast) : AST(AST::Kind::STATEMENT, 3), ast(std::move(ast)) {}
+StatementAST::StatementAST(nt<IterationStatementAST> ast) : AST(AST::Kind::STATEMENT, 4), ast(std::move(ast)) {}
+StatementAST::StatementAST(nt<JumpStatementAST> ast) : AST(AST::Kind::STATEMENT, 5), ast(std::move(ast)) {}
+LabeledStatementAST::LabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement)
+    : AST(AST::Kind::LABELED_STATEMENT, 0), id(std::move(id)), statement(std::move(statement)) {}
+LabeledStatementAST::LabeledStatementAST(nt<ConstantExpressionAST> constant_expression, nt<StatementAST> statement)
+    : AST(AST::Kind::LABELED_STATEMENT, 1),
+      constant_expression(std::move(constant_expression)),
+      statement(std::move(statement)) {}
+LabeledStatementAST::LabeledStatementAST(nt<StatementAST> statement)
+    : AST(AST::Kind::LABELED_STATEMENT, 2), statement(std::move(statement)) {}
+ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST> expression)
+    : AST(AST::Kind::EXPRESSION_STATEMENT), expression(std::move(expression)) {}
 SelectionStatementAST::SelectionStatementAST(nt<ExpressionAST>,
                                              nt<StatementAST>,
                                              bool is_if)

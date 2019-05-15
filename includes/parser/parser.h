@@ -28,7 +28,7 @@ class Parser {
   SymbolStack symbol_stack;
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
-  nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers(bool external = false);
+  nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers();
   StorageSpecifier parseStorageClassSpecifier();
   nt<TypeSpecifierAST> parseTypeSpecifier();
   nt<StructOrUnionSpecifierAST> parseStructOrUnionSpecifier();
@@ -75,7 +75,8 @@ class Parser {
 
   const std::string &accept(TokenKind kind);
   bool expect(TokenKind kind);
-  ParserException parseError(const std::string msg);
+  ParserException parseError(const std::string& msg);
+  ParserException parseError(const std::string&, const Token& token);
   int precedence(InfixOp op);
 };
 

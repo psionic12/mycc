@@ -20,7 +20,7 @@ const std::string &Parser::accept(TokenKind kind) {
     return name;
   }
 }
-ParserException Parser::parseError(const std::string msg) {
+ParserException Parser::parseError(const std::string &msg) {
   return ParserException(msg, lex.peek(-1));
 }
 int Parser::precedence(InfixOp op) {
@@ -442,9 +442,9 @@ nts<DeclarationAST> Parser::parseDeclarations() {
 ///<declaration-specifier> ::= <storage-class-specifier>
 ///                          | <type-specifier>
 ///                          | <type-qualifier>
-nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers(bool external) {
-  std::vector<Operator < StorageSpecifier>>
-  storage_specifiers;
+nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
+  std::vector<Operator<StorageSpecifier>>
+      storage_specifiers;
   nts<TypeSpecifierAST> type_specifiers;
   nts<TypeQualifierAST> type_qualifiers;
   while (true) {
@@ -452,9 +452,6 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers(bool external) {
     switch (kind) {
       case TokenKind::TOKEN_AUTO:
       case TokenKind::TOKEN_REGISTER:
-        if (external)
-          throw parseError(
-              "The storage-class specifiers auto and register shall not appear in the declaration specifiers in an external declaration.");
       case TokenKind::TOKEN_EXTERN:
       case TokenKind::TOKEN_STATIC:
       case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), lex.peek());
@@ -496,7 +493,7 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers(bool external) {
 ///                  init-declarator-list , init-declarator
 InitDeclarators Parser::parseInitDeclarators() {
 
-  std::vector<std::pair<nt < DeclaratorAST>, nt < InitializerAST>>> init_declarators;
+  std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> init_declarators;
   while (true) {
     switch (lex.peek().getKind()) {
       case TokenKind::TOKEN_IDENTIFIER:
@@ -579,7 +576,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
     term1 = nullptr;
   }
 
-  std::vector<std::pair<DirectDeclaratorAST::Term2, nt < AST>> > term2s;
+  std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s;
   while (lex.peek() == TokenKind::TOKEN_LBRACKET || lex.peek() == TokenKind::TOKEN_LPAREN) {
     if (expect(TokenKind::TOKEN_LBRACKET)) {
       switch (lex.peek().getKind()) {
@@ -1128,7 +1125,7 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
 //                       | <postfix-expression> --
 nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
   auto primary = parsePrimaryExpression();
-  std::vector<std::pair<int, nt < AST>> > terms;
+  std::vector<std::pair<int, nt<AST>>> terms;
   while (true) {
     switch (lex.peek().getKind()) {
       case TokenKind::TOKEN_LBRACKET:lex.consumeToken();
@@ -1194,6 +1191,9 @@ nt<TypeNameAST> Parser::parseTypeName() {
     case TokenKind::TOKEN_LBRACKET:return std::make_unique<TypeNameAST>(std::move(qualifiers), parseDeclarator());
     default:return std::make_unique<TypeNameAST>(std::move(qualifiers), nullptr);
   }
+}
+ParserException Parser::parseError(const std::string &msg, const Token &token) {
+  return ParserException(msg, token);
 }
 
 ParserException::ParserException(std::string error, const Token &token) :

@@ -29,6 +29,7 @@ class AST {
     STORAGE_CLASS_SPECIFIER,
     TYPE_SPECIFIER,
     TYPE_QUALIFIER,
+    PROTO_TYPE_SPECIFIER,
     STRUCT_OR_UNION_SPECIFIER,
     ENUM_SPECIFIER,
     TYPEDEF_NAME,
@@ -151,13 +152,17 @@ class SelectionStatementAST : public AST {
 };
 class ExpressionStatementAST : public AST {
  public:
-  ExpressionStatementAST(nt<ExpressionAST>);
+  ExpressionStatementAST(nt<ExpressionAST> expression);
+  const nt<ExpressionAST> expression;
 };
 class LabeledStatementAST : public AST {
  public:
-  LabeledStatementAST(nt<IdentifierAST>, nt<StatementAST>);
-  LabeledStatementAST(nt<ConstantExpressionAST>, nt<StatementAST>);
-  LabeledStatementAST(nt<StatementAST>);
+  LabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement);
+  LabeledStatementAST(nt<ConstantExpressionAST> constant_expression, nt<StatementAST> statement);
+  LabeledStatementAST(nt<StatementAST> statement);
+  const nt<IdentifierAST> id;
+  const nt<StatementAST> statement;
+  const nt<ConstantExpressionAST> constant_expression;
 };
 class StatementAST : public AST {
  public:
@@ -167,38 +172,48 @@ class StatementAST : public AST {
   StatementAST(nt<SelectionStatementAST>);
   StatementAST(nt<IterationStatementAST>);
   StatementAST(nt<JumpStatementAST>);
+  const nt<AST> ast;
 };
 class InitializerListAST : public AST {
  public:
-  InitializerListAST(nts<InitializerAST>);
+  InitializerListAST(nts<InitializerAST> initializer);
+  const nts<InitializerAST> initializer;
 };
 class InitializerAST : public AST {
  public:
-  InitializerAST(nt<AssignmentExpressionAST>);
-  InitializerAST(nt<InitializerListAST>);
+  InitializerAST(nt<AssignmentExpressionAST> assignment_expression);
+  InitializerAST(nt<InitializerListAST> initializer_list);
+  const nt<AST> ast;
 };
 
 typedef std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> InitDeclarators;
 class EnumeratorAST : public AST {
  public:
-  EnumeratorAST(nt<IdentifierAST>);
-  EnumeratorAST(nt<IdentifierAST>, nt<ConstantExpressionAST>);
+  EnumeratorAST(nt<IdentifierAST> id);
+  EnumeratorAST(nt<IdentifierAST> id, nt<ConstantExpressionAST> constant_expression);
+  const nt<IdentifierAST> id;
+  const nt<ConstantExpressionAST> constant_expression;
 };
 class EnumeratorListAST : public AST {
  public:
-  EnumeratorListAST(nts<EnumeratorAST> &&);
+  EnumeratorListAST(nts<EnumeratorAST> enumerator);
+  const nts<EnumeratorAST> enumerator;
 };
 class ParameterDeclarationAST : public AST {
  public:
-  ParameterDeclarationAST(nt<DeclarationSpecifiersAST>, nt<DeclaratorAST>);
+  ParameterDeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers, nt<DeclaratorAST> declarator);
+  const nt<DeclarationSpecifiersAST> declaration_specifiers;
+  const nt<DeclaratorAST> declarator;
 };
 class ParameterListAST : public AST {
  public:
-  ParameterListAST(nts<ParameterDeclarationAST>);
+  ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration);
+  const nts<ParameterDeclarationAST> parameter_declaration;
 };
 class EnumerationConstantAST : public AST {
  public:
-  EnumerationConstantAST(nt<IdentifierAST>);
+  EnumerationConstantAST(nt<IdentifierAST> id);
+  const nt<IdentifierAST> id;
 };
 class FloatingConstantAST : public AST {
  public:
@@ -218,9 +233,14 @@ class ConstantAST : public AST {
 };
 class AssignmentExpressionAST : public AST {
  public:
-  AssignmentExpressionAST(nt<ConditionalExpressionAST>);
-  AssignmentExpressionAST(nt<ConditionalExpressionAST>, Operator<AssignmentOp>, nt<AssignmentExpressionAST>);
+  AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
+  AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression,
+                          Operator<AssignmentOp> op,
+                          nt<AssignmentExpressionAST> assignment_expression);
   //TODO check is LHS a lvalue
+  const nt<ConditionalExpressionAST> conditional_expression;
+  const std::unique_ptr<Operator<AssignmentOp>> op;
+  const nt<AssignmentExpressionAST> assignment_expression;
 };
 class PrimaryExpressionAST : public AST {
  public:
@@ -230,14 +250,19 @@ class PrimaryExpressionAST : public AST {
   PrimaryExpressionAST(nt<CharacterConstantAST>);
   PrimaryExpressionAST(nt<StringAST>);
   PrimaryExpressionAST(nt<ExpressionAST>);
+  const nt<AST> ast;
 };
 class PostfixExpressionAST : public AST {
  public:
   PostfixExpressionAST(nt<PrimaryExpressionAST> primary, std::vector<std::pair<int, nt<AST>>> terms);
+  const nt<PrimaryExpressionAST> primary;
+  const std::vector<std::pair<int, nt<AST>>> terms;
 };
 class TypeNameAST : public AST {
  public:
-  TypeNameAST(nts<SpecifierQualifierAST>, nt<DeclaratorAST>);
+  TypeNameAST(nts<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator);
+  const nts<SpecifierQualifierAST> specifier;
+  const nt<DeclaratorAST> declarator;
 };
 class UnaryExpressionAST : public AST {
  public:
@@ -246,24 +271,36 @@ class UnaryExpressionAST : public AST {
     SUBSUB = 2,
     SIZE_OF = 4,
   };
-  UnaryExpressionAST(nt<PostfixExpressionAST>);
-  UnaryExpressionAST(nt<UnaryExpressionAST>, PrefixType type);
-  UnaryExpressionAST(Operator<UnaryOp> op, nt<CastExpressionAST>);
-  UnaryExpressionAST(nt<TypeNameAST>);
+  UnaryExpressionAST(nt<PostfixExpressionAST> postfix_expression);
+  UnaryExpressionAST(nt<UnaryExpressionAST> unary_expression, PrefixType type);
+  UnaryExpressionAST(Operator<UnaryOp> op, nt<CastExpressionAST> cast_expression);
+  UnaryExpressionAST(nt<TypeNameAST> type_name);
+  const nt<PostfixExpressionAST> postfix_expression;
+  const nt<UnaryExpressionAST> unary_expression;
+  const std::unique_ptr<Operator<UnaryOp>> op;
+  const nt<CastExpressionAST> cast_expression;
+  const nt<TypeNameAST> type_name;
 };
 class CastExpressionAST : public AST {
  public:
-  CastExpressionAST(nt<UnaryExpressionAST>);
-  CastExpressionAST(nt<TypeNameAST>, nt<CastExpressionAST>);
+  CastExpressionAST(nt<UnaryExpressionAST> unary_expression);
+  CastExpressionAST(nt<TypeNameAST> type_name, nt<CastExpressionAST> cast_expression);
+  const nt<UnaryExpressionAST> unary_expression;
+  const nt<TypeNameAST> type_name;
+  const nt<CastExpressionAST> cast_expression;
 };
 class ExpressionAST : public AST {
  public:
-  ExpressionAST(nts<AssignmentExpressionAST>);
+  ExpressionAST(nts<AssignmentExpressionAST> assignment_expression);
+  const nts<AssignmentExpressionAST> assignment_expression;
 };
 class LogicalOrExpressionAST : public AST {
  public:
-  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, Operator<InfixOp> op, nt<LogicalOrExpressionAST> right);;
-  LogicalOrExpressionAST(nt<CastExpressionAST> leaf);;
+  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, Operator<InfixOp> op, nt<LogicalOrExpressionAST> right);
+  LogicalOrExpressionAST(nt<CastExpressionAST> leaf);
+  const nt<AST> left;
+  const std::unique_ptr<Operator<InfixOp>> op;
+  const nt<LogicalOrExpressionAST> right;
 };
 class ConditionalExpressionAST : public AST {
  public:
@@ -271,16 +308,14 @@ class ConditionalExpressionAST : public AST {
   ConditionalExpressionAST(nt<LogicalOrExpressionAST> logical_or_expression,
                            nt<ExpressionAST> expression,
                            nt<ConditionalExpressionAST> conditional_expression);
- private:
-  nt<LogicalOrExpressionAST> logical_or_expression;
-  nt<ExpressionAST> expression;
-  nt<ConditionalExpressionAST> conditional_expression;
+  const nt<LogicalOrExpressionAST> logical_or_expression;
+  const nt<ExpressionAST> expression;
+  const nt<ConditionalExpressionAST> conditional_expression;
 };
 class ParameterTypeListAST : public AST {
  public:
   ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple);
- private:
-  nt<ParameterListAST> parameter_list;
+  const nt<ParameterListAST> parameter_list;
 };
 class DirectDeclaratorAST : public AST {
  public:
@@ -290,79 +325,88 @@ class DirectDeclaratorAST : public AST {
     ID,
   };
   DirectDeclaratorAST(nt<AST> term1, std::vector<std::pair<Term2, nt<AST>>> term2s);
+  const nt<AST> term1;
+  const std::vector<std::pair<Term2, nt<AST>>> term2s;
 };
 class PointerAST : public AST {
  public:
   PointerAST(nts<TypeQualifierAST> type_qualifiers, nt<PointerAST> pointer);
- private:
-  nts<TypeQualifierAST> type_qualifiers;
-  nt<PointerAST> pointer;
+  const nts<TypeQualifierAST> type_qualifiers;
+  const nt<PointerAST> pointer;
 };
 class ConstantExpressionAST : public AST {
  public:
   ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
- private:
-  nt<ConditionalExpressionAST> conditional_expression;
+  const nt<ConditionalExpressionAST> conditional_expression;
 };
 class StructDeclaratorAST : public AST {
  public:
   StructDeclaratorAST(nt<DeclaratorAST> declarator);
   StructDeclaratorAST(nt<DeclaratorAST> declarator, nt<ConstantExpressionAST> constant_expression);
   StructDeclaratorAST(nt<ConstantExpressionAST> constant_expression);
- private:
-  nt<DeclaratorAST> declarator;
-  nt<ConstantExpressionAST> constant_expression;
+  const nt<DeclaratorAST> declarator;
+  const nt<ConstantExpressionAST> constant_expression;
 };
 class StructDeclaratorListAST : public AST {
  public:
   StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators);
+  const nts<StructDeclaratorAST> struct_declarators;
 };
 class StructDeclarationAST : public AST {
  public:
   StructDeclarationAST(nts<SpecifierQualifierAST> specifier_qualifier,
                        nt<StructDeclaratorListAST> struct_declarator_list);
- private:
-  nts<SpecifierQualifierAST> spec_qual;
-  nt<StructDeclaratorListAST> decl_tor_list;
+  const nts<SpecifierQualifierAST> specifier_qualifier;
+  const nt<StructDeclaratorListAST> struct_declarator_list;
 };
 class EnumSpecifierAST : public AST {
  public:
   EnumSpecifierAST(nt<IdentifierAST> identifier, nt<EnumeratorListAST> enumeratorList);
   EnumSpecifierAST(nt<EnumeratorListAST> enumeratorList);
   EnumSpecifierAST(nt<IdentifierAST> identifier);
- private:
-  nt<IdentifierAST> id;
-  nt<EnumeratorListAST> enum_list;
+  const nt<IdentifierAST> id;
+  const nt<EnumeratorListAST> enum_list;
 };
 class StructOrUnionSpecifierAST : public AST {
  public:
-  StructOrUnionSpecifierAST(StructOrUnion type, nt<IdentifierAST> id, nts<StructDeclarationAST> declarations);;
+  StructOrUnionSpecifierAST(StructOrUnion type, nt<IdentifierAST> id, nts<StructDeclarationAST> declarations);
+  const StructOrUnion type;
+  const nt<IdentifierAST> id;
+  const nts<StructDeclarationAST> declarations;
+};
+class ProtoTypeSpecifierAST : public AST, Operator<ProtoTypeSpecifier> {
+ public:
+  ProtoTypeSpecifierAST(Operator<ProtoTypeSpecifier> specifier);
+  const Operator<ProtoTypeSpecifier> specifier;
 };
 class TypeSpecifierAST : public AST {
  public:
-  TypeSpecifierAST(Operator<ProtoTypeSpecifier> type_specifier);
+  TypeSpecifierAST(Operator<ProtoTypeSpecifier> specifier);
   TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier);
   TypeSpecifierAST(nt<EnumSpecifierAST> specifier);
   TypeSpecifierAST(nt<TypedefNameAST> specifier);
+  const nt<AST> specifier;
 };
 class SpecifierQualifierAST : public AST {
  public:
   SpecifierQualifierAST(nt<TypeSpecifierAST> speciler);
   SpecifierQualifierAST(nt<TypeQualifierAST> speciler);
  private:
-  nt<AST> spec;
+  const nt<AST> spec;
 };
 class StorageClassSpecifierAST : public AST {
  public:
   StorageClassSpecifierAST(Operator<StorageSpecifier> storage_speicifier);
+  const Operator<StorageSpecifier> storage_speicifier;
 };
 class DeclaratorAST : public AST {
  public:
   DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator);
+  const nt<PointerAST> pointer;
+  const nt<DirectDeclaratorAST> direct_declarator;
 };
 class DeclarationSpecifiersAST : public AST {
  public:
-
   DeclarationSpecifiersAST(std::vector<Operator<StorageSpecifier>> storage_specifiers,
                            nts<TypeSpecifierAST> type_specifiers,
                            nts<TypeQualifierAST> type_qualifiers);
@@ -375,15 +419,14 @@ class DeclarationAST : public AST {
  public:
   DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                  InitDeclarators init_declarators);
-  const nt<DeclarationSpecifiersAST> declaration_spcifiers;
-  const InitDeclarators init_dec_tors;
+  const nt<DeclarationSpecifiersAST> declaration_specifiers;
+  const InitDeclarators init_declarators;
 };
 class CompoundStatementAST : public AST {
  public:
   CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements);
- private:
-  nts<DeclarationAST> decls;
-  nts<StatementAST> stats;
+  const nts<DeclarationAST> declarations;
+  const nts<StatementAST> statements;
 
 };
 class FunctionDefinitionAST : public AST {
@@ -400,12 +443,12 @@ class FunctionDefinitionAST : public AST {
 };
 class ExternalDeclarationAST : public AST {
  public:
-  explicit ExternalDeclarationAST(nt<AST> def);;
- private:
-  nt<AST> def_or_decl;
+  explicit ExternalDeclarationAST(nt<AST> def);
+  const nt<AST> def;
 };
 class TranslationUnitAST : public AST {
  public:
   TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations);
+  const nts<ExternalDeclarationAST> external_declarations;
 };
 #endif //MYCCPILER_AST_H
