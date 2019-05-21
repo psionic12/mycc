@@ -53,8 +53,7 @@ void FunctionDefinitionAST::print(int indent) {
   declarations.print(indent);
   compound_statement->print(indent);
 }
-CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
-                                           nts<StatementAST> statements)
+CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements)
     : AST(AST::Kind::COMPOUND_STATEMENT),
       declarations(std::move(declarations)),
       statements(std::move(statements)) {}
@@ -64,8 +63,7 @@ void CompoundStatementAST::print(int indent) {
   declarations.print(indent);
   statements.print(indent);
 }
-DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
-                               InitDeclarators init_declarators)
+DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers, InitDeclarators init_declarators)
     : AST(AST::Kind::DECLARATION),
       declaration_specifiers(std::move(declaration_specifiers)),
       init_declarators(std::move(init_declarators)) {}
@@ -75,7 +73,7 @@ void DeclarationAST::print(int indent) {
   declaration_specifiers->print(indent);
   for (const auto &ds : init_declarators) {
     ds.first->print(indent);
-    if(ds.second) ds.second->print(indent);
+    if (ds.second) ds.second->print(indent);
   }
 }
 DeclarationSpecifiersAST::DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
