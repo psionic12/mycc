@@ -525,7 +525,7 @@ void Lex::consumeToken() {
   }
 }
 const Token &
-Lex::peek(long offsite) {
+Lex::peek(long offsite) const {
   return tokens[current + offsite];
 }
 void Lex::makeToken(TokenKind kind, std::string value) {

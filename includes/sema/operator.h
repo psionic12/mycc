@@ -2,6 +2,7 @@
 #define MYCCPILER_OPERATOR_H
 
 #include <tokens/token.h>
+#include <iostream>
 enum class InfixOp {
   BARBAR,
   AMPAMP,
@@ -72,12 +73,6 @@ enum class TypeQuailifier {
   kVOLATILE,
 };
 
-template<typename T>
-class Operator {
- public:
-  Operator(T type, const Token &token) : token(token), type(type) {}
-  const Token &token;
-  const T type;
-};
+
 
 #endif //MYCCPILER_OPERATOR_H

@@ -77,21 +77,55 @@ class AST {
   const Kind getKind() const {
     return kind;
   }
-  const int getPro_id() const {
-    return pro_id;
+  const int getProduction() const {
+    return productionId;
   }
   virtual const char *toString();
+  virtual void print(int indent = 0);
+  void printIndent(int indent);
+  virtual ~AST() = default;
  private:
   const Kind kind;
   //the id of which production
-  const int pro_id;
+  const int productionId;
+};
+template<typename T>
+class Terminal {
+ public:
+  Terminal(T type, const Token &token) : token(token), type(type) {}
+  const Token &token;
+  const T type;
+  void print(int indent) const {
+    for (int i = 0; i < indent; ++i) {
+      std::cout << "\t";
+    }
+//    std::cout << static_cast<int>(type) << std::endl;
+    std::cout << token.getValue() << std::endl;
+  }
+};
+template<typename T>
+class ts : public std::vector<Terminal<T>> {
+ public:
+  void print(int indent = 0) const {
+    for (const auto &terminal : *this) {
+      terminal.print(indent);
+    }
+  }
 };
 // nt is short for None Terminal
 template<typename T>
 using nt = std::unique_ptr<T>;
-// nts is short for None TerminalS
+
 template<typename T>
-using nts = std::vector<nt<T>>;
+class nts : public std::vector<std::unique_ptr<T>> {
+ public:
+  void print(int indent = 0) const {
+    for (const auto &noneTerminal : *this) {
+      noneTerminal->print(indent);
+    }
+  }
+};
+
 class SpecifierQualifierAST;
 class DeclaratorAST;
 class ConstantExpressionAST;
@@ -112,48 +146,69 @@ class StringAST : public AST {
 };
 class IdentifierAST : public AST {
  public:
-  IdentifierAST(Token token);
- private:
-  Token token;
+  IdentifierAST(const Token& token);
+  const Token& token;
+  void print(int indent) override;
 };
-class StructOrUnionAST : public AST {
- public:
-  StructOrUnionAST(StructOrUnion struct_or_union);
-
-};
+//class StructOrUnionAST : public AST {
+// public:
+//  StructOrUnionAST(StructOrUnion struct_or_union);
+//  const StructOrUnion struct_or_union;
+//};
 class TypedefNameAST : public AST {
  public:
   TypedefNameAST(nt<IdentifierAST> identifier);
- private:
-  nt<IdentifierAST> id;
+  const nt<IdentifierAST> id;
+  void print(int indent) override;
 };
 class TypeQualifierAST : public AST {
  public:
-  // true for const, false for volatile
-  TypeQualifierAST(Operator<TypeQuailifier> op);
+  TypeQualifierAST(Terminal<TypeQuailifier> op);
+  const Terminal<TypeQuailifier> op;
+  void print(int indent) override;
 };
-class UnaryOperatorAST : public AST { public:UnaryOperatorAST(UnaryOp op) : AST(AST::Kind::UNARY_OPERATOR) {}};
+//class UnaryOperatorAST : public AST {
+// public:
+//  UnaryOperatorAST(UnaryOp op);
+//  const UnaryOp op;
+//};
 class JumpStatementAST : public AST {
  public:
-  JumpStatementAST(nt<IdentifierAST>);
+  JumpStatementAST(nt<IdentifierAST> id);
   JumpStatementAST(bool is_continue);
   JumpStatementAST(nt<ExpressionAST>);
+  const nt<IdentifierAST> id;
+  const nt<ExpressionAST> expression;
+  void print(int indent) override;
 };
 class IterationStatementAST : public AST {
  public:
-  IterationStatementAST(nt<ExpressionAST>, nt<StatementAST>);
-  IterationStatementAST(nt<StatementAST>, nt<ExpressionAST>);
-  IterationStatementAST(nt<ExpressionAST>, nt<ExpressionAST>, nt<ExpressionAST>, nt<StatementAST>);
+  IterationStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement);
+  IterationStatementAST(nt<StatementAST> statement, nt<ExpressionAST> expression);
+  IterationStatementAST(nt<ExpressionAST> expression,
+                        nt<ExpressionAST> condition_expression,
+                        nt<ExpressionAST> step_expression,
+                        nt<StatementAST> statement);
+  const nt<ExpressionAST> expression;
+  const nt<StatementAST> statement;
+  const nt<ExpressionAST> condition_expression;
+  const nt<ExpressionAST> step_expression;
+  void print(int indent) override;
 };
 class SelectionStatementAST : public AST {
  public:
-  SelectionStatementAST(nt<ExpressionAST>, nt<StatementAST>, bool is_if);
-  SelectionStatementAST(nt<ExpressionAST>, nt<StatementAST>, nt<StatementAST>);
+  SelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement, bool is_if);
+  SelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement, nt<StatementAST> else_statement);
+  const nt<ExpressionAST> expression;
+  const nt<StatementAST> statement;
+  const nt<StatementAST> else_statement;
+  void print(int indent) override;
 };
 class ExpressionStatementAST : public AST {
  public:
   ExpressionStatementAST(nt<ExpressionAST> expression);
   const nt<ExpressionAST> expression;
+  void print(int indent) override;
 };
 class LabeledStatementAST : public AST {
  public:
@@ -163,6 +218,7 @@ class LabeledStatementAST : public AST {
   const nt<IdentifierAST> id;
   const nt<StatementAST> statement;
   const nt<ConstantExpressionAST> constant_expression;
+  void print(int indent) override;
 };
 class StatementAST : public AST {
  public:
@@ -173,17 +229,20 @@ class StatementAST : public AST {
   StatementAST(nt<IterationStatementAST>);
   StatementAST(nt<JumpStatementAST>);
   const nt<AST> ast;
+  void print(int indent) override;
 };
 class InitializerListAST : public AST {
  public:
   InitializerListAST(nts<InitializerAST> initializer);
   const nts<InitializerAST> initializer;
+  void print(int indent) override;
 };
 class InitializerAST : public AST {
  public:
   InitializerAST(nt<AssignmentExpressionAST> assignment_expression);
   InitializerAST(nt<InitializerListAST> initializer_list);
   const nt<AST> ast;
+  void print(int indent) override;
 };
 
 typedef std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> InitDeclarators;
@@ -193,22 +252,26 @@ class EnumeratorAST : public AST {
   EnumeratorAST(nt<IdentifierAST> id, nt<ConstantExpressionAST> constant_expression);
   const nt<IdentifierAST> id;
   const nt<ConstantExpressionAST> constant_expression;
+  void print(int indent) override;
 };
 class EnumeratorListAST : public AST {
  public:
   EnumeratorListAST(nts<EnumeratorAST> enumerator);
   const nts<EnumeratorAST> enumerator;
+  void print(int indent) override;
 };
 class ParameterDeclarationAST : public AST {
  public:
   ParameterDeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers, nt<DeclaratorAST> declarator);
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
   const nt<DeclaratorAST> declarator;
+  void print(int indent) override;
 };
 class ParameterListAST : public AST {
  public:
   ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration);
   const nts<ParameterDeclarationAST> parameter_declaration;
+  void print(int indent) override;
 };
 class EnumerationConstantAST : public AST {
  public:
@@ -224,23 +287,24 @@ class CharacterConstantAST : public AST {
   CharacterConstantAST(std::string);
 };
 class IntegerConstantAST : public AST { public:IntegerConstantAST(std::string) : AST(AST::Kind::INTEGER_CONSTANT) {}};
-class ConstantAST : public AST {
- public:
-  ConstantAST(nt<IntegerConstantAST>);
-  ConstantAST(nt<CharacterConstantAST>);
-  ConstantAST(nt<FloatingConstantAST>);
-  ConstantAST(nt<EnumerationConstantAST>);
-};
+//class ConstantAST : public AST {
+// public:
+//  ConstantAST(nt<IntegerConstantAST>);
+//  ConstantAST(nt<CharacterConstantAST>);
+//  ConstantAST(nt<FloatingConstantAST>);
+//  ConstantAST(nt<EnumerationConstantAST>);
+//};
 class AssignmentExpressionAST : public AST {
  public:
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression,
-                          Operator<AssignmentOp> op,
+                          Terminal<AssignmentOp> op,
                           nt<AssignmentExpressionAST> assignment_expression);
   //TODO check is LHS a lvalue
   const nt<ConditionalExpressionAST> conditional_expression;
-  const std::unique_ptr<Operator<AssignmentOp>> op;
+  const std::unique_ptr<Terminal<AssignmentOp>> op;
   const nt<AssignmentExpressionAST> assignment_expression;
+  void print(int indent) override;
 };
 class PrimaryExpressionAST : public AST {
  public:
@@ -251,18 +315,21 @@ class PrimaryExpressionAST : public AST {
   PrimaryExpressionAST(nt<StringAST>);
   PrimaryExpressionAST(nt<ExpressionAST>);
   const nt<AST> ast;
+  void print(int indent) override;
 };
 class PostfixExpressionAST : public AST {
  public:
   PostfixExpressionAST(nt<PrimaryExpressionAST> primary, std::vector<std::pair<int, nt<AST>>> terms);
   const nt<PrimaryExpressionAST> primary;
   const std::vector<std::pair<int, nt<AST>>> terms;
+  void print(int indent) override;
 };
 class TypeNameAST : public AST {
  public:
   TypeNameAST(nts<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator);
   const nts<SpecifierQualifierAST> specifier;
   const nt<DeclaratorAST> declarator;
+  void print(int indent) override;
 };
 class UnaryExpressionAST : public AST {
  public:
@@ -273,13 +340,14 @@ class UnaryExpressionAST : public AST {
   };
   UnaryExpressionAST(nt<PostfixExpressionAST> postfix_expression);
   UnaryExpressionAST(nt<UnaryExpressionAST> unary_expression, PrefixType type);
-  UnaryExpressionAST(Operator<UnaryOp> op, nt<CastExpressionAST> cast_expression);
+  UnaryExpressionAST(Terminal<UnaryOp> op, nt<CastExpressionAST> cast_expression);
   UnaryExpressionAST(nt<TypeNameAST> type_name);
   const nt<PostfixExpressionAST> postfix_expression;
   const nt<UnaryExpressionAST> unary_expression;
-  const std::unique_ptr<Operator<UnaryOp>> op;
+  const std::unique_ptr<Terminal<UnaryOp>> op;
   const nt<CastExpressionAST> cast_expression;
   const nt<TypeNameAST> type_name;
+  void print(int indent) override;
 };
 class CastExpressionAST : public AST {
  public:
@@ -288,19 +356,22 @@ class CastExpressionAST : public AST {
   const nt<UnaryExpressionAST> unary_expression;
   const nt<TypeNameAST> type_name;
   const nt<CastExpressionAST> cast_expression;
+  void print(int indent) override;
 };
 class ExpressionAST : public AST {
  public:
   ExpressionAST(nts<AssignmentExpressionAST> assignment_expression);
   const nts<AssignmentExpressionAST> assignment_expression;
+  void print(int indent) override;
 };
 class LogicalOrExpressionAST : public AST {
  public:
-  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, Operator<InfixOp> op, nt<LogicalOrExpressionAST> right);
+  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, Terminal<InfixOp> op, nt<LogicalOrExpressionAST> right);
   LogicalOrExpressionAST(nt<CastExpressionAST> leaf);
   const nt<AST> left;
-  const std::unique_ptr<Operator<InfixOp>> op;
+  const std::unique_ptr<Terminal<InfixOp>> op;
   const nt<LogicalOrExpressionAST> right;
+  void print(int indent) override;
 };
 class ConditionalExpressionAST : public AST {
  public:
@@ -311,11 +382,13 @@ class ConditionalExpressionAST : public AST {
   const nt<LogicalOrExpressionAST> logical_or_expression;
   const nt<ExpressionAST> expression;
   const nt<ConditionalExpressionAST> conditional_expression;
+  void print(int indent) override;
 };
 class ParameterTypeListAST : public AST {
  public:
   ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple);
   const nt<ParameterListAST> parameter_list;
+  void print(int indent) override;
 };
 class DirectDeclaratorAST : public AST {
  public:
@@ -327,17 +400,20 @@ class DirectDeclaratorAST : public AST {
   DirectDeclaratorAST(nt<AST> term1, std::vector<std::pair<Term2, nt<AST>>> term2s);
   const nt<AST> term1;
   const std::vector<std::pair<Term2, nt<AST>>> term2s;
+  void print(int indent) override;
 };
 class PointerAST : public AST {
  public:
   PointerAST(nts<TypeQualifierAST> type_qualifiers, nt<PointerAST> pointer);
   const nts<TypeQualifierAST> type_qualifiers;
   const nt<PointerAST> pointer;
+  void print(int indent) override;
 };
 class ConstantExpressionAST : public AST {
  public:
   ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
   const nt<ConditionalExpressionAST> conditional_expression;
+  void print(int indent) override;
 };
 class StructDeclaratorAST : public AST {
  public:
@@ -346,11 +422,13 @@ class StructDeclaratorAST : public AST {
   StructDeclaratorAST(nt<ConstantExpressionAST> constant_expression);
   const nt<DeclaratorAST> declarator;
   const nt<ConstantExpressionAST> constant_expression;
+  void print(int indent) override;
 };
 class StructDeclaratorListAST : public AST {
  public:
   StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators);
   const nts<StructDeclaratorAST> struct_declarators;
+  void print(int indent) override;
 };
 class StructDeclarationAST : public AST {
  public:
@@ -358,6 +436,7 @@ class StructDeclarationAST : public AST {
                        nt<StructDeclaratorListAST> struct_declarator_list);
   const nts<SpecifierQualifierAST> specifier_qualifier;
   const nt<StructDeclaratorListAST> struct_declarator_list;
+  void print(int indent) override;
 };
 class EnumSpecifierAST : public AST {
  public:
@@ -366,6 +445,7 @@ class EnumSpecifierAST : public AST {
   EnumSpecifierAST(nt<IdentifierAST> identifier);
   const nt<IdentifierAST> id;
   const nt<EnumeratorListAST> enum_list;
+  void print(int indent) override;
 };
 class StructOrUnionSpecifierAST : public AST {
  public:
@@ -373,47 +453,52 @@ class StructOrUnionSpecifierAST : public AST {
   const StructOrUnion type;
   const nt<IdentifierAST> id;
   const nts<StructDeclarationAST> declarations;
+  void print(int indent) override;
 };
-class ProtoTypeSpecifierAST : public AST, Operator<ProtoTypeSpecifier> {
+class ProtoTypeSpecifierAST : public AST, Terminal<ProtoTypeSpecifier> {
  public:
-  ProtoTypeSpecifierAST(Operator<ProtoTypeSpecifier> specifier);
-  const Operator<ProtoTypeSpecifier> specifier;
+  ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier);
+  const Terminal<ProtoTypeSpecifier> specifier;
+  void print(int indent) override;
 };
 class TypeSpecifierAST : public AST {
  public:
-  TypeSpecifierAST(Operator<ProtoTypeSpecifier> specifier);
+  TypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier);
   TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier);
   TypeSpecifierAST(nt<EnumSpecifierAST> specifier);
   TypeSpecifierAST(nt<TypedefNameAST> specifier);
   const nt<AST> specifier;
+  void print(int indent) override;
 };
 class SpecifierQualifierAST : public AST {
  public:
   SpecifierQualifierAST(nt<TypeSpecifierAST> speciler);
   SpecifierQualifierAST(nt<TypeQualifierAST> speciler);
- private:
-  const nt<AST> spec;
+  const nt<AST> speciler;
+  void print(int indent) override;
 };
 class StorageClassSpecifierAST : public AST {
  public:
-  StorageClassSpecifierAST(Operator<StorageSpecifier> storage_speicifier);
-  const Operator<StorageSpecifier> storage_speicifier;
+  StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier);
+  const Terminal<StorageSpecifier> storage_speicifier;
+  void print(int indent) override;
 };
 class DeclaratorAST : public AST {
  public:
   DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator);
   const nt<PointerAST> pointer;
   const nt<DirectDeclaratorAST> direct_declarator;
+  void print(int indent) override;
 };
 class DeclarationSpecifiersAST : public AST {
  public:
-  DeclarationSpecifiersAST(std::vector<Operator<StorageSpecifier>> storage_specifiers,
+  DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
                            nts<TypeSpecifierAST> type_specifiers,
                            nts<TypeQualifierAST> type_qualifiers);
-  const std::vector<Operator<StorageSpecifier>> storage_specifiers;
+  const ts<StorageSpecifier> storage_specifiers;
   const nts<TypeSpecifierAST> type_specifiers;
   const nts<TypeQualifierAST> type_qualifiers;
-
+  void print(int indent) override;
 };
 class DeclarationAST : public AST {
  public:
@@ -421,13 +506,14 @@ class DeclarationAST : public AST {
                  InitDeclarators init_declarators);
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
   const InitDeclarators init_declarators;
+  void print(int indent) override;
 };
 class CompoundStatementAST : public AST {
  public:
   CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements);
   const nts<DeclarationAST> declarations;
   const nts<StatementAST> statements;
-
+  void print(int indent) override;
 };
 class FunctionDefinitionAST : public AST {
  public:
@@ -439,16 +525,19 @@ class FunctionDefinitionAST : public AST {
   const nt<DeclaratorAST> declarator;
   const nts<DeclarationAST> declarations;
   const nt<CompoundStatementAST> compound_statement;
+  void print(int indent) override;
 
 };
 class ExternalDeclarationAST : public AST {
  public:
   explicit ExternalDeclarationAST(nt<AST> def);
   const nt<AST> def;
+  void print(int indent) override;
 };
 class TranslationUnitAST : public AST {
  public:
   TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations);
   const nts<ExternalDeclarationAST> external_declarations;
+  void print(int indent) override;
 };
 #endif //MYCCPILER_AST_H

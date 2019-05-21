@@ -7,7 +7,7 @@
 class Lex {
  public:
   Lex(std::ifstream &ifstream);
-  const Token &peek(long offsite = 0);
+  const Token &peek(long offsite = 0) const;
   void consumeToken();
   bool endOfTokens();
   TokenKind lookupTokens(const std::initializer_list<TokenKind> &tokens);

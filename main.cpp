@@ -11,4 +11,5 @@ int main() {
 
   auto parser = Parser(testFile);
   auto tr = parser.parseTranslationUnit();
+  tr->print(0);
 }

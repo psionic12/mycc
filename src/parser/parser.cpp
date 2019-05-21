@@ -140,9 +140,9 @@ nt<IdentifierAST> Parser::parseIdentifier() {
   if (lex.peek() != TokenKind::TOKEN_IDENTIFIER) {
     throw parseError("expected identifier");
   } else {
-    Token token = lex.peek();
+    const Token &token = lex.peek();
     lex.consumeToken();
-    return std::make_unique<IdentifierAST>(std::move(token));
+    return std::make_unique<IdentifierAST>(token);
   }
 }
 
@@ -226,7 +226,7 @@ nt<TypeQualifierAST> Parser::parseTypeQualifier() {
     default:throw parseError(R"(type qualifier expected "const" or "volatile")");
   }
   lex.consumeToken();
-  return std::make_unique<TypeQualifierAST>(Operator<TypeQuailifier>(quailifier, lex.peek()));
+  return std::make_unique<TypeQualifierAST>(Terminal<TypeQuailifier>(quailifier, lex.peek()));
 }
 
 ///<enumerator> ::= <identifier>
@@ -349,7 +349,7 @@ nt<AssignmentExpressionAST> Parser::parseAssignmentExpression() {
     case TokenKind::TOKEN_CARETEQ:
     case TokenKind::TOKEN_BAREQ:
       return std::make_unique<AssignmentExpressionAST>(std::move(LHS),
-                                                       Operator<AssignmentOp>(parseAssignmentOperator(), lex.peek()),
+                                                       Terminal<AssignmentOp>(parseAssignmentOperator(), lex.peek()),
                                                        parseAssignmentExpression());
     default:return std::make_unique<AssignmentExpressionAST>(std::move(LHS));
   }
@@ -388,7 +388,7 @@ nt<LogicalOrExpressionAST> Parser::parseLogicalOrExpression(int calling_prec) {
       lex.consumeToken();
       auto term2 = parseLogicalOrExpression(prec);
       term1 = std::make_unique<LogicalOrExpressionAST>(std::move(term1),
-                                                       Operator<InfixOp>(op, lex.peek()),
+                                                       Terminal<InfixOp>(op, lex.peek()),
                                                        std::move(term2));
     }
 
@@ -443,18 +443,17 @@ nts<DeclarationAST> Parser::parseDeclarations() {
 ///                          | <type-specifier>
 ///                          | <type-qualifier>
 nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
-  std::vector<Operator<StorageSpecifier>>
-      storage_specifiers;
+  ts<StorageSpecifier> storage_specifiers;
   nts<TypeSpecifierAST> type_specifiers;
   nts<TypeQualifierAST> type_qualifiers;
   while (true) {
-    TokenKind kind = lex.peek().getKind();
-    switch (kind) {
+    const auto &token = lex.peek();
+    switch (token.getKind()) {
       case TokenKind::TOKEN_AUTO:
       case TokenKind::TOKEN_REGISTER:
       case TokenKind::TOKEN_EXTERN:
       case TokenKind::TOKEN_STATIC:
-      case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), lex.peek());
+      case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), token);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
         if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
@@ -599,6 +598,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
                               parseConstantExpression());
           break;
         default:term2s.emplace_back(DirectDeclaratorAST::Term2::CONST_EXPR, nullptr);
+          lex.consumeToken();
       }
       accept(TokenKind::TOKEN_RBRACKET);
     } else {
@@ -678,7 +678,9 @@ nt<ParameterDeclarationAST> Parser::parseParameterDeclaration() {
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_LPAREN:
     case TokenKind::TOKEN_STAR:
+    case TokenKind::TOKEN_IDENTIFIER:
     case TokenKind::TOKEN_LBRACKET:declarator = parseDeclarator();
+      break;
     default:declarator = nullptr;
   }
   return std::make_unique<ParameterDeclarationAST>(std::move(ds), std::move(declarator));
@@ -748,7 +750,7 @@ nt<TypeSpecifierAST> Parser::parseTypeSpecifier() {
     default:throw parseError("expected type specifier");
   }
   handle_proto_type:
-  auto ast = std::make_unique<TypeSpecifierAST>(Operator<ProtoTypeSpecifier>(specifier, lex.peek()));
+  auto ast = std::make_unique<TypeSpecifierAST>(Terminal<ProtoTypeSpecifier>(specifier, lex.peek()));
   lex.consumeToken();
   return std::move(ast);
 
@@ -1109,7 +1111,7 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
       || lex.peek() == TokenKind::TOKEN_PLUS
       || lex.peek() == TokenKind::TOKEN_SUB
       || lex.peek() == TokenKind::TOKEN_TILDE) {
-    return std::make_unique<UnaryExpressionAST>(Operator<UnaryOp>(parseUnaryOperator(), lex.peek()),
+    return std::make_unique<UnaryExpressionAST>(Terminal<UnaryOp>(parseUnaryOperator(), lex.peek()),
                                                 parseCastExpression());
   } else {
     return std::make_unique<UnaryExpressionAST>(parsePostfixExpression());
