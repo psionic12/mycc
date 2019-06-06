@@ -6,8 +6,8 @@
 #include <vector>
 #include <memory>
 #include <sema/operator.h>
-#include <sema/SymbolTable.h>
 #include <tokens/token.h>
+class SymbolTable;
 class SemaException : public std::exception {
  public:
   SemaException(std::string error, const Token &token);
@@ -269,8 +269,9 @@ class ParameterDeclarationAST : public AST {
 };
 class ParameterListAST : public AST {
  public:
-  ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration);
+  ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table);
   const nts<ParameterDeclarationAST> parameter_declaration;
+  SymbolTable& table;
   void print(int indent) override;
 };
 class EnumerationConstantAST : public AST {
@@ -510,9 +511,12 @@ class DeclarationAST : public AST {
 };
 class CompoundStatementAST : public AST {
  public:
-  CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements);
+  CompoundStatementAST(nts<DeclarationAST> declarations,
+                         nts<StatementAST> statements,
+                         SymbolTable &table);
   const nts<DeclarationAST> declarations;
   const nts<StatementAST> statements;
+  SymbolTable& table;
   void print(int indent) override;
 };
 class FunctionDefinitionAST : public AST {

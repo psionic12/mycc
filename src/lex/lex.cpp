@@ -94,10 +94,21 @@ void Lex::getToken() {
       case '7':
       case '8':
       case '9':return scanNumber();
-      case '.':in.ignore();
+      case '.':
+        in.ignore();
         if (in.peek() >= '0' && in.peek() <= '9') {
           in.putback('.');
           return scanNumber();
+        } else if (in.peek() == '.') {
+          tokenStart = in.tellg() -= 1;
+          in.ignore();
+          if (in.peek() != '.') {
+            throwLexError("illegal dots", TokenKind::TOKEN_UNKNOWN);
+          } else {
+            tokenEnd = in.tellg();
+            in.ignore();
+            return makeToken(TokenKind::TOKEN_ELLIPSIS);
+          }
         } else {
           tokenStart = tokenEnd = in.tellg() -= 1;
           return makeToken(TokenKind::TOKEN_DOT);
@@ -530,9 +541,9 @@ Lex::peek(long offsite) const {
 }
 void Lex::makeToken(TokenKind kind, std::string value) {
   tokens.emplace_back(in,
-                             Position{currentLineNumber, currentLine, tokenStart, tokenEnd},
-                             kind,
-                             std::move(value));
+                      Position{currentLineNumber, currentLine, tokenStart, tokenEnd},
+                      kind,
+                      std::move(value));
 }
 void Lex::scanStringConstant() {
   tokenStart = in.tellg();

@@ -5,7 +5,7 @@
 #include <memory>
 #include <sema/ast.h>
 #include <lex/lex.h>
-#include <sema/SymbolTable.h>
+#include <sema/symbol_tables.h>
 #include <sema/operator.h>
 
 class NotAInfixOpException {};
@@ -20,12 +20,13 @@ class ParserException : public std::exception {
 
 class Parser {
  public:
-  Parser(std::ifstream &ifstream);
+  Parser(std::ifstream &ifstream, SymbolTables& symbolTables);
   nt<TranslationUnitAST> parseTranslationUnit();
  private:
   std::ifstream &in;
   Lex lex;
-  SymbolStack symbol_stack;
+  SymbolTables& symbolTables;
+  SymbolTable* table;
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
   nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers();
@@ -63,7 +64,7 @@ class Parser {
   InitDeclarators parseInitDeclarators();
   nt<InitializerAST> parseInitializer();
   nt<InitializerListAST> parseInitializerList();
-  nt<CompoundStatementAST> parseCompoundStatement();
+  nt<CompoundStatementAST> parseCompoundStatement(bool function = false);
   nt<StatementAST> parseStatement();
   nt<LabeledStatementAST> parseLabeledStatement();
   nt<ExpressionStatementAST> parseExpressionStatement();

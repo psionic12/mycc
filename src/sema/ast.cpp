@@ -53,10 +53,12 @@ void FunctionDefinitionAST::print(int indent) {
   declarations.print(indent);
   compound_statement->print(indent);
 }
-CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations, nts<StatementAST> statements)
+CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
+                                           nts<StatementAST> statements,
+                                           SymbolTable &table)
     : AST(AST::Kind::COMPOUND_STATEMENT),
       declarations(std::move(declarations)),
-      statements(std::move(statements)) {}
+      statements(std::move(statements)), table(table) {}
 void CompoundStatementAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -386,8 +388,8 @@ FloatingConstantAST::FloatingConstantAST(std::string)
     : AST(AST::Kind::FLOATING_CONSTANT) {}
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST> id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
-ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration)
-    : AST(AST::Kind::PARAMETER_LIST), parameter_declaration(std::move(parameter_declaration)) {}
+ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table)
+    : AST(AST::Kind::PARAMETER_LIST), parameter_declaration(std::move(parameter_declaration)), table(table) {}
 void ParameterListAST::print(int indent) {
   AST::print(indent);
   parameter_declaration.print(++indent);

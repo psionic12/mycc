@@ -1,10 +1,13 @@
 #include <memory>
 #include <parser/parser.h>
 #include <tokens/token.h>
-Parser::Parser(std::ifstream &ifstream)
-    : in(ifstream), lex(ifstream) {}
+Parser::Parser(std::ifstream &ifstream, SymbolTables &symbolTables)
+    : in(ifstream), lex(ifstream), symbolTables(symbolTables) {
+  table = symbolTables.createTable(ScopeKind::FILE, nullptr);
+}
 bool Parser::expect(TokenKind kind) {
-  if (lex.peek() == kind) {
+  TokenKind peekKind = lex.peek().getKind();
+  if (peekKind == kind) {
     lex.consumeToken();
     return true;
   } else {
@@ -121,7 +124,7 @@ nt<ExternalDeclarationAST> Parser::parseExternalDeclaration() {
       auto function_definition = std::make_unique<FunctionDefinitionAST>(std::move(specifiers),
                                                                          std::move(declarator),
                                                                          std::move(declarations),
-                                                                         parseCompoundStatement());
+                                                                         parseCompoundStatement(true));
       return std::make_unique<ExternalDeclarationAST>(std::move(function_definition));
     } else {
       // this is a declaration
@@ -425,7 +428,7 @@ nts<DeclarationAST> Parser::parseDeclarations() {
         accept(TokenKind::TOKEN_SEMI);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
+        if (SymbolKind::TYPEDEF == table->lookupTest(lex.peek())) {
           declarations.push_back(std::make_unique<DeclarationAST>(parseDeclarationSpecifiers(),
                                                                   parseInitDeclarators()));
           continue;
@@ -456,7 +459,7 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), token);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
+        if (SymbolKind::TYPEDEF != table->lookupTest(lex.peek())) {
           break;
         }
       case TokenKind::TOKEN_CHAR:
@@ -475,7 +478,7 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_CONST:
       case TokenKind::TOKEN_VOLATILE:type_qualifiers.push_back(parseTypeQualifier());
         continue;
-      default:break;
+      default:throw parseError("expected declaration-specifier");;
     }
     break;
   }
@@ -567,7 +570,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
           || lex.peek(1) == TokenKind::TOKEN_STAR
           || lex.peek(1) == TokenKind::TOKEN_LBRACKET
           || (lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-              && SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek(1).getValue())))) {
+              && SymbolKind::TYPEDEF != table->lookupTest(lex.peek(1))))) {
     lex.consumeToken();
     term1 = parseDeclarator();
     accept(TokenKind::TOKEN_RPAREN);
@@ -627,7 +630,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
                               parseParameterTypeList());
           break;
         case TokenKind::TOKEN_IDENTIFIER:
-          if (SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
+          if (SymbolKind::TYPEDEF == table->lookupTest(lex.peek())) {
             term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST, parseParameterTypeList());
           } else {
             do {
@@ -658,14 +661,17 @@ nt<ParameterTypeListAST> Parser::parseParameterTypeList() {
 ///<parameter-list> ::= <parameter-declaration>
 ///                   | <parameter-list> , <parameter-declaration>
 nt<ParameterListAST> Parser::parseParameterList() {
+  SymbolScope s(table, symbolTables.createTable(ScopeKind::FUNCTION_PROTOTYPE, table));
   nts<ParameterDeclarationAST> decls;
   do {
     decls.emplace_back(parseParameterDeclaration());
-    if (!expect(TokenKind::TOKEN_COMMA)) {
+    if (lex.peek() != TokenKind::TOKEN_COMMA || lex.peek(1) == TokenKind::TOKEN_ELLIPSIS) {
       break;
+    } else {
+      lex.consumeToken();
     }
   } while (true);
-  return std::make_unique<ParameterListAST>(std::move(decls));
+  return std::make_unique<ParameterListAST>(std::move(decls), *table);
 }
 
 ///<parameter-declaration> ::= {<declaration-specifier>}+ <declarator>
@@ -744,7 +750,7 @@ nt<TypeSpecifierAST> Parser::parseTypeSpecifier() {
     case TokenKind::TOKEN_UNION:return std::make_unique<TypeSpecifierAST>(parseStructOrUnionSpecifier());
     case TokenKind::TOKEN_ENUM:return std::make_unique<TypeSpecifierAST>(parseEnumSpecifier());
     case TokenKind::TOKEN_IDENTIFIER:
-      if (SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek().getValue())) {
+      if (SymbolKind::TYPEDEF == table->lookupTest(lex.peek())) {
         return std::make_unique<TypeSpecifierAST>(parseTypedefName());
       }
     default:throw parseError("expected type specifier");
@@ -820,7 +826,7 @@ nt<StructDeclarationAST> Parser::parseStructDeclaration() {
       case TokenKind::TOKEN_SHORT:
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_IDENTIFIER:if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue()))break;
+      case TokenKind::TOKEN_IDENTIFIER:if (SymbolKind::TYPEDEF != table->lookupTest(lex.peek()))break;
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_UNSIGNED:
       case TokenKind::TOKEN_VOID:
@@ -899,7 +905,7 @@ nt<FunctionDefinitionAST> Parser::parseFunctionDefinition() {
   auto specifiers = parseDeclarationSpecifiers();
   auto declarator = parseDeclarator();
   auto declarations = parseDeclarations();
-  auto compound = parseCompoundStatement();
+  auto compound = parseCompoundStatement(true);
   return std::make_unique<FunctionDefinitionAST>(std::move(specifiers),
                                                  std::move(declarator),
                                                  std::move(declarations),
@@ -907,7 +913,8 @@ nt<FunctionDefinitionAST> Parser::parseFunctionDefinition() {
 }
 
 ///<compound-statement> ::= { {<declaration>}* {<statement>}* }
-nt<CompoundStatementAST> Parser::parseCompoundStatement() {
+nt<CompoundStatementAST> Parser::parseCompoundStatement(bool function) {
+  SymbolScope s(table, symbolTables.createTable(function ? ScopeKind::FUNCTION : ScopeKind::BLOCK, table));
   accept(TokenKind::TOKEN_LBRACE);
   auto declarations = parseDeclarations();
 
@@ -916,7 +923,7 @@ nt<CompoundStatementAST> Parser::parseCompoundStatement() {
     statements.push_back(parseStatement());
   }
   accept(TokenKind::TOKEN_RBRACE);
-  return std::make_unique<CompoundStatementAST>(std::move(declarations), std::move(statements));
+  return std::make_unique<CompoundStatementAST>(std::move(declarations), std::move(statements), *table);
 }
 
 ///<statement> ::= <labeled-statement>
@@ -935,7 +942,7 @@ nt<StatementAST> Parser::parseStatement() {
       } else {
         return std::make_unique<StatementAST>(parseExpressionStatement());
       }
-    case TokenKind::TOKEN_LBRACE:return std::make_unique<StatementAST>(parseCompoundStatement());
+    case TokenKind::TOKEN_LBRACE:return std::make_unique<StatementAST>(parseCompoundStatement(false));
     case TokenKind::TOKEN_IF:
     case TokenKind::TOKEN_SWITCH:return std::make_unique<StatementAST>(parseSelectionStatement());
     case TokenKind::TOKEN_DO:
@@ -1082,7 +1089,7 @@ nt<ConstantExpressionAST> Parser::parseConstantExpression() {
 nt<CastExpressionAST> Parser::parseCastExpression() {
   if (lex.peek() == TokenKind::TOKEN_LPAREN
       && lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-      && SymbolKind::TYPEDEF == symbol_stack.lookupTest(lex.peek(1).getValue())) {
+      && SymbolKind::TYPEDEF == table->lookupTest(lex.peek(1))) {
     accept(TokenKind::TOKEN_LPAREN);
     auto type_name = parseTypeName();
     accept(TokenKind::TOKEN_RPAREN);
@@ -1174,7 +1181,7 @@ nt<TypeNameAST> Parser::parseTypeName() {
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_IDENTIFIER:
-        if (SymbolKind::TYPEDEF != symbol_stack.lookupTest(lex.peek().getValue())) {
+        if (SymbolKind::TYPEDEF != table->lookupTest(lex.peek())) {
           break;
         }
       case TokenKind::TOKEN_UNION:
