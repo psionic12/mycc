@@ -139,8 +139,8 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
   const SymbolKind lookupTest(const Token &token) const {
     return isupper(token.getValue()[0]) ? SymbolKind::TYPEDEF : SymbolKind::OBJECT;
   }
-  const ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> symbol) {
-    SymbolKind kind = symbol->getKind();
+  const ISymbol *insert(const Token &token, SymbolKind kind, StorageSpecifier specifier) {
+    // scope check
     SymbolTable *table = this;
     if (kind == SymbolKind::LABEL) {
       // insert label to the nearest function scope
@@ -160,6 +160,29 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
       table->at(token.getValue());
       throw SemaException(std::string(token.getValue()).append(" has already defined"), token);
     } catch (const std::out_of_range &) {
+      Linkage linkage;
+      if (table->getKind() == ScopeKind::FUNCTION_PROTOTYPE) {
+        linkage = Linkage::kNone;
+      } else if (table->getKind() == ScopeKind::FILE
+          && (kind == SymbolKind::OBJECT || kind == SymbolKind::FUNCTION)
+          && specifier == StorageSpecifier::kSTATIC) {
+        linkage = Linkage::kInternal;
+      } else if (specifier == StorageSpecifier::kEXTERN || kind == SymbolKind::FUNCTION
+          || (kind == SymbolKind::OBJECT && table->getKind() == ScopeKind::FILE)) {
+        try {
+          const ISymbol *symbol = lookup(token);
+          if (symbol->getLinkage() == Linkage::kExternal || symbol->getLinkage() == Linkage::kInternal) {
+            linkage = symbol->getLinkage();
+          } else {
+            linkage = Linkage::kExternal;
+          }
+        } catch (const SemaException &) {
+          linkage = Linkage::kExternal;
+        }
+      } else {
+        linkage = Linkage::kNone;
+      }
+
       table->emplace(token.getValue(), std::move(symbol));
     }
   }
