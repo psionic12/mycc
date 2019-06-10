@@ -2,6 +2,8 @@
 #define MYCCPILER_SYMBOL_TABLES_H
 
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Module.h>
 #include <map>
 #include <list>
 #include <tokens/token.h>
@@ -32,16 +34,16 @@ enum class ScopeKind {
 
 class ISymbol {
  public:
+  friend class SymbolTable;
   virtual SymbolKind getKind() const = 0;
-  virtual Linkage getLinkage() const {
-    return Linkage::kNone;
-  }
   virtual bool operator==(SymbolKind kind) const {
     return getKind() == kind;
   };
   virtual bool operator!=(SymbolKind kind) const {
     return !operator==(kind);
   };
+ private:
+  Linkage linkage = Linkage::kNone;
 };
 
 inline bool operator==(SymbolKind kind, const ISymbol *symbol) {
@@ -53,24 +55,30 @@ inline bool operator!=(SymbolKind kind, const ISymbol *symbol) {
 
 class ObjectSymbol : public ISymbol {
  public:
-  ObjectSymbol(llvm::Value *value, Linkage linkage) : value(value), linkage(linkage) {}
+  ObjectSymbol(llvm::Value *value) : value(value) {}
   SymbolKind getKind() const override {
     return SymbolKind::OBJECT;
   }
  private:
   llvm::Value *value;
-  Linkage linkage;
+ public:
+  llvm::Value *getValue() const {
+    return value;
+  }
 };
 
 class FunctionSymbol : public ISymbol {
  public:
-  FunctionSymbol(llvm::Function *function, Linkage linkage) : function(function), linkage(linkage) {}
+  FunctionSymbol(llvm::Function *function) : function(function) {}
   SymbolKind getKind() const override {
     return SymbolKind::FUNCTION;
   }
  private:
   llvm::Function *function;
-  Linkage linkage;
+ public:
+  llvm::Function *getFunction() const {
+    return function;
+  }
 };
 
 class TagSymbol : public ISymbol {
@@ -121,28 +129,36 @@ class EnumConstSymbol : public ISymbol {
 
 class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
  public:
-  SymbolTable(ScopeKind kind, SymbolTable *father) : kind(kind), father(father) {}
+  SymbolTable(ScopeKind kind, SymbolTable *father, llvm::Module &module) : kind(kind), father(father), module(module) {}
   ScopeKind getKind() {
     return kind;
   }
   const ISymbol *lookup(const Token &token) const {
+    const ISymbol *symbol = lookupInner(token);
+    if (symbol) {
+      return symbol;
+    } else {
+      throw SemaException(std::string(token.getValue()).append(" not defined"), token);
+    }
+  }
+  const ISymbol *lookupInner(const Token &token) const {
     try {
       return std::map<std::string, std::unique_ptr<ISymbol>>::at(token.getValue()).get();
     } catch (const std::out_of_range &) {
       if (father) {
-        return father->lookup(token);
+        return father->lookupInner(token);
       } else {
-        throw SemaException(std::string(token.getValue()).append(" not defined"), token);
+        return nullptr;
       }
     }
   }
   const SymbolKind lookupTest(const Token &token) const {
     return isupper(token.getValue()[0]) ? SymbolKind::TYPEDEF : SymbolKind::OBJECT;
   }
-  const ISymbol *insert(const Token &token, SymbolKind kind, StorageSpecifier specifier) {
+  ISymbol *insert(const Token &token, SymbolKind symbol_kind, llvm::Type *type, StorageSpecifier storage_specifier) {
     // scope check
     SymbolTable *table = this;
-    if (kind == SymbolKind::LABEL) {
+    if (symbol_kind == SymbolKind::LABEL) {
       // insert label to the nearest function scope
       do {
         if (table->getKind() != ScopeKind::FUNCTION) {
@@ -156,34 +172,96 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
         throw SemaException(std::string(token.getValue()).append(" must define in function"), token);
       }
     }
-    try {
-      table->at(token.getValue());
-      throw SemaException(std::string(token.getValue()).append(" has already defined"), token);
-    } catch (const std::out_of_range &) {
-      Linkage linkage;
-      if (table->getKind() == ScopeKind::FUNCTION_PROTOTYPE) {
-        linkage = Linkage::kNone;
-      } else if (table->getKind() == ScopeKind::FILE
-          && (kind == SymbolKind::OBJECT || kind == SymbolKind::FUNCTION)
-          && specifier == StorageSpecifier::kSTATIC) {
-        linkage = Linkage::kInternal;
-      } else if (specifier == StorageSpecifier::kEXTERN || kind == SymbolKind::FUNCTION
-          || (kind == SymbolKind::OBJECT && table->getKind() == ScopeKind::FILE)) {
-        try {
-          const ISymbol *symbol = lookup(token);
-          if (symbol->getLinkage() == Linkage::kExternal || symbol->getLinkage() == Linkage::kInternal) {
-            linkage = symbol->getLinkage();
+
+    Linkage linkage;
+    const ISymbol *linkage_symbol = nullptr;
+    if ((symbol_kind != SymbolKind::OBJECT && symbol_kind != SymbolKind::FUNCTION)
+        || table->getKind() == ScopeKind::FUNCTION_PROTOTYPE
+        || (table->getKind() == ScopeKind::BLOCK && symbol_kind == SymbolKind::OBJECT
+            && storage_specifier != StorageSpecifier::kEXTERN)) {
+      linkage = Linkage::kNone;
+    } else if (table->getKind() == ScopeKind::FILE
+        && (symbol_kind == SymbolKind::OBJECT || symbol_kind == SymbolKind::FUNCTION)
+        && storage_specifier == StorageSpecifier::kSTATIC) {
+      linkage = Linkage::kInternal;
+    } else if (storage_specifier == StorageSpecifier::kEXTERN || symbol_kind == SymbolKind::FUNCTION
+        || (symbol_kind == SymbolKind::OBJECT && table->getKind() == ScopeKind::FILE)) {
+      linkage_symbol = lookupInner(token);
+      if (linkage_symbol) {
+        // type check
+        if (linkage_symbol->getKind() != symbol_kind) {
+          throw SemaException(std::string("Redefination of \'") + token.getValue() + "\' as different kind of symbol",
+                              token);
+        } else {
+          llvm::Type *linkage_symbol_type = nullptr;
+          if (linkage_symbol->getKind() == SymbolKind::OBJECT) {
+            auto *object_symbol = static_cast<const ObjectSymbol *>(linkage_symbol);
+            linkage_symbol_type = object_symbol->getValue()->getType();
           } else {
-            linkage = Linkage::kExternal;
+            auto *function_symbol = static_cast<const FunctionSymbol *>(linkage_symbol);
+            linkage_symbol_type = function_symbol->getFunction()->getType();
           }
-        } catch (const SemaException &) {
+          if (linkage_symbol_type != type) {
+            throw SemaException(std::string("redeclaration of \'") + token.getValue() + "\' with a different type",
+                                token);
+          }
+        }
+
+        if (linkage_symbol->linkage == Linkage::kExternal
+            || linkage_symbol->linkage == Linkage::kInternal) {
+          linkage = linkage_symbol->linkage;
+        } else {
           linkage = Linkage::kExternal;
         }
       } else {
-        linkage = Linkage::kNone;
+        linkage = Linkage::kExternal;
       }
+    } else {
+      // check to see if the standard misses some case...
+      throw SemaException(
+          std::string("don't know how to deal with ")
+              + std::to_string(static_cast<int>(symbol_kind)) + " "
+              + std::to_string(static_cast<int>(storage_specifier)), token);
+    }
 
-      table->emplace(token.getValue(), std::move(symbol));
+    if (linkage_symbol) {
+      std::unique_ptr<ISymbol> symbol;
+      switch (linkage_symbol->getKind()) {
+        case SymbolKind::OBJECT:
+          symbol = std::make_unique<ObjectSymbol>(*static_cast<const ObjectSymbol *>(linkage_symbol));
+          break;
+        case SymbolKind::FUNCTION:
+          symbol = std::make_unique<FunctionSymbol>(*static_cast<const FunctionSymbol *>(linkage_symbol));
+          break;
+        case SymbolKind::TAG:symbol = std::make_unique<TagSymbol>(*static_cast<const TagSymbol *>(linkage_symbol));
+          break;
+        case SymbolKind::MEMBER:
+          symbol = std::make_unique<MemberSymbol>(*static_cast<const MemberSymbol *>(linkage_symbol));
+          break;
+        case SymbolKind::TYPEDEF:
+          symbol = std::make_unique<TypedefSymbol>(*static_cast<const TypedefSymbol *>(linkage_symbol));
+          break;
+        case SymbolKind::LABEL:
+          symbol = std::make_unique<LabelSymbol>(*static_cast<const LabelSymbol *>(linkage_symbol));
+          break;
+        case SymbolKind::ENUMERATION_CONSTANT:
+          symbol = std::make_unique<EnumConstSymbol>(*static_cast<const EnumConstSymbol *>(linkage_symbol));
+          break;
+      }
+      auto entry = table->emplace(token.getValue(), std::move(symbol));
+      return entry.first->second.get();
+    } else {
+      switch (symbol_kind) {
+        case SymbolKind::OBJECT:
+        case SymbolKind::FUNCTION:
+        case SymbolKind::TAG:
+        case SymbolKind::MEMBER:
+        case SymbolKind::TYPEDEF:
+        case SymbolKind::LABEL:
+        case SymbolKind::ENUMERATION_CONSTANT:
+          // TODO create values
+          return nullptr;
+      }
     }
   }
  private:
@@ -194,17 +272,21 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
   }
  private:
   ScopeKind kind;
+  llvm::Module &module;
 };
 
 class SymbolTables {
  public:
-  SymbolTables() = default;
+  SymbolTables(llvm::Module &module) : module(module) {
+
+  }
   SymbolTable *createTable(ScopeKind kind, SymbolTable *father) {
-    tables.emplace_back(kind, father);
+    tables.emplace_back(kind, father, module);
     return &tables.back();
   }
  private:
   std::list<SymbolTable> tables;
+  llvm::Module &module;
 };
 
 class SymbolScope {
