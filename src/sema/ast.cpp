@@ -99,7 +99,7 @@ void DeclaratorAST::print(int indent) {
   AST::print(indent);
   ++indent;
   if (pointer) pointer->print(indent);
-  direct_declarator->print(indent);
+  if (direct_declarator) direct_declarator->print(indent);
 }
 StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier)
     : AST(AST::Kind::STORAGE_CLASS_SPECIFIER), storage_speicifier(storage_speicifier) {}
@@ -143,7 +143,7 @@ void StructOrUnionSpecifierAST::print(int indent) {
   AST::print(indent);
   ++indent;
   AST::printIndent(indent);
-  type == StructOrUnion::kSTRUCT ? std::cout << "struct" : std::cout << "union";
+  type == StructOrUnion::kSTRUCT ? std::cout << "STRUCT" << std::endl : std::cout << "UNION" << std::endl;
   if (id != nullptr) id->print(indent);
   declarations.print(indent);
 }

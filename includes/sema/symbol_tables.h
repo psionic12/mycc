@@ -127,30 +127,14 @@ class EnumConstSymbol : public ISymbol {
   llvm::Value *constFP;
 };
 
-class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
+class SymbolTable {
  public:
-  SymbolTable(ScopeKind kind, SymbolTable *father, llvm::Module &module) : kind(kind), father(father), module(module) {}
-  ScopeKind getKind() {
-    return kind;
-  }
-  const ISymbol *lookup(const Token &token) const {
-    const ISymbol *symbol = lookupInner(token);
-    if (symbol) {
-      return symbol;
-    } else {
-      throw SemaException(std::string(token.getValue()).append(" not defined"), token);
-    }
-  }
-  const ISymbol *lookupInner(const Token &token) const {
-    try {
-      return std::map<std::string, std::unique_ptr<ISymbol>>::at(token.getValue()).get();
-    } catch (const std::out_of_range &) {
-      if (father) {
-        return father->lookupInner(token);
-      } else {
-        return nullptr;
-      }
-    }
+  SymbolTable(ScopeKind kind, SymbolTable *father, llvm::Module &module)
+      : scope_kind(kind), father(father), module(module) {}
+  const ISymbol *lookup(const Token &token, SymbolKind symbol_kind, const std::string &name_space = "") const {
+    const ISymbol *symbol = lookupInner(token, symbol_kind, name_space);
+    if (symbol) return symbol;
+    else throw SemaException(std::string(token.getValue()).append(" not defined"), token);
   }
   const SymbolKind lookupTest(const Token &token) const {
     return isupper(token.getValue()[0]) ? SymbolKind::TYPEDEF : SymbolKind::OBJECT;
@@ -161,7 +145,7 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
     if (symbol_kind == SymbolKind::LABEL) {
       // insert label to the nearest function scope
       do {
-        if (table->getKind() != ScopeKind::FUNCTION) {
+        if (table->scope_kind != ScopeKind::FUNCTION) {
           table = table->father;
         } else {
           break;
@@ -176,17 +160,17 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
     Linkage linkage;
     const ISymbol *linkage_symbol = nullptr;
     if ((symbol_kind != SymbolKind::OBJECT && symbol_kind != SymbolKind::FUNCTION)
-        || table->getKind() == ScopeKind::FUNCTION_PROTOTYPE
-        || (table->getKind() == ScopeKind::BLOCK && symbol_kind == SymbolKind::OBJECT
+        || table->scope_kind == ScopeKind::FUNCTION_PROTOTYPE
+        || (table->scope_kind == ScopeKind::BLOCK && symbol_kind == SymbolKind::OBJECT
             && storage_specifier != StorageSpecifier::kEXTERN)) {
       linkage = Linkage::kNone;
-    } else if (table->getKind() == ScopeKind::FILE
+    } else if (table->scope_kind == ScopeKind::FILE
         && (symbol_kind == SymbolKind::OBJECT || symbol_kind == SymbolKind::FUNCTION)
         && storage_specifier == StorageSpecifier::kSTATIC) {
       linkage = Linkage::kInternal;
     } else if (storage_specifier == StorageSpecifier::kEXTERN || symbol_kind == SymbolKind::FUNCTION
-        || (symbol_kind == SymbolKind::OBJECT && table->getKind() == ScopeKind::FILE)) {
-      linkage_symbol = lookupInner(token);
+        || (symbol_kind == SymbolKind::OBJECT && table->scope_kind == ScopeKind::FILE)) {
+      linkage_symbol = lookupInner(token, SymbolKind::OBJECT);  // object and function follow the same rule
       if (linkage_symbol) {
         // type check
         if (linkage_symbol->getKind() != symbol_kind) {
@@ -248,7 +232,7 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
           symbol = std::make_unique<EnumConstSymbol>(*static_cast<const EnumConstSymbol *>(linkage_symbol));
           break;
       }
-      auto entry = table->emplace(token.getValue(), std::move(symbol));
+      auto entry = table->ordinary_table.emplace(token.getValue(), std::move(symbol));
       return entry.first->second.get();
     } else {
       switch (symbol_kind) {
@@ -265,14 +249,34 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
     }
   }
  private:
+  ScopeKind scope_kind;
   SymbolTable *father;
- public:
-  SymbolTable *getFather() {
-    return father;
-  }
- private:
-  ScopeKind kind;
+  // 6.2.3 Name spaces of identifiers
+  typedef std::map<std::string, std::unique_ptr<ISymbol>> SymbolTableImpl;
+  SymbolTableImpl ordinary_table;
+  SymbolTableImpl label_table;
+  SymbolTableImpl tag_table;
+  std::map<std::string, SymbolTableImpl> member_tables;
   llvm::Module &module;
+  const ISymbol *lookupInner(const Token &token, SymbolKind symbol_kind, const std::string &name_space = "") const {
+    try {
+      switch (symbol_kind) {
+        case SymbolKind::OBJECT:
+        case SymbolKind::FUNCTION:
+        case SymbolKind::TYPEDEF:
+        case SymbolKind::ENUMERATION_CONSTANT:return ordinary_table.at(token.getValue()).get();
+        case SymbolKind::TAG:return tag_table.at(token.getValue()).get();
+        case SymbolKind::LABEL:return label_table.at(token.getValue()).get();
+        case SymbolKind::MEMBER:return member_tables.at(name_space).at(token.getValue()).get();
+      }
+    } catch (const std::out_of_range &) {
+      if (father) {
+        return father->lookupInner(token, symbol_kind, name_space);
+      } else {
+        return nullptr;
+      }
+    }
+  }
 };
 
 class SymbolTables {

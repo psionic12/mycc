@@ -478,7 +478,7 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_CONST:
       case TokenKind::TOKEN_VOLATILE:type_qualifiers.push_back(parseTypeQualifier());
         continue;
-      default:throw parseError("expected declaration-specifier");;
+      default:break;
     }
     break;
   }
@@ -780,8 +780,11 @@ nt<StructOrUnionSpecifierAST> Parser::parseStructOrUnionSpecifier() {
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     id = parseIdentifier();
   }
-  accept(TokenKind::TOKEN_LBRACE);
   nts<StructDeclarationAST> declarations;
+  if(!expect(TokenKind::TOKEN_LBRACE)) {
+    return std::make_unique<StructOrUnionSpecifierAST>(type, std::move(id), std::move(declarations));
+  }
+
   do {
     declarations.push_back(parseStructDeclaration());
     switch (lex.peek().getKind()) {
