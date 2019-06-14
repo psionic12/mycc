@@ -41,7 +41,7 @@ class Sema {
   void analyzeEnumeratorList(const EnumeratorListAST *ast);
   void analyzeEnumerator(const EnumeratorAST *ast);
   void analyzeTypedefName(const TypedefNameAST *ast);
-  void analyzeDeclarations(const nts<DeclarationAST> *declarations);
+  void analyzeDeclaration(const DeclarationAST *declaration);
   void analyzeInitDeclarators(const InitDeclarators *ast);
   void analyzeInitializer(const InitializerAST *ast);
   void analyzeInitializerList(const InitializerListAST *ast);
