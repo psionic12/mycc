@@ -1,5 +1,6 @@
 #include <sema/ast.h>
 #include <iostream>
+#include <sema/symbol_tables.h>
 SemaException::SemaException(std::string error, const Token &token) :
     token(token), error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
@@ -65,10 +66,26 @@ void CompoundStatementAST::print(int indent) {
   declarations.print(indent);
   statements.print(indent);
 }
-DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers, InitDeclarators init_declarators)
+DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
+                               InitDeclarators init_declarators,
+                               SymbolTable &table)
     : AST(AST::Kind::DECLARATION),
       declaration_specifiers(std::move(declaration_specifiers)),
-      init_declarators(std::move(init_declarators)) {}
+      init_declarators(std::move(init_declarators)) {
+  for (auto specifiers : this->declaration_specifiers->storage_specifiers) {
+    if (specifiers.type == StorageSpecifier::kTYPEDEF) {
+      for (const auto &pair : this->init_declarators) {
+        const AST *ast = pair.first.get();
+        while (ast->getKind() != AST::Kind::IDENTIFIER) {
+          ast = static_cast<const DeclaratorAST *>(ast)->direct_declarator->term1.get();
+        }
+        const Token& token = static_cast<const IdentifierAST *>(ast)->token;
+        table.insert(token, SymbolKind::TYPEDEF, nullptr, StorageSpecifier::kTYPEDEF);
+      }
+      break;
+    }
+  }
+}
 void DeclarationAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -91,6 +108,9 @@ void DeclarationSpecifiersAST::print(int indent) {
   storage_specifiers.print(indent);
   type_qualifiers.print(indent);
   type_specifiers.print(indent);
+}
+bool DeclarationSpecifiersAST::empty() {
+  return storage_specifiers.empty() && type_qualifiers.empty() && type_specifiers.empty();
 }
 DeclaratorAST::DeclaratorAST(nt<PointerAST> pointer,
                              nt<DirectDeclaratorAST> direct_declarator)

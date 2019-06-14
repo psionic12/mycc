@@ -139,7 +139,7 @@ class SymbolTable {
   const SymbolKind lookupTest(const Token &token) const {
     return isupper(token.getValue()[0]) ? SymbolKind::TYPEDEF : SymbolKind::OBJECT;
   }
-  ISymbol *insert(const Token &token, SymbolKind symbol_kind, llvm::Type *type, StorageSpecifier storage_specifier) {
+  void insert(const Token &token, SymbolKind symbol_kind, llvm::Type *type, StorageSpecifier storage_specifier) {
     // scope check
     SymbolTable *table = this;
     if (symbol_kind == SymbolKind::LABEL) {
@@ -233,20 +233,24 @@ class SymbolTable {
           break;
       }
       auto entry = table->ordinary_table.emplace(token.getValue(), std::move(symbol));
-      return entry.first->second.get();
     } else {
       switch (symbol_kind) {
         case SymbolKind::OBJECT:
         case SymbolKind::FUNCTION:
         case SymbolKind::TAG:
         case SymbolKind::MEMBER:
-        case SymbolKind::TYPEDEF:
-        case SymbolKind::LABEL:
         case SymbolKind::ENUMERATION_CONSTANT:
+        case SymbolKind::LABEL:
           // TODO create values
-          return nullptr;
+          break;
+        case SymbolKind::TYPEDEF:
+          this->ordinary_table.emplace(token.getValue(), std::make_unique<TypedefSymbol>());
       }
     }
+  }
+  bool isTypedef(const Token &token) {
+    const ISymbol *symbol = lookupInner(token, SymbolKind::TYPEDEF);
+    return symbol != nullptr;
   }
  private:
   ScopeKind scope_kind;
@@ -264,7 +268,11 @@ class SymbolTable {
         case SymbolKind::OBJECT:
         case SymbolKind::FUNCTION:
         case SymbolKind::TYPEDEF:
-        case SymbolKind::ENUMERATION_CONSTANT:return ordinary_table.at(token.getValue()).get();
+        case SymbolKind::ENUMERATION_CONSTANT: {
+          const ISymbol *symbol = ordinary_table.at(token.getValue()).get();
+          if (symbol->getKind() != symbol_kind) return nullptr;
+          else return symbol;
+        }
         case SymbolKind::TAG:return tag_table.at(token.getValue()).get();
         case SymbolKind::LABEL:return label_table.at(token.getValue()).get();
         case SymbolKind::MEMBER:return member_tables.at(name_space).at(token.getValue()).get();

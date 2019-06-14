@@ -399,7 +399,7 @@ class DirectDeclaratorAST : public AST {
     ID,
   };
   DirectDeclaratorAST(nt<AST> term1, std::vector<std::pair<Term2, nt<AST>>> term2s);
-  const nt<AST> term1;
+  const nt<AST> term1;  //<identifier> or <declarator>
   const std::vector<std::pair<Term2, nt<AST>>> term2s;
   void print(int indent) override;
 };
@@ -499,12 +499,14 @@ class DeclarationSpecifiersAST : public AST {
   const ts<StorageSpecifier> storage_specifiers;
   const nts<TypeSpecifierAST> type_specifiers;
   const nts<TypeQualifierAST> type_qualifiers;
+  bool empty();
   void print(int indent) override;
 };
 class DeclarationAST : public AST {
  public:
   DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
-                 InitDeclarators init_declarators);
+                   InitDeclarators init_declarators,
+                   SymbolTable &table);
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
   const InitDeclarators init_declarators;
   void print(int indent) override;
