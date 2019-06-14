@@ -294,7 +294,8 @@ nt<EnumSpecifierAST> Parser::parseEnumSpecifier() {
 
 // we don't distinguish whether an identifier is a enumeraition constant or not, we put this on the sema phrase.
 nt<PrimaryExpressionAST> Parser::parsePrimaryExpression() {
-  switch (lex.peek().getKind()) {
+  TokenKind kind = lex.peek().getKind();
+  switch (kind) {
     case TokenKind::TOKEN_IDENTIFIER:return std::make_unique<PrimaryExpressionAST>(parseIdentifier());
     case TokenKind::TOKEN_INT_CONSTANT: {
       auto c = std::make_unique<PrimaryExpressionAST>(std::make_unique<IntegerConstantAST>(lex.peek().getValue()));
@@ -605,7 +606,6 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
                               parseConstantExpression());
           break;
         default:term2s.emplace_back(DirectDeclaratorAST::Term2::CONST_EXPR, nullptr);
-          lex.consumeToken();
       }
       accept(TokenKind::TOKEN_RBRACKET);
     } else {
@@ -785,7 +785,7 @@ nt<StructOrUnionSpecifierAST> Parser::parseStructOrUnionSpecifier() {
     id = parseIdentifier();
   }
   nts<StructDeclarationAST> declarations;
-  if(!expect(TokenKind::TOKEN_LBRACE)) {
+  if (!expect(TokenKind::TOKEN_LBRACE)) {
     return std::make_unique<StructOrUnionSpecifierAST>(type, std::move(id), std::move(declarations));
   }
 
@@ -1142,6 +1142,8 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
 //                       | <postfix-expression> -> <identifier>
 //                       | <postfix-expression> ++
 //                       | <postfix-expression> --
+
+
 nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
   auto primary = parsePrimaryExpression();
   std::vector<std::pair<int, nt<AST>>> terms;
@@ -1152,9 +1154,10 @@ nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
         accept(TokenKind::TOKEN_RBRACKET);
         continue;
       case TokenKind::TOKEN_LPAREN:lex.consumeToken();
-        while (!expect(TokenKind::TOKEN_RPAREN)) {
+        do {
           terms.emplace_back(2, parseAssignmentExpression());
-        }
+        } while (expect(TokenKind::TOKEN_COMMA));
+        accept(TokenKind::TOKEN_RPAREN);
         continue;
       case TokenKind::TOKEN_DOT:lex.consumeToken();
         terms.emplace_back(3, parseIdentifier());

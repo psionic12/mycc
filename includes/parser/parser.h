@@ -27,6 +27,13 @@ class Parser {
   Lex lex;
   SymbolTables& symbolTables;
   SymbolTable* table;
+  InfixOp isInfixOp(TokenKind kind);
+  const std::string &accept(TokenKind kind);
+  bool expect(TokenKind kind);
+  ParserException parseError(const std::string& msg);
+  ParserException parseError(const std::string&, const Token& token);
+  int precedence(InfixOp op);
+ public:
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();
   nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers();
@@ -72,13 +79,6 @@ class Parser {
   nt<IterationStatementAST> parseIterationStatement();
   nt<JumpStatementAST> parseJumpStatement();
   nt<IdentifierAST> parseIdentifier();
-  InfixOp isInfixOp(TokenKind kind);
-
-  const std::string &accept(TokenKind kind);
-  bool expect(TokenKind kind);
-  ParserException parseError(const std::string& msg);
-  ParserException parseError(const std::string&, const Token& token);
-  int precedence(InfixOp op);
 };
 
 #endif //MYCCPILER_PARSER_H

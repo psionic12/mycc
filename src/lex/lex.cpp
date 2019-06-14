@@ -584,7 +584,7 @@ void Lex::scanStringConstant() {
 }
 void Lex::skipLineComment() {
   in.ignore();
-  while (in.peek() != '\r' && in.peek() != '\n' && in.peek() != in.eof()) {
+  while (in.peek() != '\r' && in.peek() != '\n' && !in.eof()) {
     in.ignore();
   }
 }
