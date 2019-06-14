@@ -542,8 +542,9 @@ class ExternalDeclarationAST : public AST {
 };
 class TranslationUnitAST : public AST {
  public:
-  TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations);
+  TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations, SymbolTable &table);
   const nts<ExternalDeclarationAST> external_declarations;
+  SymbolTable& table;
   void print(int indent) override;
 };
 #endif //MYCCPILER_AST_H

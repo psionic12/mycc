@@ -8,8 +8,8 @@ SemaException::SemaException(std::string error, const Token &token) :
 const char *SemaException::what() const noexcept {
   return error.c_str();
 }
-TranslationUnitAST::TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations)
-    : AST(AST::Kind::TRANSLATION_UNIT), external_declarations(std::move(external_declarations)) {}
+TranslationUnitAST::TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations, SymbolTable &table)
+    : AST(AST::Kind::TRANSLATION_UNIT), external_declarations(std::move(external_declarations)), table(table) {}
 void TranslationUnitAST::print(int indent) {
   AST::print(indent);
   external_declarations.print(++indent);
@@ -79,7 +79,7 @@ DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifie
         while (ast->getKind() != AST::Kind::IDENTIFIER) {
           ast = static_cast<const DeclaratorAST *>(ast)->direct_declarator->term1.get();
         }
-        const Token& token = static_cast<const IdentifierAST *>(ast)->token;
+        const Token &token = static_cast<const IdentifierAST *>(ast)->token;
         table.insert(token, SymbolKind::TYPEDEF, nullptr, StorageSpecifier::kTYPEDEF);
       }
       break;

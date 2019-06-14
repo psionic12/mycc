@@ -100,7 +100,7 @@ Parser::parseTranslationUnit() {
   while (lex.peek() != TokenKind::TOKEN_EOF) {
     declarations.push_back(parseExternalDeclaration());
   }
-  return std::make_unique<TranslationUnitAST>(std::move(declarations));
+  return std::make_unique<TranslationUnitAST>(std::move(declarations), *table);
 }
 
 ///<external-declaration> ::= <function-definition>
