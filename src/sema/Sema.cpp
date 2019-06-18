@@ -20,6 +20,7 @@ void Sema::analyzeFunctionDefinition(const FunctionDefinitionAST *ast) {
       throw SemaException("declaration specifiers shall be either extern or static", specifier.token);
     }
   }
+
 }
 void Sema::analyzeIdentifier(const IdentifierAST *ast) {
 

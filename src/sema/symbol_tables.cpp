@@ -93,8 +93,7 @@ void SymbolTable::insert(const Token &token,
       case SymbolKind::TYPEDEF:
         symbol = std::make_unique<TypedefSymbol>(*static_cast<const TypedefSymbol *>(linkage_symbol));
         break;
-      case SymbolKind::LABEL:
-        symbol = std::make_unique<LabelSymbol>(*static_cast<const LabelSymbol *>(linkage_symbol));
+      case SymbolKind::LABEL:symbol = std::make_unique<LabelSymbol>(*static_cast<const LabelSymbol *>(linkage_symbol));
         break;
       case SymbolKind::ENUMERATION_CONSTANT:
         symbol = std::make_unique<EnumConstSymbol>(*static_cast<const EnumConstSymbol *>(linkage_symbol));
@@ -111,12 +110,13 @@ void SymbolTable::insert(const Token &token,
       case SymbolKind::LABEL:
         // TODO create values
         break;
-      case SymbolKind::TYPEDEF:
-        this->ordinary_table.emplace(token.getValue(), std::make_unique<TypedefSymbol>());
+      case SymbolKind::TYPEDEF:this->ordinary_table.emplace(token.getValue(), std::make_unique<TypedefSymbol>());
     }
   }
 }
-const ISymbol *SymbolTable::lookupInner(const Token &token, SymbolKind symbol_kind, const std::string &name_space) const {
+const ISymbol *SymbolTable::lookupInner(const Token &token,
+                                        SymbolKind symbol_kind,
+                                        const std::string &name_space) const {
   try {
     switch (symbol_kind) {
       case SymbolKind::OBJECT:
@@ -142,6 +142,60 @@ const ISymbol *SymbolTable::lookupInner(const Token &token, SymbolKind symbol_ki
 bool SymbolTable::isTypedef(const Token &token) {
   const ISymbol *symbol = lookupInner(token, SymbolKind::TYPEDEF);
   return symbol != nullptr;
+}
+void SymbolTable::insertObject(const Token &token, llvm::Type *type, StorageSpecifier storage_specifier) {
+  Linkage linkage = Linkage::kNone;
+  const ISymbol *linked_symbol;
+  if (this->scope_kind == ScopeKind::FUNCTION_PROTOTYPE) {
+    linkage = Linkage::kNone;
+  } else if (storage_specifier == StorageSpecifier::kSTATIC) {
+    if (this->scope_kind == ScopeKind::FILE) {
+      linkage = Linkage::kInternal;
+    }
+  } else if (storage_specifier == StorageSpecifier::kEXTERN) {
+    linked_symbol = lookupInner(token, SymbolKind::OBJECT);
+    if (linked_symbol) {
+      if (linked_symbol->linkage != Linkage::kNone) {
+        linkage = linked_symbol->linkage;
+      } else {
+        linkage = Linkage::kExternal;
+      }
+    } else {
+      linkage = Linkage::kExternal;
+    }
+  } else {
+    if (this->scope_kind == ScopeKind::FILE) {
+      linkage = Linkage::kExternal;
+    }
+  }
+}
+void SymbolTable::insertFunction(const Token &token, llvm::FunctionType *type, StorageSpecifier storage_specifier) {
+  Linkage linkage;
+  const ISymbol *symbol;
+  std::tie(linkage, symbol) = getLinkage(token, SymbolKind::FUNCTION, type, storage_specifier);
+  if (symbol) {
+    this->ordinary_table.emplace(token.getValue(),
+                                 std::make_unique<FunctionSymbol>(*static_cast<const FunctionSymbol *>(symbol)));
+  } else {
+    // TODO
+  }
+}
+void SymbolTable::insertLabel(const Token &token, llvm::BasicBlock *basicBlock) {
+  // scope check
+  SymbolTable *table = this;
+  // insert label to the nearest function scope
+  do {
+    if (table->scope_kind != ScopeKind::FUNCTION) {
+      table = table->father;
+    } else {
+      break;
+    }
+  } while (table != nullptr);
+
+  if (table == nullptr) {
+    throw SemaException(std::string(token.getValue()).append(" must define in function"), token);
+  }
+
 }
 SymbolTable *SymbolTables::createTable(ScopeKind kind, SymbolTable *father) {
   tables.emplace_back(kind, father, module);

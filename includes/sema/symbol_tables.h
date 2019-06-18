@@ -55,16 +55,18 @@ inline bool operator!=(SymbolKind kind, const ISymbol *symbol) {
 
 class ObjectSymbol : public ISymbol {
  public:
-  ObjectSymbol(llvm::Value *value) : value(value) {}
+  ObjectSymbol(llvm::Value *value, bool is_const = false, bool is_volatile = false)
+      : value(value), is_const(is_const), is_volatile(is_volatile) {}
   SymbolKind getKind() const override {
     return SymbolKind::OBJECT;
   }
- private:
-  llvm::Value *value;
- public:
   llvm::Value *getValue() const {
     return value;
   }
+ private:
+  llvm::Value *value;
+  bool is_const;
+  bool is_volatile;
 };
 
 class FunctionSymbol : public ISymbol {
@@ -133,6 +135,15 @@ class SymbolTable {
       : scope_kind(kind), father(father), module(module) {}
   const ISymbol *lookup(const Token &token, SymbolKind symbol_kind, const std::string &name_space = "") const;
   void insert(const Token &token, SymbolKind symbol_kind, llvm::Type *type, StorageSpecifier storage_specifier);
+
+  void insertObject(const Token &token, llvm::Type * type, StorageSpecifier storage_specifier);
+  void insertFunction(const Token &token, llvm::FunctionType * type, StorageSpecifier storage_specifier);
+  void insertTag(const Token &token, llvm::StructType* type);
+  void insertMember(const Token &token);
+  void insertTypedef(const Token &token, llvm::Type* type);
+  void insertLabel(const Token &token, llvm::BasicBlock* basicBlock);
+  void insertEnumConst(const Token &token);
+
   bool isTypedef(const Token &token);
  private:
   ScopeKind scope_kind;
