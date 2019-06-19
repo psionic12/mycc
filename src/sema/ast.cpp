@@ -45,7 +45,9 @@ FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declar
       declaration_spcifiers(std::move(declaration_spcifiers)),
       declarator(std::move(declarator)),
       declarations(std::move(declarations)),
-      compound_statement(std::move(compound_statement)) {}
+      compound_statement(std::move(compound_statement)) {
+  // TODO proto scope is the father of function block;
+}
 void FunctionDefinitionAST::print(int indent) {
   AST::print(indent);
   ++indent;
