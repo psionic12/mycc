@@ -99,7 +99,7 @@ class Terminal {
     for (int i = 0; i < indent; ++i) {
       std::cout << "\t";
     }
-//    std::cout << static_cast<int>(type) << std::endl;
+    std::cout << static_cast<int>(type) << " ";
     std::cout << token.getValue() << std::endl;
   }
 };

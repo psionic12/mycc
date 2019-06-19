@@ -648,7 +648,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
           } else {
             do {
               term2s.emplace_back(DirectDeclaratorAST::Term2::ID, parseIdentifier());
-            } while (lex.peek() == TokenKind::TOKEN_IDENTIFIER);
+            } while (expect(TokenKind::TOKEN_COMMA));
           }
           break;
         default:break;

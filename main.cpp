@@ -4,7 +4,7 @@
 #include <sema/Sema.h>
 
 int main() {
-  try {
+//  try {
     std::ifstream testFile;
     testFile.open("test.c");
     llvm::LLVMContext TheContext;
@@ -16,9 +16,9 @@ int main() {
     auto sema = Sema(std::move(tr));
     sema.analyze();
 
-  } catch (const SemaException& e) {
-    std::cerr << e.what() << std::endl;
-  } catch (const ParserException& e) {
-    std::cerr << e.what() << std::endl;
-  }
+//  } catch (const SemaException& e) {
+//    std::cerr << e.what() << std::endl;
+//  } catch (const ParserException& e) {
+//    std::cerr << e.what() << std::endl;
+//  }
 }

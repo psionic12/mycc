@@ -286,11 +286,12 @@ LogicalOrExpressionAST::LogicalOrExpressionAST(nt<CastExpressionAST> leaf)
     : AST(AST::Kind::LOGICAL_OR_EXPRESSION, 1), left(std::move(leaf)), op(nullptr), right(nullptr) {}
 void LogicalOrExpressionAST::print(int indent) {
   AST::print(indent);
-  ++indent;
-  left->print(indent);
-  if (op) {
+  if (getProduction() == 0) {
+    left->print(++indent);
     op->print(indent);
-    right->print(indent);
+    right->print(++indent);
+  } else {
+    left->print(indent);
   }
 }
 ExpressionAST::ExpressionAST(nts<AssignmentExpressionAST> assignment_expression)
