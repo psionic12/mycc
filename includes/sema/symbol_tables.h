@@ -129,33 +129,19 @@ class EnumConstSymbol : public ISymbol {
   llvm::Value *constFP;
 };
 
-class SymbolTable {
+class SymbolTable : std::map<std::string, std::unique_ptr<ISymbol>> {
  public:
   SymbolTable(ScopeKind kind, SymbolTable *father, llvm::Module &module)
       : scope_kind(kind), father(father), module(module) {}
-  const ISymbol *lookup(const Token &token, SymbolKind symbol_kind, const std::string &name_space = "") const;
-  void insert(const Token &token, SymbolKind symbol_kind, llvm::Type *type, StorageSpecifier storage_specifier);
+  const ISymbol *lookup(const Token &token, SymbolKind symbol_kind) const;
+  const ISymbol * insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
 
-  void insertObject(const Token &token, llvm::Type * type, StorageSpecifier storage_specifier);
-  void insertFunction(const Token &token, llvm::FunctionType * type, StorageSpecifier storage_specifier);
-  void insertTag(const Token &token, llvm::StructType* type);
-  void insertMember(const Token &token);
-  void insertTypedef(const Token &token, llvm::Type* type);
-  void insertLabel(const Token &token, llvm::BasicBlock* basicBlock);
-  void insertEnumConst(const Token &token);
-
+  // TODO move this to parser
   bool isTypedef(const Token &token);
  private:
   ScopeKind scope_kind;
   SymbolTable *father;
-  // 6.2.3 Name spaces of identifiers
-  typedef std::map<std::string, std::unique_ptr<ISymbol>> SymbolTableImpl;
-  SymbolTableImpl ordinary_table;
-  SymbolTableImpl label_table;
-  SymbolTableImpl tag_table;
-  std::map<std::string, SymbolTableImpl> member_tables;
   llvm::Module &module;
-  const ISymbol *lookupInner(const Token &token, SymbolKind symbol_kind, const std::string &name_space = "") const;
 };
 
 class SymbolTables {

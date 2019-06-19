@@ -1,4 +1,6 @@
 #include <memory>
+
+#include <memory>
 #include <parser/parser.h>
 #include <tokens/token.h>
 Parser::Parser(std::ifstream &ifstream, SymbolTables &symbolTables)
@@ -129,6 +131,10 @@ nt<ExternalDeclarationAST> Parser::parseExternalDeclaration() {
                                                                          std::move(declarator),
                                                                          std::move(declarations),
                                                                          parseCompoundStatement(true));
+      // common mistake
+      if (expect(TokenKind::TOKEN_SEMI)) {
+        throw SemaException("function definition should end without semi", lex.peek(-1));
+      }
       return std::make_unique<ExternalDeclarationAST>(std::move(function_definition));
     } else {
       // this is a declaration
@@ -176,6 +182,7 @@ UnaryOp Parser::parseUnaryOperator() {
       break;
     default:throw parseError("unary operator expected '&', '*', '+', '-', '~', '!'");
   }
+  lex.consumeToken();
   return op;
 }
 
@@ -409,6 +416,7 @@ nts<DeclarationAST> Parser::parseDeclarations() {
   nts<DeclarationAST> declarations;
   while (true) {
     switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_IDENTIFIER:if (!table->isTypedef(lex.peek())) break;
       case TokenKind::TOKEN_AUTO:
       case TokenKind::TOKEN_CHAR:
       case TokenKind::TOKEN_CONST:
@@ -427,19 +435,15 @@ nts<DeclarationAST> Parser::parseDeclarations() {
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_UNSIGNED:
       case TokenKind::TOKEN_VOID:
-      case TokenKind::TOKEN_VOLATILE:
-        declarations.push_back(std::make_unique<DeclarationAST>(parseDeclarationSpecifiers(),
-                                                                parseInitDeclarators(), *table));
+      case TokenKind::TOKEN_VOLATILE: {
+        auto ds = parseDeclarationSpecifiers();
+        auto p = std::make_unique<DeclarationAST>(std::move(ds),
+                                                  parseInitDeclarators(),
+                                                  *table);
+        declarations.push_back(std::move(p));
         accept(TokenKind::TOKEN_SEMI);
         continue;
-      case TokenKind::TOKEN_IDENTIFIER:
-        if (table->isTypedef(lex.peek())) {
-          declarations.push_back(std::make_unique<DeclarationAST>(parseDeclarationSpecifiers(),
-                                                                  parseInitDeclarators(), *table));
-          continue;
-        } else {
-          break;
-        }
+      }
       default:break;
     }
     break;
@@ -451,6 +455,7 @@ nts<DeclarationAST> Parser::parseDeclarations() {
 ///                          | <type-specifier>
 ///                          | <type-qualifier>
 nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
+  bool typeCompleted = false;
   ts<StorageSpecifier> storage_specifiers;
   nts<TypeSpecifierAST> type_specifiers;
   nts<TypeQualifierAST> type_qualifiers;
@@ -464,8 +469,12 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), token);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (!table->isTypedef(lex.peek())) {
+        if (!table->isTypedef(lex.peek()) || typeCompleted) {
           break;
+        } else {
+          type_specifiers.push_back(parseTypeSpecifier());
+          typeCompleted = true;
+          continue;
         }
       case TokenKind::TOKEN_CHAR:
       case TokenKind::TOKEN_DOUBLE:
@@ -512,7 +521,7 @@ InitDeclarators Parser::parseInitDeclarators() {
           init_declarators.emplace_back(std::move(decl), nullptr);
         }
         if (expect(TokenKind::TOKEN_COMMA)) continue;
-        break;
+        return init_declarators;
       }
       default:return init_declarators;
     }
@@ -821,42 +830,10 @@ nt<StructOrUnionSpecifierAST> Parser::parseStructOrUnionSpecifier() {
 
 ///<struct-declaration> ::= {<specifier-qualifier>}* <struct-declarator-list> ;
 nt<StructDeclarationAST> Parser::parseStructDeclaration() {
-  nts<SpecifierQualifierAST> qualifiers;
-  while (true) {
-    switch (lex.peek().getKind()) {
-      case TokenKind::TOKEN_IDENTIFIER:if (!table->isTypedef(lex.peek()))break;
-      case TokenKind::TOKEN_CHAR:
-      case TokenKind::TOKEN_CONST:
-      case TokenKind::TOKEN_DOUBLE:
-      case TokenKind::TOKEN_ENUM:
-      case TokenKind::TOKEN_FLOAT:
-      case TokenKind::TOKEN_INT:
-      case TokenKind::TOKEN_LONG:
-      case TokenKind::TOKEN_SHORT:
-      case TokenKind::TOKEN_SIGNED:
-      case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_UNION:
-      case TokenKind::TOKEN_UNSIGNED:
-      case TokenKind::TOKEN_VOID:
-      case TokenKind::TOKEN_VOLATILE:qualifiers.push_back(parseSpecifierQualifier());
-        continue;
-      default:break;
-    }
-    break;
-  }
+  nts<SpecifierQualifierAST> qualifiers = parseSpecifierQualifiers();
   auto ast = std::make_unique<StructDeclarationAST>(std::move(qualifiers), parseStructDeclaratorList());
   accept(TokenKind::TOKEN_SEMI);
   return ast;
-}
-
-///<specifier-qualifier> ::= <type-specifier>
-///                        | <type-qualifier>
-nt<SpecifierQualifierAST> Parser::parseSpecifierQualifier() {
-  if (lex.peek() == TokenKind::TOKEN_CONST || lex.peek() == TokenKind::TOKEN_VOLATILE) {
-    return std::make_unique<SpecifierQualifierAST>(parseTypeQualifier());
-  } else {
-    return std::make_unique<SpecifierQualifierAST>(parseTypeSpecifier());
-  }
 }
 
 ///<struct-declarator-list> ::= <struct-declarator>
@@ -1128,8 +1105,8 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
       || lex.peek() == TokenKind::TOKEN_PLUS
       || lex.peek() == TokenKind::TOKEN_SUB
       || lex.peek() == TokenKind::TOKEN_TILDE) {
-    return std::make_unique<UnaryExpressionAST>(Terminal<UnaryOp>(parseUnaryOperator(), lex.peek()),
-                                                parseCastExpression());
+    auto uo = parseUnaryOperator();
+    return std::make_unique<UnaryExpressionAST>(Terminal<UnaryOp>(uo, lex.peek(-1)), parseCastExpression());
   } else {
     return std::make_unique<UnaryExpressionAST>(parsePostfixExpression());
   }
@@ -1180,32 +1157,7 @@ nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
 
 ///<type-name> ::= {<specifier-qualifier>}+ {<abstract-declarator>}?
 nt<TypeNameAST> Parser::parseTypeName() {
-  nts<SpecifierQualifierAST> qualifiers;
-  while (true) {
-    switch (lex.peek().getKind()) {
-      case TokenKind::TOKEN_CHAR:
-      case TokenKind::TOKEN_CONST:
-      case TokenKind::TOKEN_DOUBLE:
-      case TokenKind::TOKEN_ENUM:
-      case TokenKind::TOKEN_FLOAT:
-      case TokenKind::TOKEN_INT:
-      case TokenKind::TOKEN_LONG:
-      case TokenKind::TOKEN_SHORT:
-      case TokenKind::TOKEN_SIGNED:
-      case TokenKind::TOKEN_STRUCT:
-      case TokenKind::TOKEN_IDENTIFIER:
-        if (!table->isTypedef(lex.peek())) {
-          break;
-        }
-      case TokenKind::TOKEN_UNION:
-      case TokenKind::TOKEN_UNSIGNED:
-      case TokenKind::TOKEN_VOID:
-      case TokenKind::TOKEN_VOLATILE:qualifiers.push_back(parseSpecifierQualifier());
-        continue;
-      default:break;
-    }
-    break;
-  }
+  nts<SpecifierQualifierAST> qualifiers = parseSpecifierQualifiers();
 
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_LPAREN:
@@ -1216,6 +1168,43 @@ nt<TypeNameAST> Parser::parseTypeName() {
 }
 ParserException Parser::parseError(const std::string &msg, const Token &token) {
   return ParserException(msg, token);
+}
+///<specifier-qualifier> ::= <type-specifier>
+///                        | <type-qualifier>
+nts<SpecifierQualifierAST> Parser::parseSpecifierQualifiers() {
+  bool typeCompleted = false;
+  nts<SpecifierQualifierAST> qualifiers;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_VOLATILE:
+      case TokenKind::TOKEN_CONST:qualifiers.push_back(std::make_unique<SpecifierQualifierAST>(parseTypeQualifier()));
+        continue;
+      case TokenKind::TOKEN_IDENTIFIER:
+        if (!table->isTypedef(lex.peek()) || typeCompleted) {
+          break;
+        } else {
+          qualifiers.push_back(std::make_unique<SpecifierQualifierAST>(parseTypeSpecifier()));
+          typeCompleted = true;
+          continue;
+        }
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:qualifiers.push_back(std::make_unique<SpecifierQualifierAST>(parseTypeSpecifier()));
+        continue;
+      default:break;
+    }
+    break;
+  }
+  return qualifiers;
 }
 
 ParserException::ParserException(std::string error, const Token &token) :

@@ -80,7 +80,7 @@ DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifie
           ast = static_cast<const DeclaratorAST *>(ast)->direct_declarator->term1.get();
         }
         const Token &token = static_cast<const IdentifierAST *>(ast)->token;
-        table.insert(token, SymbolKind::TYPEDEF, nullptr, StorageSpecifier::kTYPEDEF);
+        table.insert(token, std::make_unique<TypedefSymbol>());
       }
       break;
     }
@@ -339,12 +339,11 @@ void UnaryExpressionAST::print(int indent) {
     case 0:postfix_expression->print(indent);
       break;
     case 1:
-    case 2:unary_expression->print(indent);
-      break;
-    case 3:unary_expression->print(indent);
-      cast_expression->print(indent);
-      break;
+    case 2:
     case 4:unary_expression->print(indent);
+      break;
+    case 3:op->print(indent);
+      cast_expression->print(indent);
       break;
     case 5:type_name->print(indent);
       break;
