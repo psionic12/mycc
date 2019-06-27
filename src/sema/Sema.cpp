@@ -145,3 +145,6 @@ void Sema::analyzeIterationStatement(const IterationStatementAST *ast) {
 void Sema::analyzeJumpStatement(const JumpStatementAST *ast) {
 
 }
+void Sema::analyzeString(StringAST *ast) {
+
+}

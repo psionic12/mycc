@@ -406,8 +406,29 @@ void AssignmentExpressionAST::print(int indent) {
 }
 CharacterConstantAST::CharacterConstantAST(std::string)
     : AST(AST::Kind::CHARACTER_CONSTANT) {}
-FloatingConstantAST::FloatingConstantAST(std::string)
-    : AST(AST::Kind::FLOATING_CONSTANT) {}
+FloatingConstantAST::FloatingConstantAST(const Token &token)
+    : AST(AST::Kind::FLOATING_CONSTANT), token(token) {
+  std::string::size_type sz;
+  try {
+    value = std::stof(this->token.getValue(), &sz);
+    const std::string &sub = this->token.getValue().substr(sz);
+    if (sub.empty()) {
+      suffix = Suffix::None;
+    } else if (sub.size() == 1) {
+      if (sub[0] == 'f' || sub[0] == 'F') {
+        suffix = Suffix::F;
+      } else if (sub[0] == 'l' || sub[0] == 'L') {
+        suffix = Suffix::L;
+      } else {
+        throw SemaException("cannot parse integer constant", token);
+      }
+    } else {
+      throw SemaException("cannot parse integer constant", token);
+    }
+  } catch (const std::invalid_argument &) {
+    throw SemaException("cannot parse integer constant", token);
+  }
+}
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST> id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
 ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table)
@@ -577,7 +598,7 @@ void IdentifierAST::print(int indent) {
   AST::printIndent(++indent);
   std::cout << token.getValue() << std::endl;
 }
-StringAST::StringAST(std::string value) : AST(AST::Kind::STRING) {}
+StringAST::StringAST(std::string string) : AST(AST::Kind::STRING), string(std::move(string)) {}
 AST::AST(AST::Kind kind, int id) : kind(kind), productionId(id) {}
 const char *AST::toString() {
   switch (kind) {
@@ -645,4 +666,67 @@ void AST::printIndent(int indent) {
   for (int i = 0; i < indent; ++i) {
     std::cout << "\t";
   }
+}
+IntegerConstantAST::IntegerConstantAST(const Token &token)
+    : AST(AST::Kind::INTEGER_CONSTANT), token(token) {
+  std::string::size_type sz;
+  try {
+    this->value = std::stoi(this->token.getValue(), &sz, 0);
+    const std::string sub = token.getValue().substr(sz);
+    if (sub.empty()) {
+      this->suffix = Suffix::None;
+    } else {
+      auto it = sub.begin();
+      if (*it == 'u' || *it == 'U') {
+        ++it;
+        if (it == sub.end()) {
+          suffix = Suffix::U;
+        } else if (*it == 'l' || *it == 'L') {
+          ++it;
+          if (it == sub.end()) {
+            suffix = Suffix::UL;
+          } else {
+            if ((*it == 'l' || *it == 'L') && *it == *--it) {
+              ++it;
+              if (it == sub.end()) {
+                suffix = Suffix::ULL;
+              } else {
+                throw SemaException("cannot parse integer constant", token);
+              }
+            } else {
+              throw SemaException("cannot parse integer constant", token);
+            }
+          }
+        }
+      } else if (*it == 'l' || *it == 'L') {
+        ++it;
+        if (it == sub.end()) {
+          suffix = Suffix::L;
+        } else if ((*it == 'l' || *it == 'L') && *it == *--it) {
+          ++it;
+          if (it == sub.end()) {
+            suffix = Suffix::LL;
+          } else {
+            if (*it == 'u' || *it == 'U') {
+              ++it;
+              if (it == sub.end()) {
+                suffix = Suffix::ULL;
+              } else {
+                throw SemaException("cannot parse integer constant", token);
+              }
+            } else {
+              throw SemaException("cannot parse integer constant", token);
+            }
+          }
+        }
+      }
+    }
+  } catch (const std::invalid_argument &) {
+    throw SemaException("cannot parse integer constant", token);
+  }
+}
+void IntegerConstantAST::print(int indent) {
+  AST::print(indent);
+  printIndent(++indent);
+  std::cout << token.getValue() << std::endl;
 }

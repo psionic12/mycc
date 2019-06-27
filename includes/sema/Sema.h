@@ -1,14 +1,20 @@
 #ifndef MYCCPILER_SEMA_H
 #define MYCCPILER_SEMA_H
 
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/IRBuilder.h"
 #include "symbol_tables.h"
 class Sema {
  public:
-  Sema(nt<TranslationUnitAST> &&root) : root(std::move(root)), table(&this->root->table) {}
+  Sema(nt<TranslationUnitAST> &&root, llvm::Module &module, llvm::IRBuilder<> &builder)
+      : root(std::move(root)), table(&this->root->table), module(module), builder(builder) {}
   void analyze();
  private:
   nt<TranslationUnitAST> root;
   SymbolTable *table;
+  llvm::Module &module;
+  llvm::IRBuilder<> &builder;
   void analyzeTranslationUnitAST(const TranslationUnitAST *ast);
   void analyzeExternalDeclaration(const ExternalDeclarationAST *ast);
   void analyzeFunctionDefinition(const FunctionDefinitionAST *ast);
@@ -53,6 +59,7 @@ class Sema {
   void analyzeIterationStatement(const IterationStatementAST *ast);
   void analyzeJumpStatement(const JumpStatementAST *ast);
   void analyzeIdentifier(const IdentifierAST *ast);
+  void analyzeString(StringAST *ast);
 };
 
 #endif //MYCCPILER_SEMA_H

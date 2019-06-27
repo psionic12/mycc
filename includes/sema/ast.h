@@ -7,6 +7,7 @@
 #include <memory>
 #include <sema/operator.h>
 #include <tokens/token.h>
+#include <llvm/IR/Value.h>
 class SymbolTable;
 class SemaException : public std::exception {
  public:
@@ -142,12 +143,13 @@ class CompoundStatementAST;
 class StatementAST;
 class StringAST : public AST {
  public:
-  StringAST(std::string value);
+  StringAST(std::string string);
+  std::string string;
 };
 class IdentifierAST : public AST {
  public:
-  IdentifierAST(const Token& token);
-  const Token& token;
+  IdentifierAST(const Token &token);
+  const Token &token;
   void print(int indent) override;
 };
 //class StructOrUnionAST : public AST {
@@ -271,7 +273,7 @@ class ParameterListAST : public AST {
  public:
   ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table);
   const nts<ParameterDeclarationAST> parameter_declaration;
-  SymbolTable& table;
+  SymbolTable &table;
   void print(int indent) override;
 };
 class EnumerationConstantAST : public AST {
@@ -281,13 +283,36 @@ class EnumerationConstantAST : public AST {
 };
 class FloatingConstantAST : public AST {
  public:
-  FloatingConstantAST(std::string);
+  FloatingConstantAST(const Token& token);
+  enum class Suffix {
+    None,
+    F,
+    L,
+  };
+  const Token& token;
+  double value;
+  Suffix suffix;
 };
 class CharacterConstantAST : public AST {
  public:
   CharacterConstantAST(std::string);
 };
-class IntegerConstantAST : public AST { public:IntegerConstantAST(std::string) : AST(AST::Kind::INTEGER_CONSTANT) {}};
+class IntegerConstantAST : public AST {
+ public:
+  IntegerConstantAST(const Token &token);
+  enum class Suffix {
+    None,
+    U,
+    L,
+    UL,
+    LL,
+    ULL,
+  };
+  const Token &token;
+  long value;
+  Suffix suffix;
+  void print(int indent) override;
+};
 //class ConstantAST : public AST {
 // public:
 //  ConstantAST(nt<IntegerConstantAST>);
@@ -505,8 +530,8 @@ class DeclarationSpecifiersAST : public AST {
 class DeclarationAST : public AST {
  public:
   DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
-                   InitDeclarators init_declarators,
-                   SymbolTable &table);
+                 InitDeclarators init_declarators,
+                 SymbolTable &table);
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
   const InitDeclarators init_declarators;
   void print(int indent) override;
@@ -514,11 +539,11 @@ class DeclarationAST : public AST {
 class CompoundStatementAST : public AST {
  public:
   CompoundStatementAST(nts<DeclarationAST> declarations,
-                         nts<StatementAST> statements,
-                         SymbolTable &table);
+                       nts<StatementAST> statements,
+                       SymbolTable &table);
   const nts<DeclarationAST> declarations;
   const nts<StatementAST> statements;
-  SymbolTable& table;
+  SymbolTable &table;
   void print(int indent) override;
 };
 class FunctionDefinitionAST : public AST {
@@ -544,7 +569,7 @@ class TranslationUnitAST : public AST {
  public:
   TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations, SymbolTable &table);
   const nts<ExternalDeclarationAST> external_declarations;
-  SymbolTable& table;
+  SymbolTable &table;
   void print(int indent) override;
 };
 #endif //MYCCPILER_AST_H

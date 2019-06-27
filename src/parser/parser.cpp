@@ -305,12 +305,12 @@ nt<PrimaryExpressionAST> Parser::parsePrimaryExpression() {
   switch (kind) {
     case TokenKind::TOKEN_IDENTIFIER:return std::make_unique<PrimaryExpressionAST>(parseIdentifier());
     case TokenKind::TOKEN_INT_CONSTANT: {
-      auto c = std::make_unique<PrimaryExpressionAST>(std::make_unique<IntegerConstantAST>(lex.peek().getValue()));
+      auto c = std::make_unique<PrimaryExpressionAST>(std::make_unique<IntegerConstantAST>(lex.peek()));
       lex.consumeToken();
       return c;
     }
     case TokenKind::TOKEN_FLOAT_CONSTANT: {
-      auto c = std::make_unique<PrimaryExpressionAST>(std::make_unique<FloatingConstantAST>(lex.peek().getValue()));
+      auto c = std::make_unique<PrimaryExpressionAST>(std::make_unique<FloatingConstantAST>(lex.peek()));
       lex.consumeToken();
       return c;
     }
