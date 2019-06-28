@@ -94,8 +94,7 @@ void Lex::getToken() {
       case '7':
       case '8':
       case '9':return scanNumber();
-      case '.':
-        in.ignore();
+      case '.':in.ignore();
         if (in.peek() >= '0' && in.peek() <= '9') {
           in.putback('.');
           return scanNumber();
@@ -415,6 +414,11 @@ void Lex::scanNumber() {
       case '.':
         // TODO right?
         kind = TokenKind::TOKEN_FLOAT_CONSTANT;
+        value += (char) in.get();
+        tokenEnd = in.tellg();
+        break;
+      case '+':
+      case '-':if (value.back() != 'e' && value.back() != 'E' && value.back() != 'p' && value.back() != 'P') return makeToken(kind, std::move(value));
       case 'A':
       case 'B':
       case 'C':

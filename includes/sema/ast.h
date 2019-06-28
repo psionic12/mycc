@@ -8,6 +8,7 @@
 #include <sema/operator.h>
 #include <tokens/token.h>
 #include <llvm/IR/Value.h>
+#include "types.h"
 class SymbolTable;
 class SemaException : public std::exception {
  public:
@@ -292,6 +293,7 @@ class FloatingConstantAST : public AST {
   const Token& token;
   double value;
   Suffix suffix;
+  void print(int indent) override;
 };
 class CharacterConstantAST : public AST {
  public:

@@ -17,5 +17,5 @@ target_include_directories(myccpiler PUBLIC ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(myccpiler PUBLIC ${LLVM_DEFINITIONS})
 target_link_libraries(myccpiler ${llvm_libs})
 
-add_executable(first_sets src/tools/main.cpp src/tools/first_set_generator.cpp includes/sema/operator.h includes/sema/symbol_tables.h includes/sema/Sema.h)
+add_executable(first_sets src/tools/main.cpp src/tools/first_set_generator.cpp includes/sema/operator.h includes/sema/symbol_tables.h includes/sema/Sema.h includes/sema/types.h)
 target_include_directories(first_sets PUBLIC includes)

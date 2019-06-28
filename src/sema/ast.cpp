@@ -429,6 +429,11 @@ FloatingConstantAST::FloatingConstantAST(const Token &token)
     throw SemaException("cannot parse integer constant", token);
   }
 }
+void FloatingConstantAST::print(int indent) {
+  AST::print(indent);
+  AST::printIndent(++indent);
+  std::cout << token.getValue() << std::endl;
+}
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST> id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
 ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table)
@@ -719,6 +724,8 @@ IntegerConstantAST::IntegerConstantAST(const Token &token)
             }
           }
         }
+      } else {
+        throw SemaException("cannot parse integer constant", token);
       }
     }
   } catch (const std::invalid_argument &) {
