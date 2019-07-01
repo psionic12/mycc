@@ -1,7 +1,6 @@
 #ifndef MYCCPILER_OPERATOR_H
 #define MYCCPILER_OPERATOR_H
 
-#include <tokens/token.h>
 #include <iostream>
 enum class InfixOp {
   BARBAR,
@@ -71,6 +70,7 @@ enum class StructOrUnion {
 enum class TypeQuailifier {
   kCONST,
   kVOLATILE,
+  kNone,
 };
 
 

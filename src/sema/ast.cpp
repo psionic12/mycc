@@ -377,13 +377,13 @@ PrimaryExpressionAST::PrimaryExpressionAST(nt<IdentifierAST> id)
 PrimaryExpressionAST::PrimaryExpressionAST(nt<IntegerConstantAST> interger_constant)
     : AST(AST::Kind::PRIMARY_EXPRESSION, 1), ast(std::move(interger_constant)) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<FloatingConstantAST> floating_constatnt)
-    : AST(AST::Kind::PRIMARY_EXPRESSION, 1), ast(std::move(floating_constatnt)) {}
+    : AST(AST::Kind::PRIMARY_EXPRESSION, 2), ast(std::move(floating_constatnt)) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<CharacterConstantAST> character_constant)
-    : AST(AST::Kind::PRIMARY_EXPRESSION, 1), ast(std::move(character_constant)) {}
+    : AST(AST::Kind::PRIMARY_EXPRESSION, 3), ast(std::move(character_constant)) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<StringAST> string)
-    : AST(AST::Kind::PRIMARY_EXPRESSION, 2), ast(std::move(string)) {}
+    : AST(AST::Kind::PRIMARY_EXPRESSION, 4), ast(std::move(string)) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<ExpressionAST> exp)
-    : AST(AST::Kind::PRIMARY_EXPRESSION, 3), ast(std::move(exp)) {}
+    : AST(AST::Kind::PRIMARY_EXPRESSION, 5), ast(std::move(exp)) {}
 void PrimaryExpressionAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);

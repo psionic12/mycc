@@ -1,18 +1,21 @@
 #ifndef MYCCPILER_TYPES_H
 #define MYCCPILER_TYPES_H
 
+#include <set>
 #include <vector>
-#include <string>
 #include <memory>
+#include "operator.h"
 class Type {
+ private:
  public:
-  virtual bool equals(Type *type) {
-    return true;
-  };
+  Type(std::set<TypeQuailifier> quailifiers) : quailifiers(std::move(quailifiers)) {}
+ private:
+  std::set<TypeQuailifier> quailifiers;
 };
 
 class ObjectType : public Type {
  public:
+  ObjectType(std::set<TypeQuailifier> quailifiers) : Type(std::move(quailifiers)) {}
   virtual bool complete() {
     return true;
   }
@@ -21,69 +24,86 @@ class ObjectType : public Type {
 class IntegerType : public ObjectType {
  public:
   enum class Kind {
-    kChar,
+    kChar = 1,
     kShortInt,
     kInt,
     kLongInt,
     kLongLongInt,
   };
-  IntegerType(Kind kind) : kind_(kind) {}
-  bool equals(Type *type) override {
-    auto *it = dynamic_cast<IntegerType *>(type);
-    return it
-        && it->kind_ == this->kind_
-        && it->signed_ == this->signed_
-        && ObjectType::equals(type);
+  IntegerType(std::set<TypeQuailifier> quailifiers, bool bSigned, Kind kind)
+      : mSigned(bSigned), mKind(kind), ObjectType(std::move(quailifiers)) {}
+  static IntegerType *getIntegerType(bool bSigned, bool bConst, bool bVolatile, Kind kind) {
+    auto &ptr =
+        types[static_cast<int>(bSigned)][static_cast<int>(bConst)][static_cast<int>(bVolatile)][static_cast<int>(kind)];
+    if (!ptr) {
+      std::set<TypeQuailifier> set;
+      if (bConst) {
+        set.emplace(TypeQuailifier::kCONST);
+      }
+      if (bVolatile) {
+        set.emplace(TypeQuailifier::kVOLATILE);
+      }
+      ptr = std::make_unique<IntegerType>(std::move(set), bSigned, kind);
+    }
+    return ptr.get();
   }
  private:
-  bool signed_;
-  Kind kind_;
+  bool mSigned;
+  Kind mKind;
+  static std::unique_ptr<IntegerType>
+      types[2]/*signed*/[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongLongInt)]/*kind*/;
 };
 
 class FloatingType : public ObjectType {
  public:
   enum class Kind {
-    kFloat,
+    kFloat = 1,
     kDouble,
     kLongDouble,
   };
-  FloatingType(Kind kind_) : kind_(kind_) {}
+  static FloatingType *getFloatingType(bool bConst, bool bVolatile, Kind kind) {
+    auto &ptr =
+        types[static_cast<int>(bConst)][static_cast<int>(bVolatile)][static_cast<int>(kind)];
+    if (!ptr) {
+      std::set<TypeQuailifier> set;
+      if (bConst) {
+        set.emplace(TypeQuailifier::kCONST);
+      }
+      if (bVolatile) {
+        set.emplace(TypeQuailifier::kVOLATILE);
+      }
+      ptr = std::make_unique<FloatingType>(std::move(set), kind);
+    }
+    return ptr.get();
+  }
+  FloatingType(std::set<TypeQuailifier> quailifiers, Kind kind_) : kind_(kind_), ObjectType(std::move(quailifiers)) {}
  private:
+  static std::unique_ptr<FloatingType>
+      types[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongDouble)]/*kind*/;
   Kind kind_;
 };
 
 class VoidType : public ObjectType {
  public:
+  VoidType() : ObjectType(std::set<TypeQuailifier>()) {}
   bool complete() override {
     return false;
-  }
-  bool equals(Type *type) override {
-    auto *v = dynamic_cast<VoidType *>(type);
-    return v;
   }
 };
 
 class FunctionType : public Type {
  public:
-  FunctionType(ObjectType *returnType_, std::vector<ObjectType *> &&parameters_)
-      : returnType_(returnType_), parameters_(parameters_) {}
-  bool equals(Type *type) override {
-    auto *ft = dynamic_cast<FunctionType *>(type);
-    if (!ft) return false;
-    if (!returnType_->equals(ft->returnType_)) return false;
-    if (parameters_.size() != ft->parameters_.size()) return false;
-    auto sit = parameters_.begin();
-    auto rit = ft->parameters_.begin();
-    while (sit != parameters_.end()) {
-      if (!(*sit)->equals(*rit)) return false;
-      ++sit;
-      ++rit;
-    }
-    return true;
+  FunctionType(std::set<TypeQuailifier> quailifiers, ObjectType *returnType, std::vector<ObjectType *> &&parameters)
+      : mReturnType(returnType), mParameters(parameters), Type(std::move(quailifiers)) {}
+  ObjectType *getReturnType() const {
+    return mReturnType;
+  }
+  const std::vector<ObjectType *> &getParameters() const {
+    return mParameters;
   }
  private:
-  ObjectType *returnType_;
-  std::vector<ObjectType *> parameters_;
+  ObjectType *mReturnType;
+  std::vector<ObjectType *> mParameters;
 };
 
 //TODO
@@ -93,23 +113,20 @@ class EnumerationType : public Type {
 
 class ArrayType : public ObjectType {
  public:
-  ArrayType(ObjectType *elementType) : elementType_(elementType) {}
-  ArrayType(ObjectType *elementType, int size) : elementType_(elementType), size_(size) {}
-  bool equals(Type *type) override {
-    auto *at = dynamic_cast<ArrayType *>(type);
-    return at
-        && at->elementType_->equals(at->elementType_);
-  }
+  ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType)
+      : mElementType(elementType), ObjectType(std::move(quailifiers)) {}
+  ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType, unsigned int size)
+      : mElementType(elementType), mSize(size), ObjectType(std::move(quailifiers)) {}
   bool complete() override {
-    return size_ > 0;
+    return mSize > 0;
   }
   void setSize(unsigned int size) {
-    size_ = size;
+    mSize = size;
   }
  private:
-  ObjectType *elementType_;
+  ObjectType *mElementType;
   //TODO is int enough?
-  unsigned int size_ = 0;
+  unsigned int mSize = 0;
 };
 
 //TODO
@@ -124,11 +141,8 @@ class UnionType : public Type {
 
 class PointerType : public ObjectType {
  public:
-  PointerType(Type *referencedType) : referencedType_(referencedType) {}
-  bool equals(Type *type) override {
-    auto *pt = dynamic_cast<PointerType *>(type);
-    return pt && this->referencedType_->equals(pt->referencedType_);
-  }
+  PointerType(std::set<TypeQuailifier> quailifiers, Type *referencedType)
+      : referencedType_(referencedType), ObjectType(std::move(quailifiers)) {}
  private:
   Type *referencedType_;
 };

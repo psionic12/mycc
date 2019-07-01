@@ -55,42 +55,39 @@ inline bool operator!=(SymbolKind kind, const ISymbol *symbol) {
 
 class ObjectSymbol : public ISymbol {
  public:
-  ObjectSymbol(llvm::Value *value, bool is_const = false, bool is_volatile = false)
-      : value(value), is_const(is_const), is_volatile(is_volatile) {}
+  ObjectSymbol(std::unique_ptr<Type> &&type, bool is_const = false, bool is_volatile = false)
+      : type_(std::move(type)), const_(is_const), volatile_(is_volatile) {}
   SymbolKind getKind() const override {
     return SymbolKind::OBJECT;
   }
-  llvm::Value *getValue() const {
-    return value;
+  Type *getType() {
+    return type_.get();
   }
  private:
-  llvm::Value *value;
-  bool is_const;
-  bool is_volatile;
+  std::unique_ptr<Type> type_;
+  bool const_;
+  bool volatile_;
 };
 
 class FunctionSymbol : public ISymbol {
  public:
-  FunctionSymbol(llvm::Function *function) : function(function) {}
+  FunctionSymbol(std::unique_ptr<FunctionType> &&type) : type_(std::move(type)) {}
   SymbolKind getKind() const override {
     return SymbolKind::FUNCTION;
   }
- private:
-  llvm::Function *function;
- public:
-  llvm::Function *getFunction() const {
-    return function;
+  FunctionType *getType() {
+    return type_.get();
   }
+ private:
+  std::unique_ptr<FunctionType> type_;
+
 };
 
 class TagSymbol : public ISymbol {
  public:
-  TagSymbol(llvm::Type *type) : type(type) {}
   SymbolKind getKind() const override {
     return SymbolKind::TAG;
   }
- private:
-  llvm::Type *type;
 };
 
 class MemberSymbol : public ISymbol {
@@ -98,8 +95,6 @@ class MemberSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::MEMBER;
   }
- private:
-  llvm::Value *value;
 };
 
 class TypedefSymbol : public ISymbol {
@@ -107,8 +102,6 @@ class TypedefSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::TYPEDEF;
   }
- private:
-  llvm::Type *type;
 };
 
 class LabelSymbol : public ISymbol {
@@ -116,8 +109,6 @@ class LabelSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::LABEL;
   }
- private:
-  llvm::BasicBlock *basicBlock;
 };
 
 class EnumConstSymbol : public ISymbol {
@@ -125,16 +116,20 @@ class EnumConstSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::ENUMERATION_CONSTANT;
   }
+  EnumConstSymbol(EnumerationType *type_) : type_(type_) {}
+  EnumerationType *getType() const {
+    return type_;
+  }
  private:
-  llvm::Value *constFP;
+  EnumerationType *type_;
 };
 
 class SymbolTable : std::map<std::string, std::unique_ptr<ISymbol>> {
  public:
   SymbolTable(ScopeKind kind, SymbolTable *father, llvm::Module &module)
       : scope_kind(kind), father(father), module(module) {}
-  const ISymbol *lookup(const Token &token, SymbolKind symbol_kind) const;
-  const ISymbol * insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
+  ISymbol *lookup(const Token &token);
+  ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
 
   // TODO move this to parser
   bool isTypedef(const Token &token);

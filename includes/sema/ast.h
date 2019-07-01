@@ -142,6 +142,11 @@ class AssignmentExpressionAST;
 class InitializerAST;
 class CompoundStatementAST;
 class StatementAST;
+class IExpression {
+ public:
+  const Type* type;
+
+};
 class StringAST : public AST {
  public:
   StringAST(std::string string);
@@ -334,7 +339,7 @@ class AssignmentExpressionAST : public AST {
   const nt<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
 };
-class PrimaryExpressionAST : public AST {
+class PrimaryExpressionAST : public AST, public IExpression {
  public:
   PrimaryExpressionAST(nt<IdentifierAST>);
   PrimaryExpressionAST(nt<IntegerConstantAST>);
