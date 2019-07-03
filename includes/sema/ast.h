@@ -74,6 +74,7 @@ class AST {
     SELECTION_STATEMENT,
     ITERATION_STATEMENT,
     JUMP_STATEMENT,
+    ARGUMENT_EXPRESSION_LIST,
   };
   AST(Kind kind, int id = 0);
   const Kind getKind() const {
@@ -144,7 +145,7 @@ class CompoundStatementAST;
 class StatementAST;
 class IExpression {
  public:
-  const Type* type;
+  const Type *type;
 
 };
 class StringAST : public AST {
@@ -289,13 +290,13 @@ class EnumerationConstantAST : public AST {
 };
 class FloatingConstantAST : public AST {
  public:
-  FloatingConstantAST(const Token& token);
+  FloatingConstantAST(const Token &token);
   enum class Suffix {
     None,
     F,
     L,
   };
-  const Token& token;
+  const Token &token;
   double value;
   Suffix suffix;
   void print(int indent) override;
@@ -316,7 +317,7 @@ class IntegerConstantAST : public AST {
     ULL,
   };
   const Token &token;
-  long value;
+  unsigned long value;
   Suffix suffix;
   void print(int indent) override;
 };
@@ -350,12 +351,32 @@ class PrimaryExpressionAST : public AST, public IExpression {
   const nt<AST> ast;
   void print(int indent) override;
 };
+class ArgumentExpressionList : public AST {
+ public:
+  ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList);
+  void print(int indent) override;
+ private:
+  nts<AssignmentExpressionAST> mArgumentList;
+};
 class PostfixExpressionAST : public AST {
  public:
-  PostfixExpressionAST(nt<PrimaryExpressionAST> primary, std::vector<std::pair<int, nt<AST>>> terms);
-  const nt<PrimaryExpressionAST> primary;
-  const std::vector<std::pair<int, nt<AST>>> terms;
+  enum class identifierOperator {
+    DOT = 3,
+    ARROW = 4,
+  };
+  enum class Xcrement {
+    PLUSPLUS = 5,
+    MINMIN = 6,
+  };
+  PostfixExpressionAST(nt<PrimaryExpressionAST> primary);
+  PostfixExpressionAST(nt<PostfixExpressionAST> left, nt<ExpressionAST> right);
+  PostfixExpressionAST(nt<PostfixExpressionAST> left, nt<ArgumentExpressionList> right);
+  PostfixExpressionAST(nt<PostfixExpressionAST> left, identifierOperator io, nt<IdentifierAST> right);
+  PostfixExpressionAST(nt<PostfixExpressionAST> left, Xcrement x);
   void print(int indent) override;
+ private:
+  nt<AST> left;
+  nt<AST> right;
 };
 class TypeNameAST : public AST {
  public:

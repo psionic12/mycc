@@ -361,15 +361,34 @@ void TypeNameAST::print(int indent) {
   specifier.print(indent);
   if (declarator) declarator->print(indent);
 }
-PostfixExpressionAST::PostfixExpressionAST(nt<PrimaryExpressionAST> primary,
-                                           std::vector<std::pair<int, nt<AST>>> terms)
-    : AST(AST::Kind::POSTFIX_EXPRESSION, 0), primary(std::move(primary)), terms(std::move(terms)) {}
+PostfixExpressionAST::PostfixExpressionAST(nt<PrimaryExpressionAST> primary)
+    : AST(AST::Kind::POSTFIX_EXPRESSION, 0),
+      left(std::move(primary)),
+      right(nullptr) {}
+PostfixExpressionAST::PostfixExpressionAST(nt<PostfixExpressionAST> left, nt<ExpressionAST> right)
+    : AST(AST::Kind::POSTFIX_EXPRESSION, 1),
+      left(std::move(left)),
+      right(std::move(right)) {}
+PostfixExpressionAST::PostfixExpressionAST(nt<PostfixExpressionAST> left, nt<ArgumentExpressionList> right)
+    : AST(AST::Kind::POSTFIX_EXPRESSION, 2),
+      left(std::move(left)),
+      right(std::move(right)) {}
+PostfixExpressionAST::PostfixExpressionAST(nt<PostfixExpressionAST> left,
+                                           PostfixExpressionAST::identifierOperator io,
+                                           nt<IdentifierAST> right)
+    : AST(AST::Kind::POSTFIX_EXPRESSION, static_cast<int>(io)),
+      left(std::move(left)),
+      right(std::move(right)) {}
+PostfixExpressionAST::PostfixExpressionAST(nt<PostfixExpressionAST> left, PostfixExpressionAST::Xcrement x)
+    : AST(AST::Kind::POSTFIX_EXPRESSION, static_cast<int>(x)),
+      left(std::move(left)),
+      right(nullptr) {}
 void PostfixExpressionAST::print(int indent) {
   AST::print(indent);
   ++indent;
-  primary->print(indent);
-  for (const auto &term : terms) {
-    term.second->print(indent);
+  left->print(indent);
+  if (right) {
+    right->print(indent);
   }
 }
 PrimaryExpressionAST::PrimaryExpressionAST(nt<IdentifierAST> id)
@@ -660,6 +679,7 @@ const char *AST::toString() {
     case AST::Kind::ITERATION_STATEMENT:return "ITERATION_STATEMENT";
     case AST::Kind::JUMP_STATEMENT:return "JUMP_STATEMENT";
     case AST::Kind::PROTO_TYPE_SPECIFIER: return "PROTO_TYPE_SPECIFIER";
+    case AST::Kind::ARGUMENT_EXPRESSION_LIST: return "ARGUMENT_EXPRESSION_LIST";
     default:return "unknown kind";
   }
 }
@@ -737,3 +757,12 @@ void IntegerConstantAST::print(int indent) {
   printIndent(++indent);
   std::cout << token.getValue() << std::endl;
 }
+void ArgumentExpressionList::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  for (const auto &argument : mArgumentList) {
+    argument->print(indent);
+  }
+}
+ArgumentExpressionList::ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList)
+    : AST(AST::Kind::ARGUMENT_EXPRESSION_LIST), mArgumentList(std::move(argumentList)) {}

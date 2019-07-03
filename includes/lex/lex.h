@@ -29,7 +29,7 @@ class Lex {
   void scanStringConstant();
   void skipLineComment();
   void skipBlockComment();
-  void makeToken(TokenKind kind, std::string value = "");
+  void makeToken(TokenKind kind, std::string value);
 };
 
 class LexException : public std::exception {

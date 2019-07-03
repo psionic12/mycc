@@ -165,7 +165,7 @@ nt<IdentifierAST> Parser::parseIdentifier() {
 ///                   | -
 ///                   | ~
 ///                   | !
-UnaryOp Parser::parseUnaryOperator() {
+Terminal<UnaryOp> Parser::parseUnaryOperator() {
   UnaryOp op;
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_AMP:op = UnaryOp::AMP;
@@ -182,8 +182,9 @@ UnaryOp Parser::parseUnaryOperator() {
       break;
     default:throw parseError("unary operator expected '&', '*', '+', '-', '~', '!'");
   }
+  auto terminal = Terminal<UnaryOp>(op, lex.peek());
   lex.consumeToken();
-  return op;
+  return terminal;
 }
 
 ///<assignment-operator> ::= =
@@ -1074,16 +1075,32 @@ nt<ConstantExpressionAST> Parser::parseConstantExpression() {
 ///<cast-expression> ::= <unary-expression>
 ///                    | ( <type-name> ) <cast-expression>
 nt<CastExpressionAST> Parser::parseCastExpression() {
-  if (lex.peek() == TokenKind::TOKEN_LPAREN
-      && lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
-      && table->isTypedef(lex.peek(1))) {
-    accept(TokenKind::TOKEN_LPAREN);
-    auto type_name = parseTypeName();
-    accept(TokenKind::TOKEN_RPAREN);
-    return std::make_unique<CastExpressionAST>(std::move(type_name), parseCastExpression());
-  } else {
-    return std::make_unique<CastExpressionAST>(parseUnaryExpression());
+  if (lex.peek() == TokenKind::TOKEN_LPAREN) {
+    switch (lex.peek(1).getKind()) {
+      case TokenKind::TOKEN_IDENTIFIER:if (!table->isTypedef(lex.peek(1))) break;
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE: {
+        accept(TokenKind::TOKEN_LPAREN);
+        auto type_name = parseTypeName();
+        accept(TokenKind::TOKEN_RPAREN);
+        return std::make_unique<CastExpressionAST>(std::move(type_name), parseCastExpression());
+      }
+      default:break;
+    }
   }
+  return std::make_unique<CastExpressionAST>(parseUnaryExpression());
 }
 
 ///<unary-expression> ::= <postfix-expression>
@@ -1106,53 +1123,60 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
       || lex.peek() == TokenKind::TOKEN_SUB
       || lex.peek() == TokenKind::TOKEN_TILDE) {
     auto uo = parseUnaryOperator();
-    return std::make_unique<UnaryExpressionAST>(Terminal<UnaryOp>(uo, lex.peek(-1)), parseCastExpression());
+    return std::make_unique<UnaryExpressionAST>(uo, parseCastExpression());
   } else {
     return std::make_unique<UnaryExpressionAST>(parsePostfixExpression());
   }
 }
 
 ///<postfix-expression> ::= <primary-expression>
-//                       | <postfix-expression> [ <expression> ]
-//                       | <postfix-expression> ( {<assignment-expression>}* )
-//                       | <postfix-expression> . <identifier>
-//                       | <postfix-expression> -> <identifier>
-//                       | <postfix-expression> ++
-//                       | <postfix-expression> --
-
-
+///                       | <postfix-expression> [ <expression> ]
+///                       | <postfix-expression> ( {<assignment-expression>}* )
+///                       | <postfix-expression> . <identifier>
+///                       | <postfix-expression> -> <identifier>
+///                       | <postfix-expression> ++
+///                       | <postfix-expression> --
 nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
-  auto primary = parsePrimaryExpression();
-  std::vector<std::pair<int, nt<AST>>> terms;
+  auto p = std::make_unique<PostfixExpressionAST>(parsePrimaryExpression());
   while (true) {
     switch (lex.peek().getKind()) {
       case TokenKind::TOKEN_LBRACKET:lex.consumeToken();
-        terms.emplace_back(1, parseExpression());
+        p = std::make_unique<PostfixExpressionAST>(std::move(p), parseExpression());
         accept(TokenKind::TOKEN_RBRACKET);
         continue;
-      case TokenKind::TOKEN_LPAREN:lex.consumeToken();
+      case TokenKind::TOKEN_LPAREN: {
+        lex.consumeToken();
+        nts<AssignmentExpressionAST> arguments;
         do {
-          terms.emplace_back(2, parseAssignmentExpression());
+          arguments.emplace_back(parseAssignmentExpression());
         } while (expect(TokenKind::TOKEN_COMMA));
+
+        p = std::make_unique<PostfixExpressionAST>(std::move(p),
+                                                   std::make_unique<ArgumentExpressionList>(std::move(arguments)));
         accept(TokenKind::TOKEN_RPAREN);
         continue;
+      }
       case TokenKind::TOKEN_DOT:lex.consumeToken();
-        terms.emplace_back(3, parseIdentifier());
+        p = std::make_unique<PostfixExpressionAST>(std::move(p),
+                                                   PostfixExpressionAST::identifierOperator::DOT,
+                                                   parseIdentifier());
         continue;
       case TokenKind::TOKEN_ARROW:lex.consumeToken();
-        terms.emplace_back(4, parseIdentifier());
+        p = std::make_unique<PostfixExpressionAST>(std::move(p),
+                                                   PostfixExpressionAST::identifierOperator::ARROW,
+                                                   parseIdentifier());
         continue;
       case TokenKind::TOKEN_PLUSPLUS:lex.consumeToken();
-        terms.emplace_back(5, nullptr);
+        p = std::make_unique<PostfixExpressionAST>(std::move(p), PostfixExpressionAST::Xcrement::PLUSPLUS);
         continue;
       case TokenKind::TOKEN_SUBSUB:lex.consumeToken();
-        terms.emplace_back(6, nullptr);
+        p = std::make_unique<PostfixExpressionAST>(std::move(p), PostfixExpressionAST::Xcrement::MINMIN);
         continue;
       default:break;
     }
     break;
   }
-  return std::make_unique<PostfixExpressionAST>(std::move(primary), std::move(terms));
+  return std::move(p);
 }
 
 ///<type-name> ::= {<specifier-qualifier>}+ {<abstract-declarator>}?
@@ -1207,7 +1231,9 @@ nts<SpecifierQualifierAST> Parser::parseSpecifierQualifiers() {
   return qualifiers;
 }
 
-ParserException::ParserException(std::string error, const Token &token) :
+ParserException::ParserException(std::string
+                                 error,
+                                 const Token &token) :
     token(token), error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
 }

@@ -106,42 +106,42 @@ void Lex::getToken() {
           } else {
             tokenEnd = in.tellg();
             in.ignore();
-            return makeToken(TokenKind::TOKEN_ELLIPSIS);
+            return makeToken(TokenKind::TOKEN_ELLIPSIS, "...");
           }
         } else {
           tokenStart = tokenEnd = in.tellg() -= 1;
-          return makeToken(TokenKind::TOKEN_DOT);
+          return makeToken(TokenKind::TOKEN_DOT, ".");
         }
       case ',':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_COMMA);
+        return makeToken(TokenKind::TOKEN_COMMA, ",");
       case ';':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_SEMI);
+        return makeToken(TokenKind::TOKEN_SEMI, ";");
       case '(':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_LPAREN);
+        return makeToken(TokenKind::TOKEN_LPAREN, "(");
       case ')':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_RPAREN);
+        return makeToken(TokenKind::TOKEN_RPAREN, ")");
       case '[':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_LBRACKET);
+        return makeToken(TokenKind::TOKEN_LBRACKET, "[");
       case ']':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_RBRACKET);
+        return makeToken(TokenKind::TOKEN_RBRACKET, "]");
       case '{':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_LBRACE);
+        return makeToken(TokenKind::TOKEN_LBRACE, "{");
       case '}':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_RBRACE);
+        return makeToken(TokenKind::TOKEN_RBRACE, "}");
       case '?':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_QUES);
+        return makeToken(TokenKind::TOKEN_QUES, "?");
       case '~':tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        return makeToken(TokenKind::TOKEN_TILDE);
+        return makeToken(TokenKind::TOKEN_TILDE, "~");
       case '\'':return scanCharConstant();
       case '"':return scanStringConstant();
       case '&':tokenStart = in.tellg();
@@ -149,61 +149,61 @@ void Lex::getToken() {
         tokenEnd = in.tellg();
         if (in.peek() == '&') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_AMPAMP);
+          return makeToken(TokenKind::TOKEN_AMPAMP, "&&");
         } else if (in.peek() == '=') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_AMPEQ);
+          return makeToken(TokenKind::TOKEN_AMPEQ, "&=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_AMP);
+          return makeToken(TokenKind::TOKEN_AMP, "&");
         }
       case '*':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_STAREQ);
+          return makeToken(TokenKind::TOKEN_STAREQ, "*=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_STAR);
+          return makeToken(TokenKind::TOKEN_STAR, "*");
         }
       case '+':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '+') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_PLUSPLUS);
+          return makeToken(TokenKind::TOKEN_PLUSPLUS, "++");
         } else if (in.peek() == '=') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_PLUSEQ);
+          return makeToken(TokenKind::TOKEN_PLUSEQ, "+=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_PLUS);
+          return makeToken(TokenKind::TOKEN_PLUS, "+");
         }
       case '-':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '-') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_SUBSUB);
+          return makeToken(TokenKind::TOKEN_SUBSUB, "--");
         } else if (in.peek() == '=') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_SUBEQ);
+          return makeToken(TokenKind::TOKEN_SUBEQ, "-=");
         } else if (in.peek() == '>') {
-          return makeToken(TokenKind::TOKEN_ARROW);
+          return makeToken(TokenKind::TOKEN_ARROW, "->");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_SUB);
+          return makeToken(TokenKind::TOKEN_SUB,"-");
         }
       case '!':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_BANGEQ);
+          return makeToken(TokenKind::TOKEN_BANGEQ,"!=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_BANG);
+          return makeToken(TokenKind::TOKEN_BANG,"!");
         }
       case '/':tokenStart = in.tellg();
         in.ignore();
@@ -216,20 +216,20 @@ void Lex::getToken() {
         } else if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_SLASHEQ);
+          return makeToken(TokenKind::TOKEN_SLASHEQ,"/=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_SLASH);
+          return makeToken(TokenKind::TOKEN_SLASH,"/");
         }
       case '%':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_PERCENTEQ);
+          return makeToken(TokenKind::TOKEN_PERCENTEQ,"%=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_PERCENT);
+          return makeToken(TokenKind::TOKEN_PERCENT,"%");
         }
       case '<':tokenStart = in.tellg();
         in.ignore();
@@ -239,16 +239,16 @@ void Lex::getToken() {
           if (in.peek() == '=') {
             tokenEnd = in.tellg();
             in.ignore();
-            return makeToken(TokenKind::TOKEN_LTLTEQ);
+            return makeToken(TokenKind::TOKEN_LTLTEQ,"<<=");
           } else {
-            return makeToken(TokenKind::TOKEN_LTLT);
+            return makeToken(TokenKind::TOKEN_LTLT,"<<");
           }
         } else if (in.peek() == '=') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_LTEQ);
+          return makeToken(TokenKind::TOKEN_LTEQ,"<=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_LT);
+          return makeToken(TokenKind::TOKEN_LT,"<");
         }
       case '>':tokenStart = in.tellg();
         in.ignore();
@@ -258,63 +258,63 @@ void Lex::getToken() {
           if (in.peek() == '=') {
             tokenEnd = in.tellg();
             in.ignore();
-            return makeToken(TokenKind::TOKEN_GTGTEQ);
+            return makeToken(TokenKind::TOKEN_GTGTEQ,">>=");
           } else {
-            return makeToken(TokenKind::TOKEN_GTGT);
+            return makeToken(TokenKind::TOKEN_GTGT,">>");
           }
         } else if (in.peek() == '=') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_GTEQ);
+          return makeToken(TokenKind::TOKEN_GTEQ, ">=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_GT);
+          return makeToken(TokenKind::TOKEN_GT, ">");
         }
       case '^':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_CARETEQ);
+          return makeToken(TokenKind::TOKEN_CARETEQ, "^=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_CARET);
+          return makeToken(TokenKind::TOKEN_CARET, "^");
         }
       case '|':tokenStart = in.tellg();
         in.ignore();
         tokenEnd = in.tellg();
         if (in.peek() == '|') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_BARBAR);
+          return makeToken(TokenKind::TOKEN_BARBAR, "||");
         } else if (in.peek() == '=') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_BAREQ);
+          return makeToken(TokenKind::TOKEN_BAREQ, "|=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_BAR);
+          return makeToken(TokenKind::TOKEN_BAR, "|");
         }
       case ':':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == ':') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_COLONCOLON);
+          return makeToken(TokenKind::TOKEN_COLONCOLON, "::");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_COLON);
+          return makeToken(TokenKind::TOKEN_COLON, ":");
         }
       case '=':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_EQEQ);
+          return makeToken(TokenKind::TOKEN_EQEQ, "==");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_EQ);
+          return makeToken(TokenKind::TOKEN_EQ, "=");
         }
       case EOF:tokenStart = tokenEnd = in.tellg();
         in.ignore();
-        makeToken(TokenKind::TOKEN_EOF);
+        makeToken(TokenKind::TOKEN_EOF, "eof");
         eof_consumed = true;
         return;
       default:tokenStart = tokenEnd = in.tellg();
@@ -418,7 +418,9 @@ void Lex::scanNumber() {
         tokenEnd = in.tellg();
         break;
       case '+':
-      case '-':if (value.back() != 'e' && value.back() != 'E' && value.back() != 'p' && value.back() != 'P') return makeToken(kind, std::move(value));
+      case '-':
+        if (value.back() != 'e' && value.back() != 'E' && value.back() != 'p' && value.back() != 'P')
+          return makeToken(kind, std::move(value));
       case 'A':
       case 'B':
       case 'C':

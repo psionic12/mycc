@@ -58,7 +58,7 @@ class Parser {
   nt<ExpressionAST> parseExpression();
   nt<AssignmentExpressionAST> parseAssignmentExpression();
   AssignmentOp parseAssignmentOperator();
-  UnaryOp parseUnaryOperator();
+  Terminal<UnaryOp> parseUnaryOperator();
   nt<TypeNameAST> parseTypeName();
   nt<ParameterTypeListAST> parseParameterTypeList();
   nt<ParameterListAST> parseParameterList();
