@@ -86,6 +86,7 @@ class AST {
   virtual const char *toString();
   virtual void print(int indent = 0);
   void printIndent(int indent);
+  virtual std::pair<const Token &, const Token &> invovedTokens() = 0;
   virtual ~AST() = default;
  private:
   const Kind kind;
@@ -146,12 +147,12 @@ class StatementAST;
 class IExpression {
  public:
   const Type *type;
-
 };
 class StringAST : public AST {
  public:
   StringAST(std::string string);
-  std::string string;
+  std::string mString;
+  std::unique_ptr<Type> mType;
 };
 class IdentifierAST : public AST {
  public:
@@ -304,6 +305,7 @@ class FloatingConstantAST : public AST {
 class CharacterConstantAST : public AST {
  public:
   CharacterConstantAST(std::string);
+  char c;
 };
 class IntegerConstantAST : public AST {
  public:
@@ -317,7 +319,7 @@ class IntegerConstantAST : public AST {
     ULL,
   };
   const Token &token;
-  unsigned long value;
+  unsigned long long value;
   Suffix suffix;
   void print(int indent) override;
 };
@@ -351,14 +353,14 @@ class PrimaryExpressionAST : public AST, public IExpression {
   const nt<AST> ast;
   void print(int indent) override;
 };
-class ArgumentExpressionList : public AST {
+class ArgumentExpressionList : public AST, public IExpression {
  public:
   ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList);
   void print(int indent) override;
  private:
   nts<AssignmentExpressionAST> mArgumentList;
 };
-class PostfixExpressionAST : public AST {
+class PostfixExpressionAST : public AST, public IExpression {
  public:
   enum class identifierOperator {
     DOT = 3,
@@ -374,8 +376,7 @@ class PostfixExpressionAST : public AST {
   PostfixExpressionAST(nt<PostfixExpressionAST> left, identifierOperator io, nt<IdentifierAST> right);
   PostfixExpressionAST(nt<PostfixExpressionAST> left, Xcrement x);
   void print(int indent) override;
- private:
-  nt<AST> left;
+  nt<IExpression> left;
   nt<AST> right;
 };
 class TypeNameAST : public AST {
@@ -412,7 +413,7 @@ class CastExpressionAST : public AST {
   const nt<CastExpressionAST> cast_expression;
   void print(int indent) override;
 };
-class ExpressionAST : public AST {
+class ExpressionAST : public AST, public IExpression {
  public:
   ExpressionAST(nts<AssignmentExpressionAST> assignment_expression);
   const nts<AssignmentExpressionAST> assignment_expression;

@@ -870,7 +870,7 @@ nt<InitializerAST> Parser::parseInitializer() {
   if (expect(TokenKind::TOKEN_LBRACE)) {
     auto exp = parseInitializerList();
     expect(TokenKind::TOKEN_COMMA);
-    accept(TokenKind::TOKEN_LBRACE);
+    accept(TokenKind::TOKEN_RBRACE);
     return std::make_unique<InitializerAST>(std::move(exp));
   } else {
     return std::make_unique<InitializerAST>(parseAssignmentExpression());

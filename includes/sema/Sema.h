@@ -36,7 +36,7 @@ class Sema {
   void analyzeCastExpression(CastExpressionAST *ast);
   void analyzeUnaryExpression(UnaryExpressionAST *ast);
   void analyzePostfixExpression(PostfixExpressionAST *ast);
-  void analyzePrimaryExpression(PrimaryExpressionAST *ast);
+  const Type * analyzePrimaryExpression(PrimaryExpressionAST *ast);
   void analyzeExpression(ExpressionAST *ast);
   void analyzeAssignmentExpression(AssignmentExpressionAST *ast);
   void analyzeTypeName(TypeNameAST *ast);

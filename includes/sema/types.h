@@ -8,17 +8,16 @@
 class Type {
  private:
  public:
-  Type(std::set<TypeQuailifier> quailifiers) : quailifiers(std::move(quailifiers)) {}
+  Type(std::set<TypeQuailifier> quailifiers);
+  virtual ~Type() = default;
  private:
-  std::set<TypeQuailifier> quailifiers;
+  std::set<TypeQuailifier> mQquailifiers;
 };
 
 class ObjectType : public Type {
  public:
-  ObjectType(std::set<TypeQuailifier> quailifiers) : Type(std::move(quailifiers)) {}
-  virtual bool complete() {
-    return true;
-  }
+  ObjectType(std::set<TypeQuailifier> quailifiers);
+  virtual bool complete();
 };
 
 class IntegerType : public ObjectType {
@@ -30,28 +29,15 @@ class IntegerType : public ObjectType {
     kLongInt,
     kLongLongInt,
   };
-  IntegerType(std::set<TypeQuailifier> quailifiers, bool bSigned, Kind kind)
-      : mSigned(bSigned), mKind(kind), ObjectType(std::move(quailifiers)) {}
-  static IntegerType *getIntegerType(bool bSigned, bool bConst, bool bVolatile, Kind kind) {
-    auto &ptr =
-        types[static_cast<int>(bSigned)][static_cast<int>(bConst)][static_cast<int>(bVolatile)][static_cast<int>(kind)];
-    if (!ptr) {
-      std::set<TypeQuailifier> set;
-      if (bConst) {
-        set.emplace(TypeQuailifier::kCONST);
-      }
-      if (bVolatile) {
-        set.emplace(TypeQuailifier::kVOLATILE);
-      }
-      ptr = std::make_unique<IntegerType>(std::move(set), bSigned, kind);
-    }
-    return ptr.get();
-  }
+  IntegerType(std::set<TypeQuailifier> quailifiers, bool bSigned, Kind kind);
+  static IntegerType *getIntegerType(bool bSigned, bool bConst, bool bVolatile, Kind kind);
+  unsigned int getSizeInBits() const;
  private:
   bool mSigned;
   Kind mKind;
+  unsigned int mSizeInBits;
   static std::unique_ptr<IntegerType>
-      types[2]/*signed*/[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongLongInt)]/*kind*/;
+      sTypes[2]/*signed*/[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongLongInt)]/*kind*/;
 };
 
 class FloatingType : public ObjectType {
@@ -61,46 +47,26 @@ class FloatingType : public ObjectType {
     kDouble,
     kLongDouble,
   };
-  static FloatingType *getFloatingType(bool bConst, bool bVolatile, Kind kind) {
-    auto &ptr =
-        types[static_cast<int>(bConst)][static_cast<int>(bVolatile)][static_cast<int>(kind)];
-    if (!ptr) {
-      std::set<TypeQuailifier> set;
-      if (bConst) {
-        set.emplace(TypeQuailifier::kCONST);
-      }
-      if (bVolatile) {
-        set.emplace(TypeQuailifier::kVOLATILE);
-      }
-      ptr = std::make_unique<FloatingType>(std::move(set), kind);
-    }
-    return ptr.get();
-  }
-  FloatingType(std::set<TypeQuailifier> quailifiers, Kind kind_) : kind_(kind_), ObjectType(std::move(quailifiers)) {}
+  static FloatingType *getFloatingType(bool bConst, bool bVolatile, Kind kind);
+  FloatingType(std::set<TypeQuailifier> quailifiers, Kind kind);
  private:
   static std::unique_ptr<FloatingType>
-      types[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongDouble)]/*kind*/;
-  Kind kind_;
+      sTypes[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongDouble)]/*kind*/;
+  Kind mKind;
+  unsigned int mSizeInBits;
 };
 
 class VoidType : public ObjectType {
  public:
-  VoidType() : ObjectType(std::set<TypeQuailifier>()) {}
-  bool complete() override {
-    return false;
-  }
+  VoidType();
+  bool complete() override;
 };
 
 class FunctionType : public Type {
  public:
-  FunctionType(std::set<TypeQuailifier> quailifiers, ObjectType *returnType, std::vector<ObjectType *> &&parameters)
-      : mReturnType(returnType), mParameters(parameters), Type(std::move(quailifiers)) {}
-  ObjectType *getReturnType() const {
-    return mReturnType;
-  }
-  const std::vector<ObjectType *> &getParameters() const {
-    return mParameters;
-  }
+  FunctionType(std::set<TypeQuailifier> quailifiers, ObjectType *returnType, std::vector<ObjectType *> &&parameters);
+  ObjectType *getReturnType() const;
+  const std::vector<ObjectType *> &getParameters() const;
  private:
   ObjectType *mReturnType;
   std::vector<ObjectType *> mParameters;
@@ -113,16 +79,10 @@ class EnumerationType : public Type {
 
 class ArrayType : public ObjectType {
  public:
-  ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType)
-      : mElementType(elementType), ObjectType(std::move(quailifiers)) {}
-  ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType, unsigned int size)
-      : mElementType(elementType), mSize(size), ObjectType(std::move(quailifiers)) {}
-  bool complete() override {
-    return mSize > 0;
-  }
-  void setSize(unsigned int size) {
-    mSize = size;
-  }
+  ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType);
+  ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType, unsigned int size);
+  bool complete() override;
+  void setSize(unsigned int size);
  private:
   ObjectType *mElementType;
   //TODO is int enough?
@@ -141,8 +101,7 @@ class UnionType : public Type {
 
 class PointerType : public ObjectType {
  public:
-  PointerType(std::set<TypeQuailifier> quailifiers, Type *referencedType)
-      : referencedType_(referencedType), ObjectType(std::move(quailifiers)) {}
+  PointerType(std::set<TypeQuailifier> quailifiers, Type *referencedType);
  private:
   Type *referencedType_;
 };

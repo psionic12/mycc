@@ -423,8 +423,8 @@ void AssignmentExpressionAST::print(int indent) {
     assignment_expression->print(indent);
   }
 }
-CharacterConstantAST::CharacterConstantAST(std::string)
-    : AST(AST::Kind::CHARACTER_CONSTANT) {}
+CharacterConstantAST::CharacterConstantAST(std::string string)
+    : AST(AST::Kind::CHARACTER_CONSTANT), c(string.c_str()[0]) {}
 FloatingConstantAST::FloatingConstantAST(const Token &token)
     : AST(AST::Kind::FLOATING_CONSTANT), token(token) {
   std::string::size_type sz;
@@ -622,7 +622,13 @@ void IdentifierAST::print(int indent) {
   AST::printIndent(++indent);
   std::cout << token.getValue() << std::endl;
 }
-StringAST::StringAST(std::string string) : AST(AST::Kind::STRING), string(std::move(string)) {}
+StringAST::StringAST(std::string string) : AST(AST::Kind::STRING), mString(std::move(string)) {
+  std::set<TypeQuailifier> quailifiers;
+  quailifiers.emplace(TypeQuailifier::kCONST);
+  mType = std::make_unique<ArrayType>(std::move(quailifiers),
+                                      IntegerType::getIntegerType(false, true, false, IntegerType::Kind::kChar),
+                                      mString.size());
+}
 AST::AST(AST::Kind kind, int id) : kind(kind), productionId(id) {}
 const char *AST::toString() {
   switch (kind) {
@@ -696,7 +702,7 @@ IntegerConstantAST::IntegerConstantAST(const Token &token)
     : AST(AST::Kind::INTEGER_CONSTANT), token(token) {
   std::string::size_type sz;
   try {
-    this->value = std::stoi(this->token.getValue(), &sz, 0);
+    this->value = std::stoull(this->token.getValue(), &sz, 0);
     const std::string sub = token.getValue().substr(sz);
     if (sub.empty()) {
       this->suffix = Suffix::None;
