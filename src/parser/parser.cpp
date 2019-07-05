@@ -321,7 +321,7 @@ nt<PrimaryExpressionAST> Parser::parsePrimaryExpression() {
       return c;
     }
     case TokenKind::TOKEN_STRINGLITERAL: {
-      auto c = std::make_unique<PrimaryExpressionAST>(std::make_unique<StringAST>(lex.peek().getValue()));
+      auto c = std::make_unique<PrimaryExpressionAST>(std::make_unique<StringAST>(lex.peek()));
       lex.consumeToken();
       return c;
     }

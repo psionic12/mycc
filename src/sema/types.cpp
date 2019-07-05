@@ -1,9 +1,9 @@
 #include <sema/types.h>
 Type::Type(std::set<TypeQuailifier> quailifiers) : mQquailifiers(std::move(quailifiers)) {}
-ObjectType::ObjectType(std::set<TypeQuailifier> quailifiers) : Type(std::move(quailifiers)) {}
-bool ObjectType::complete() {
-  return true;
+bool Type::canCast(Type *type) {
+  return this == type;
 }
+ObjectType::ObjectType(std::set<TypeQuailifier> quailifiers) : Type(std::move(quailifiers)) {}
 IntegerType::IntegerType(std::set<TypeQuailifier> quailifiers, bool bSigned, IntegerType::Kind kind)
     : mSigned(bSigned), mKind(kind), ObjectType(std::move(quailifiers)) {
   // TODO decide integer type size by platform info
@@ -37,6 +37,9 @@ IntegerType *IntegerType::getIntegerType(bool bSigned, bool bConst, bool bVolati
 unsigned int IntegerType::getSizeInBits() const {
   return mSizeInBits;
 }
+bool IntegerType::canCast(Type *type) {
+  return dynamic_cast<IntegerType*>(type) || dynamic_cast<FloatingType*>(type);
+}
 std::unique_ptr<IntegerType>
     IntegerType::sTypes[2]/*signed*/[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongLongInt)]/*kind*/;
 FloatingType *FloatingType::getFloatingType(bool bConst, bool bVolatile, FloatingType::Kind kind) {
@@ -65,26 +68,26 @@ FloatingType::FloatingType(std::set<TypeQuailifier> quailifiers, FloatingType::K
       break;
   }
 }
+bool FloatingType::canCast(Type *type) {
+  return dynamic_cast<IntegerType*>(type) || dynamic_cast<FloatingType*>(type);
+}
 std::unique_ptr<FloatingType>
     FloatingType::sTypes[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongDouble)]/*kind*/;
-VoidType::VoidType() : ObjectType(std::set<TypeQuailifier>()) {}
-bool VoidType::complete() {
-  return false;
-}
+
 FunctionType::FunctionType(std::set<TypeQuailifier> quailifiers,
-                           ObjectType *returnType,
+                           Type *returnType,
                            std::vector<ObjectType *> &&parameters)
     : mReturnType(returnType), mParameters(parameters), Type(std::move(quailifiers)) {}
-ObjectType *FunctionType::getReturnType() const {
+Type * FunctionType::getReturnType() const {
   return mReturnType;
 }
 const std::vector<ObjectType *> &FunctionType::getParameters() const {
   return mParameters;
 }
 ArrayType::ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType)
-    : mElementType(elementType), ObjectType(std::move(quailifiers)) {}
+    : PointerType(std::move(quailifiers), elementType) {}
 ArrayType::ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType, unsigned int size)
-    : mElementType(elementType), mSize(size), ObjectType(std::move(quailifiers)) {}
+    : mSize(size), PointerType(std::move(quailifiers), elementType) {}
 bool ArrayType::complete() {
   return mSize > 0;
 }
@@ -92,4 +95,7 @@ void ArrayType::setSize(unsigned int size) {
   mSize = size;
 }
 PointerType::PointerType(std::set<TypeQuailifier> quailifiers, Type *referencedType)
-    : referencedType_(referencedType), ObjectType(std::move(quailifiers)) {}
+    : mReferencedType(referencedType), ObjectType(std::move(quailifiers)) {}
+Type *PointerType::getReferencedType() const {
+  return mReferencedType;
+}

@@ -76,24 +76,67 @@ void Sema::analyzeCastExpression(CastExpressionAST *ast) {
 void Sema::analyzeUnaryExpression(UnaryExpressionAST *ast) {
 
 }
-void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
+Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
   switch (ast->getProduction()) {
     case 0: {
-      analyzePrimaryExpression(ast->left.get());
-
+      auto *primary = static_cast<PrimaryExpressionAST *>(ast->left.get());
+      analyzePrimaryExpression(primary);
       break;
     }
     case 1: {
       // 6.5.2.1 Array subscripting
-      if (dynamic_cast<const ArrayType *>(ast->left->type)) {
-        break;
+      auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
+      analyzePostfixExpression(postfix);
+      auto *exp = static_cast<ExpressionAST *>(ast->right.get());
+      analyzeExpression(exp);
+      auto *pointer = dynamic_cast<PointerType *>(postfix->type);
+      if (!pointer) {
+        throw SemaException("array left side should be pointer to complete object type",
+                            postfix->involvedTokens());
       }
-      throw SemaException("left side should be pointer to complete object type", )
+      auto *object = dynamic_cast<ObjectType *>(pointer->getReferencedType());
+      if (!object || !object->complete()) {
+        throw SemaException("array left side should be pointer to complete object type",
+                            postfix->involvedTokens());
+      }
 
+      if (!(dynamic_cast<IntegerType *>(exp->type))) {
+        throw SemaException("array right side should be an integer type",
+                            postfix->involvedTokens());
+      }
+      ast->type = pointer->getReferencedType();
+      break;
     }
+    case 2:
+      //6.5.2.2 Function calls
+      auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
+      analyzePostfixExpression(postfix);
+      auto *function = dynamic_cast<FunctionType *>(postfix->type);
+      if (!function) {
+        throw SemaException("left side must be a function type", postfix->involvedTokens());
+      }
+      auto *returnType = function->getReturnType();
+      if (dynamic_cast<ArrayType *>(returnType)) {
+        throw SemaException("return type cannot be array type", postfix->involvedTokens());
+      }
+      if (dynamic_cast<FunctionType *>(returnType)) {
+        throw SemaException("return type cannot be function type", postfix->involvedTokens());
+      }
+      auto *arguments = static_cast<ArgumentExpressionList *>(ast->right.get());
+      if (function->getParameters().size() != arguments->getArgumentList().size()) {
+        throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
+      }
+      auto para = function->getParameters().begin();
+      auto argu = arguments->getArgumentList().begin();
+      while (para != function->getParameters().end()) {
+        *argu
+      }
+      auto
+      break;
   }
+  return ast->type;
 }
-const Type * Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
+Type *Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
   switch (ast->getProduction()) {
     case 0: { // identifier
       auto *identifierAST = static_cast<IdentifierAST *>(ast->ast.get());
@@ -113,7 +156,7 @@ const Type * Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
     }
     case 1: {
       auto *integerConstAST = static_cast<IntegerConstantAST *>(ast->ast.get());
-      bool isBase10 = integerConstAST->token.getValue()[0] != 0;
+      bool isBase10 = integerConstAST->mToken.getValue()[0] != 0;
       unsigned long long int n = integerConstAST->value;
 
       IntegerType *uIntType = IntegerType::getIntegerType(false, false, false, IntegerType::Kind::kInt);
@@ -212,7 +255,7 @@ const Type * Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
     case 2: {
       auto *floatingConstAST = static_cast<FloatingConstantAST *>(ast->ast.get());
       FloatingType::Kind kind;
-      switch (floatingConstAST->suffix) {
+      switch (floatingConstAST->mSuffix) {
         case FloatingConstantAST::Suffix::None:kind = FloatingType::Kind::kDouble;
           break;
         case FloatingConstantAST::Suffix::F:kind = FloatingType::Kind::kFloat;

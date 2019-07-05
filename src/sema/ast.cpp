@@ -1,13 +1,17 @@
 #include <sema/ast.h>
 #include <iostream>
 #include <sema/symbol_tables.h>
-SemaException::SemaException(std::string error, const Token &token) :
-    token(token), error(std::move(error)) {
+SemaException::SemaException(std::string error, const Token &token) : error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
 }
 const char *SemaException::what() const noexcept {
   return error.c_str();
 }
+SemaException::SemaException(std::string error, const Token &start, const Token &end) : error(std::move(error)) {
+  this->error.append("\n").append(Token::getTokenInLine(start, end));
+}
+SemaException::SemaException(std::string error, std::pair<const Token &, const Token &> range)
+    : SemaException(std::move(error), range.first, range.second) {}
 TranslationUnitAST::TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations, SymbolTable &table)
     : AST(AST::Kind::TRANSLATION_UNIT), external_declarations(std::move(external_declarations)), table(table) {}
 void TranslationUnitAST::print(int indent) {
@@ -407,6 +411,12 @@ void PrimaryExpressionAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
 }
+const Token &PrimaryExpressionAST::getLeftMostToken() {
+  return ast->getLeftMostToken();
+}
+const Token &PrimaryExpressionAST::getRightMostToken() {
+  return ast->getRightMostToken();
+}
 AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression)
     : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0), conditional_expression(std::move(conditional_expression)) {}
 AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression,
@@ -423,21 +433,27 @@ void AssignmentExpressionAST::print(int indent) {
     assignment_expression->print(indent);
   }
 }
-CharacterConstantAST::CharacterConstantAST(std::string string)
-    : AST(AST::Kind::CHARACTER_CONSTANT), c(string.c_str()[0]) {}
+CharacterConstantAST::CharacterConstantAST(const Token &token)
+    : AST(AST::Kind::CHARACTER_CONSTANT), mToken(token), c(token.getValue().c_str()[0]) {}
+const Token &CharacterConstantAST::getLeftMostToken() {
+  return mToken;
+}
+const Token &CharacterConstantAST::getRightMostToken() {
+  return mToken;
+}
 FloatingConstantAST::FloatingConstantAST(const Token &token)
-    : AST(AST::Kind::FLOATING_CONSTANT), token(token) {
+    : AST(AST::Kind::FLOATING_CONSTANT), mToken(token) {
   std::string::size_type sz;
   try {
-    value = std::stof(this->token.getValue(), &sz);
-    const std::string &sub = this->token.getValue().substr(sz);
+    mValue = std::stof(this->mToken.getValue(), &sz);
+    const std::string &sub = this->mToken.getValue().substr(sz);
     if (sub.empty()) {
-      suffix = Suffix::None;
+      mSuffix = Suffix::None;
     } else if (sub.size() == 1) {
       if (sub[0] == 'f' || sub[0] == 'F') {
-        suffix = Suffix::F;
+        mSuffix = Suffix::F;
       } else if (sub[0] == 'l' || sub[0] == 'L') {
-        suffix = Suffix::L;
+        mSuffix = Suffix::L;
       } else {
         throw SemaException("cannot parse integer constant", token);
       }
@@ -451,7 +467,13 @@ FloatingConstantAST::FloatingConstantAST(const Token &token)
 void FloatingConstantAST::print(int indent) {
   AST::print(indent);
   AST::printIndent(++indent);
-  std::cout << token.getValue() << std::endl;
+  std::cout << mToken.getValue() << std::endl;
+}
+const Token &FloatingConstantAST::getLeftMostToken() {
+  return mToken;
+}
+const Token &FloatingConstantAST::getRightMostToken() {
+  return mToken;
 }
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST> id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
@@ -622,12 +644,18 @@ void IdentifierAST::print(int indent) {
   AST::printIndent(++indent);
   std::cout << token.getValue() << std::endl;
 }
-StringAST::StringAST(std::string string) : AST(AST::Kind::STRING), mString(std::move(string)) {
+StringAST::StringAST(const Token &token) : AST(AST::Kind::STRING), mToken(token) {
   std::set<TypeQuailifier> quailifiers;
   quailifiers.emplace(TypeQuailifier::kCONST);
   mType = std::make_unique<ArrayType>(std::move(quailifiers),
                                       IntegerType::getIntegerType(false, true, false, IntegerType::Kind::kChar),
-                                      mString.size());
+                                      mToken.getValue().size());
+}
+const Token &StringAST::getLeftMostToken() {
+  return mToken;
+}
+const Token &StringAST::getRightMostToken() {
+  return mToken;
 }
 AST::AST(AST::Kind kind, int id) : kind(kind), productionId(id) {}
 const char *AST::toString() {
@@ -698,11 +726,14 @@ void AST::printIndent(int indent) {
     std::cout << "\t";
   }
 }
+std::pair<const Token &, const Token &> AST::involvedTokens() {
+  return {getLeftMostToken(), getRightMostToken()};
+}
 IntegerConstantAST::IntegerConstantAST(const Token &token)
-    : AST(AST::Kind::INTEGER_CONSTANT), token(token) {
+    : AST(AST::Kind::INTEGER_CONSTANT), mToken(token) {
   std::string::size_type sz;
   try {
-    this->value = std::stoull(this->token.getValue(), &sz, 0);
+    this->value = std::stoull(this->mToken.getValue(), &sz, 0);
     const std::string sub = token.getValue().substr(sz);
     if (sub.empty()) {
       this->suffix = Suffix::None;
@@ -761,7 +792,13 @@ IntegerConstantAST::IntegerConstantAST(const Token &token)
 void IntegerConstantAST::print(int indent) {
   AST::print(indent);
   printIndent(++indent);
-  std::cout << token.getValue() << std::endl;
+  std::cout << mToken.getValue() << std::endl;
+}
+const Token &IntegerConstantAST::getLeftMostToken() {
+  return mToken;
+}
+const Token &IntegerConstantAST::getRightMostToken() {
+  return mToken;
 }
 void ArgumentExpressionList::print(int indent) {
   AST::print(indent);
@@ -772,3 +809,6 @@ void ArgumentExpressionList::print(int indent) {
 }
 ArgumentExpressionList::ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList)
     : AST(AST::Kind::ARGUMENT_EXPRESSION_LIST), mArgumentList(std::move(argumentList)) {}
+const nts<AssignmentExpressionAST> &ArgumentExpressionList::getArgumentList() const {
+  return mArgumentList;
+}

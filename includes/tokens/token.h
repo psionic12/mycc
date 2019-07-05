@@ -137,7 +137,7 @@ struct Position {
 class Token {
  public:
   Token(std::ifstream &ifstream, Position position, TokenKind kind, std::string value = "")
-      : ifstream(ifstream), position(position), kind(kind), value(std::move(value)) {}
+      : sIfstream(ifstream), position(position), kind(kind), value(std::move(value)) {}
 
   const Position &getPosition() const {
     return position;
@@ -158,25 +158,49 @@ class Token {
     return value;
   }
   std::string getTokenInLine() const {
-    std::streampos current_pos = ifstream.tellg();
-    ifstream.clear();
-    ifstream.seekg(getPosition().line);
+    std::streampos current_pos = sIfstream.tellg();
+    sIfstream.clear();
+    sIfstream.seekg(getPosition().line);
     std::string s1;
     std::string s2("\n");
     while (true) {
-      char c = (char) ifstream.peek();
+      char c = (char) sIfstream.peek();
       if (c == '\r' || c == '\n' || c == EOF) {
-        ifstream.seekg(current_pos);
+        sIfstream.seekg(current_pos);
         s1.append(s2);
         return s1;
       } else {
         s1.push_back(c);
-        if (ifstream.tellg() >= getPosition().pos_start && ifstream.tellg() <= getPosition().pos_end) {
+        if (sIfstream.tellg() >= getPosition().pos_start && sIfstream.tellg() <= getPosition().pos_end) {
           s2.push_back('~');
         } else {
           s2.push_back(' ');
         }
-        ifstream.ignore();
+        sIfstream.ignore();
+      }
+
+    }
+  }
+  static std::string getTokenInLine(const Token& start, const Token& end) {
+    std::streampos current_pos = sIfstream.tellg();
+    sIfstream.clear();
+    sIfstream.seekg(start.getPosition().line);
+    std::string s1;
+    std::string s2("\n");
+    while (true) {
+      char c = (char) sIfstream.peek();
+      if (c == '\r' || c == '\n' || c == EOF) {
+        sIfstream.seekg(current_pos);
+        s1.append(s2);
+        return s1;
+      } else {
+        s1.push_back(c);
+        if (sIfstream.tellg() >= start.getPosition().pos_start && sIfstream.tellg() <= end.getPosition().pos_end) {
+          s2.push_back('~');
+        } else {
+          s2.push_back(' ');
+        }
+        sIfstream.ignore();
       }
 
     }
@@ -276,6 +300,6 @@ class Token {
   const Position position;
   const TokenKind kind;
   const std::string value;
-  std::ifstream &ifstream;
+  static std::ifstream &sIfstream;
 };
 #endif //MYCCPILER_TOKEN_H

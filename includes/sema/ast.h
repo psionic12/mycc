@@ -13,9 +13,10 @@ class SymbolTable;
 class SemaException : public std::exception {
  public:
   SemaException(std::string error, const Token &token);
+  SemaException(std::string error, const Token &start, const Token &end);
+  SemaException(std::string error, std::pair<const Token &, const Token &> range);
   const char *what() const noexcept override;
  private:
-  const Token &token;
   std::string error;
 };
 class AST {
@@ -86,12 +87,15 @@ class AST {
   virtual const char *toString();
   virtual void print(int indent = 0);
   void printIndent(int indent);
-  virtual std::pair<const Token &, const Token &> invovedTokens() = 0;
+  std::pair<const Token &, const Token &> involvedTokens();
   virtual ~AST() = default;
+  virtual const Token& getLeftMostToken() = 0;
+  virtual const Token& getRightMostToken() = 0;
  private:
   const Kind kind;
   //the id of which production
   const int productionId;
+
 };
 template<typename T>
 class Terminal {
@@ -146,13 +150,15 @@ class CompoundStatementAST;
 class StatementAST;
 class IExpression {
  public:
-  const Type *type;
+  Type *type;
 };
 class StringAST : public AST {
  public:
-  StringAST(std::string string);
-  std::string mString;
+  StringAST(const Token& token);
   std::unique_ptr<Type> mType;
+  const Token& mToken;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class IdentifierAST : public AST {
  public:
@@ -160,11 +166,6 @@ class IdentifierAST : public AST {
   const Token &token;
   void print(int indent) override;
 };
-//class StructOrUnionAST : public AST {
-// public:
-//  StructOrUnionAST(StructOrUnion struct_or_union);
-//  const StructOrUnion struct_or_union;
-//};
 class TypedefNameAST : public AST {
  public:
   TypedefNameAST(nt<IdentifierAST> identifier);
@@ -177,11 +178,6 @@ class TypeQualifierAST : public AST {
   const Terminal<TypeQuailifier> op;
   void print(int indent) override;
 };
-//class UnaryOperatorAST : public AST {
-// public:
-//  UnaryOperatorAST(UnaryOp op);
-//  const UnaryOp op;
-//};
 class JumpStatementAST : public AST {
  public:
   JumpStatementAST(nt<IdentifierAST> id);
@@ -297,15 +293,20 @@ class FloatingConstantAST : public AST {
     F,
     L,
   };
-  const Token &token;
-  double value;
-  Suffix suffix;
+  const Token &mToken;
+  double mValue;
+  Suffix mSuffix;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class CharacterConstantAST : public AST {
  public:
-  CharacterConstantAST(std::string);
+  CharacterConstantAST(const Token& token);
+  const Token& mToken;
   char c;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class IntegerConstantAST : public AST {
  public:
@@ -318,18 +319,13 @@ class IntegerConstantAST : public AST {
     LL,
     ULL,
   };
-  const Token &token;
+  const Token &mToken;
   unsigned long long value;
   Suffix suffix;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
-//class ConstantAST : public AST {
-// public:
-//  ConstantAST(nt<IntegerConstantAST>);
-//  ConstantAST(nt<CharacterConstantAST>);
-//  ConstantAST(nt<FloatingConstantAST>);
-//  ConstantAST(nt<EnumerationConstantAST>);
-//};
 class AssignmentExpressionAST : public AST {
  public:
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
@@ -352,6 +348,8 @@ class PrimaryExpressionAST : public AST, public IExpression {
   PrimaryExpressionAST(nt<ExpressionAST>);
   const nt<AST> ast;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class ArgumentExpressionList : public AST, public IExpression {
  public:
@@ -359,6 +357,8 @@ class ArgumentExpressionList : public AST, public IExpression {
   void print(int indent) override;
  private:
   nts<AssignmentExpressionAST> mArgumentList;
+ public:
+  const nts<AssignmentExpressionAST> &getArgumentList() const;
 };
 class PostfixExpressionAST : public AST, public IExpression {
  public:
@@ -376,7 +376,7 @@ class PostfixExpressionAST : public AST, public IExpression {
   PostfixExpressionAST(nt<PostfixExpressionAST> left, identifierOperator io, nt<IdentifierAST> right);
   PostfixExpressionAST(nt<PostfixExpressionAST> left, Xcrement x);
   void print(int indent) override;
-  nt<IExpression> left;
+  nt<AST> left;
   nt<AST> right;
 };
 class TypeNameAST : public AST {
