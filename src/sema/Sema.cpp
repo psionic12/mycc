@@ -107,11 +107,12 @@ Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
       ast->type = pointer->getReferencedType();
       break;
     }
-    case 2:
+    case 2: {
       //6.5.2.2 Function calls
       auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
       analyzePostfixExpression(postfix);
-      auto *function = dynamic_cast<FunctionType *>(postfix->type);
+      auto *p = dynamic_cast<PointerType *>(postfix->type);
+      auto *function = dynamic_cast<FunctionType *>(p->getReferencedType());
       if (!function) {
         throw SemaException("left side must be a function type", postfix->involvedTokens());
       }
@@ -127,12 +128,57 @@ Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
         throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
       }
       auto para = function->getParameters().begin();
-      auto argu = arguments->getArgumentList().begin();
+      auto arg = arguments->getArgumentList().begin();
       while (para != function->getParameters().end()) {
-        *argu
+        analyzeAssignmentExpression(arg->get());
+        auto *argType = dynamic_cast<ObjectType *>((*arg)->type);
+        if (!argType) {
+          throw SemaException("arguments must be object type", postfix->involvedTokens());
+        }
+        if (!argType->complete()) {
+          throw SemaException("arguments must be completed type", postfix->involvedTokens());
+        }
+        if (!argType->compatible(*para)) {
+          throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
+        }
       }
-      auto
+      ast->type = function->getReturnType();
       break;
+    }
+    case 3:
+    case 4: {
+      //6.5.2.3 Structure and union members
+      auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
+      analyzePostfixExpression(postfix);
+      CompoundType *compoundType;
+      if (ast->getProduction() == 3) {
+        if (!dynamic_cast<StructType *>(postfix->type) && !dynamic_cast<UnionType *>(postfix->type)) {
+          throw SemaException("left side must be a struct type or union type", postfix->involvedTokens());
+        } else {
+          compoundType = dynamic_cast<CompoundType *>(postfix->type);
+        }
+      } else {
+        if (auto *p = dynamic_cast<PointerType *>(postfix->type)) {
+          if (!dynamic_cast<StructType *>(p->getReferencedType())
+              && !dynamic_cast<UnionType *>(p->getReferencedType())) {
+            throw SemaException("left side must be a pointer to a struct type or union type",
+                                postfix->involvedTokens());
+          } else {
+            compoundType = dynamic_cast<CompoundType *>(p->getReferencedType());
+          }
+        } else {
+          throw SemaException("left side must be a pointer type", postfix->involvedTokens());
+        }
+      }
+      auto *id = static_cast<IdentifierAST *>(ast->right.get());
+      const std::string &memberName = id->token.getValue();
+      ast->type = compoundType->getMember(memberName);
+      if (!ast->type) {
+        throw SemaException(std::string(memberName).append(" is not a member of ").append(compoundType->getTag()),
+                            postfix->involvedTokens());
+      }
+      break;
+    }
   }
   return ast->type;
 }

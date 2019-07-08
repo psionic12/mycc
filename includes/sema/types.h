@@ -10,7 +10,8 @@ class Type {
  public:
   Type(std::set<TypeQuailifier> quailifiers);
   virtual ~Type() = default;
-  virtual bool canCast(Type* type);
+  virtual bool compatible(Type *type);
+  virtual bool complete();
  private:
   std::set<TypeQuailifier> mQquailifiers;
 };
@@ -32,7 +33,7 @@ class IntegerType : public ObjectType {
   IntegerType(std::set<TypeQuailifier> quailifiers, bool bSigned, Kind kind);
   static IntegerType *getIntegerType(bool bSigned, bool bConst, bool bVolatile, Kind kind);
   unsigned int getSizeInBits() const;
-  bool canCast(Type *type) override;
+  bool compatible(Type *type) override;
  private:
   bool mSigned;
   Kind mKind;
@@ -50,7 +51,7 @@ class FloatingType : public ObjectType {
   };
   static FloatingType *getFloatingType(bool bConst, bool bVolatile, Kind kind);
   FloatingType(std::set<TypeQuailifier> quailifiers, Kind kind);
-  bool canCast(Type *type) override;
+  bool compatible(Type *type) override;
  private:
   static std::unique_ptr<FloatingType>
       sTypes[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongDouble)]/*kind*/;
@@ -61,6 +62,7 @@ class FloatingType : public ObjectType {
 class VoidType : public Type {
  public:
   static VoidType sVoidType;
+  bool complete() override;
 };
 
 class FunctionType : public Type {
@@ -71,10 +73,6 @@ class FunctionType : public Type {
  private:
   Type *mReturnType;
   std::vector<ObjectType *> mParameters;
-};
-
-//TODO
-class EnumerationType : public ObjectType {
 };
 
 class PointerType : public ObjectType {
@@ -97,13 +95,33 @@ class ArrayType : public PointerType {
   unsigned int mSize = 0;
 };
 
+class CompoundType : public ObjectType {
+ public:
+  CompoundType(std::set<TypeQuailifier> quailifiers,
+              std::string tag,
+              std::vector<std::pair<std::string, Type *>> members);
+  bool isMember(const std::string& name);
+  Type* getMember(const std::string& name);
+ private:
+  std::string mTag;
+  std::vector<std::pair<std::string, Type*>> mMembers;
+ public:
+  const std::string &getTag() const;
+};
+
 //TODO
-class StructType : public ObjectType {
+class StructType : public CompoundType {
 
 };
 
 //TODO
-class UnionType : public ObjectType {
+class UnionType : public CompoundType {
 
+};
+
+
+//TODO
+class EnumerationType : public CompoundType {
 };
 #endif //MYCCPILER_TYPES_H
+

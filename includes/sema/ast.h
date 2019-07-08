@@ -326,7 +326,7 @@ class IntegerConstantAST : public AST {
   const Token &getLeftMostToken() override;
   const Token &getRightMostToken() override;
 };
-class AssignmentExpressionAST : public AST {
+class AssignmentExpressionAST : public AST, public IExpression {
  public:
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression,

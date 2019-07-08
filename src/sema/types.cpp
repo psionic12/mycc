@@ -1,7 +1,10 @@
 #include <sema/types.h>
 Type::Type(std::set<TypeQuailifier> quailifiers) : mQquailifiers(std::move(quailifiers)) {}
-bool Type::canCast(Type *type) {
+bool Type::compatible(Type *type) {
   return this == type;
+}
+bool Type::complete() {
+  return true;
 }
 ObjectType::ObjectType(std::set<TypeQuailifier> quailifiers) : Type(std::move(quailifiers)) {}
 IntegerType::IntegerType(std::set<TypeQuailifier> quailifiers, bool bSigned, IntegerType::Kind kind)
@@ -37,8 +40,8 @@ IntegerType *IntegerType::getIntegerType(bool bSigned, bool bConst, bool bVolati
 unsigned int IntegerType::getSizeInBits() const {
   return mSizeInBits;
 }
-bool IntegerType::canCast(Type *type) {
-  return dynamic_cast<IntegerType*>(type) || dynamic_cast<FloatingType*>(type);
+bool IntegerType::compatible(Type *type) {
+  return dynamic_cast<IntegerType *>(type) || dynamic_cast<FloatingType *>(type);
 }
 std::unique_ptr<IntegerType>
     IntegerType::sTypes[2]/*signed*/[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongLongInt)]/*kind*/;
@@ -68,8 +71,8 @@ FloatingType::FloatingType(std::set<TypeQuailifier> quailifiers, FloatingType::K
       break;
   }
 }
-bool FloatingType::canCast(Type *type) {
-  return dynamic_cast<IntegerType*>(type) || dynamic_cast<FloatingType*>(type);
+bool FloatingType::compatible(Type *type) {
+  return dynamic_cast<IntegerType *>(type) || dynamic_cast<FloatingType *>(type);
 }
 std::unique_ptr<FloatingType>
     FloatingType::sTypes[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongDouble)]/*kind*/;
@@ -78,7 +81,7 @@ FunctionType::FunctionType(std::set<TypeQuailifier> quailifiers,
                            Type *returnType,
                            std::vector<ObjectType *> &&parameters)
     : mReturnType(returnType), mParameters(parameters), Type(std::move(quailifiers)) {}
-Type * FunctionType::getReturnType() const {
+Type *FunctionType::getReturnType() const {
   return mReturnType;
 }
 const std::vector<ObjectType *> &FunctionType::getParameters() const {
@@ -98,4 +101,30 @@ PointerType::PointerType(std::set<TypeQuailifier> quailifiers, Type *referencedT
     : mReferencedType(referencedType), ObjectType(std::move(quailifiers)) {}
 Type *PointerType::getReferencedType() const {
   return mReferencedType;
+}
+bool VoidType::complete() {
+  return false;
+}
+CompoundType::CompoundType(std::set<TypeQuailifier> quailifiers,
+                         std::string tag,
+                         std::vector<std::pair<std::string, Type *>> members)
+    : ObjectType(std::move(quailifiers)), mTag(std::move(tag)), mMembers(std::move(members)) {}
+bool CompoundType::isMember(const std::string &name) {
+  for(const auto& member : mMembers) {
+    if(name == member.first) {
+      return true;
+    }
+  }
+  return false;
+}
+const std::string &CompoundType::getTag() const {
+  return mTag;
+}
+Type *CompoundType::getMember(const std::string &name) {
+  for(const auto& member : mMembers) {
+    if(name == member.first) {
+      return member.second;
+    }
+  }
+  return nullptr;
 }
