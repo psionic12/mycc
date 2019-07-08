@@ -150,7 +150,7 @@ class CompoundStatementAST;
 class StatementAST;
 class IExpression {
  public:
-  Type *type;
+  QualifiedType mType;
 };
 class StringAST : public AST {
  public:
@@ -174,8 +174,8 @@ class TypedefNameAST : public AST {
 };
 class TypeQualifierAST : public AST {
  public:
-  TypeQualifierAST(Terminal<TypeQuailifier> op);
-  const Terminal<TypeQuailifier> op;
+  TypeQualifierAST(Terminal<TypeQualifier> op);
+  const Terminal<TypeQualifier> op;
   void print(int indent) override;
 };
 class JumpStatementAST : public AST {

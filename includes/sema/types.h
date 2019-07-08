@@ -8,66 +8,57 @@
 class Type {
  private:
  public:
-  Type(std::set<TypeQuailifier> quailifiers);
   virtual ~Type() = default;
   virtual bool compatible(Type *type);
   virtual bool complete();
- private:
-  std::set<TypeQuailifier> mQquailifiers;
 };
 
 class ObjectType : public Type {
- public:
-  ObjectType(std::set<TypeQuailifier> quailifiers);
 };
 
+// Types saved as public static members
 class IntegerType : public ObjectType {
  public:
-  enum class Kind {
-    kChar = 1,
-    kShortInt,
-    kInt,
-    kLongInt,
-    kLongLongInt,
-  };
-  IntegerType(std::set<TypeQuailifier> quailifiers, bool bSigned, Kind kind);
-  static IntegerType *getIntegerType(bool bSigned, bool bConst, bool bVolatile, Kind kind);
+  IntegerType(unsigned int mSizeInBits);
   unsigned int getSizeInBits() const;
   bool compatible(Type *type) override;
+  static const IntegerType sCharType;
+  static const IntegerType sShortIntType;
+  static const IntegerType sIntType;
+  static const IntegerType sLongIntType;
+  static const IntegerType sLongLongIntType;
+  static const IntegerType sUnsignedCharType;
+  static const IntegerType sUnsignedShortIntType;
+  static const IntegerType sUnsignedIntType;
+  static const IntegerType sUnsignedLongIntType;
+  static const IntegerType sUnsignedLongLongIntType;
  private:
-  bool mSigned;
-  Kind mKind;
   unsigned int mSizeInBits;
-  static std::unique_ptr<IntegerType>
-      sTypes[2]/*signed*/[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongLongInt)]/*kind*/;
 };
 
+// Types saved as public static members
 class FloatingType : public ObjectType {
  public:
-  enum class Kind {
-    kFloat = 1,
-    kDouble,
-    kLongDouble,
-  };
-  static FloatingType *getFloatingType(bool bConst, bool bVolatile, Kind kind);
-  FloatingType(std::set<TypeQuailifier> quailifiers, Kind kind);
+  FloatingType(unsigned int mSizeInBits);
   bool compatible(Type *type) override;
+  static const FloatingType sFloatType;
+  static const FloatingType sDoubleType;
+  static const FloatingType sLongDoubleType;
  private:
-  static std::unique_ptr<FloatingType>
-      sTypes[2]/*const*/[2]/*volatile*/[static_cast<int>(Kind::kLongDouble)]/*kind*/;
-  Kind mKind;
   unsigned int mSizeInBits;
 };
 
-class VoidType : public Type {
+// Types saved as public static members
+class VoidType : public ObjectType {
  public:
   static VoidType sVoidType;
   bool complete() override;
 };
 
+// Types stored in symbol table
 class FunctionType : public Type {
  public:
-  FunctionType(std::set<TypeQuailifier> quailifiers, Type *returnType, std::vector<ObjectType *> &&parameters);
+  FunctionType(Type *returnType, std::vector<ObjectType *> &&parameters);
   Type *getReturnType() const;
   const std::vector<ObjectType *> &getParameters() const;
  private:
@@ -75,53 +66,69 @@ class FunctionType : public Type {
   std::vector<ObjectType *> mParameters;
 };
 
+// Types created dynamically
 class PointerType : public ObjectType {
  public:
-  PointerType(std::set<TypeQuailifier> quailifiers, Type *referencedType);
+  PointerType(Type *referencedType);
  private:
   Type *mReferencedType;
  public:
   Type *getReferencedType() const;
 };
 
-class ArrayType : public PointerType {
+// Types create dynamically
+class ArrayType : public Type {
  public:
-  ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType);
-  ArrayType(std::set<TypeQuailifier> quailifiers, ObjectType *elementType, unsigned int size);
+  ArrayType(ObjectType *elementType);
+  ArrayType(ObjectType *elementType, unsigned int size);
   bool complete() override;
   void setSize(unsigned int size);
  private:
   //TODO is int enough?
   unsigned int mSize = 0;
+  ObjectType *mElementType;
 };
 
+// Types stored in symbol table
 class CompoundType : public ObjectType {
  public:
-  CompoundType(std::set<TypeQuailifier> quailifiers,
-              std::string tag,
-              std::vector<std::pair<std::string, Type *>> members);
-  bool isMember(const std::string& name);
-  Type* getMember(const std::string& name);
+  CompoundType(std::string tag,
+               std::vector<std::pair<std::string, Type *>> members);
+  bool isMember(const std::string &name);
+  Type *getMember(const std::string &name);
  private:
   std::string mTag;
-  std::vector<std::pair<std::string, Type*>> mMembers;
+  std::vector<std::pair<std::string, Type *>> mMembers;
  public:
   const std::string &getTag() const;
 };
 
 //TODO
 class StructType : public CompoundType {
-
+ public:
+  StructType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members);
 };
 
 //TODO
 class UnionType : public CompoundType {
-
+ public:
+  UnionType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members);
 };
-
 
 //TODO
 class EnumerationType : public CompoundType {
+ public:
+  EnumerationType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members);
+};
+
+class QualifiedType {
+ private:
+  ObjectType *mType;
+  std::set<TypeQualifier> mQualifiers;
+ public:
+  Type *getType() const;
+  const std::set<TypeQualifier> &getQualifiers() const;
+  QualifiedType(ObjectType *type, std::set<TypeQualifier> qualifiers);
 };
 #endif //MYCCPILER_TYPES_H
 

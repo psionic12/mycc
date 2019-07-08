@@ -626,7 +626,7 @@ void JumpStatementAST::print(int indent) {
     expression->print(indent);
   }
 }
-TypeQualifierAST::TypeQualifierAST(Terminal<TypeQuailifier> op) : AST(AST::Kind::TYPE_QUALIFIER), op(op) {}
+TypeQualifierAST::TypeQualifierAST(Terminal<TypeQualifier> op) : AST(AST::Kind::TYPE_QUALIFIER), op(op) {}
 void TypeQualifierAST::print(int indent) {
   AST::print(indent);
   op.print(++indent);
@@ -645,8 +645,8 @@ void IdentifierAST::print(int indent) {
   std::cout << token.getValue() << std::endl;
 }
 StringAST::StringAST(const Token &token) : AST(AST::Kind::STRING), mToken(token) {
-  std::set<TypeQuailifier> quailifiers;
-  quailifiers.emplace(TypeQuailifier::kCONST);
+  std::set<TypeQualifier> quailifiers;
+  quailifiers.emplace(TypeQualifier::kCONST);
   mType = std::make_unique<ArrayType>(std::move(quailifiers),
                                       IntegerType::getIntegerType(false, true, false, IntegerType::Kind::kChar),
                                       mToken.getValue().size());

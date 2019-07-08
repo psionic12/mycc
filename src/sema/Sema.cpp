@@ -189,11 +189,11 @@ Type *Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
       auto *symbol = table->lookup(identifierAST->token);
       SymbolKind kind = symbol->getKind();
       if (kind == SymbolKind::OBJECT) {
-        ast->type = static_cast<ObjectSymbol *>(symbol)->getType();
+        ast->mType = static_cast<ObjectSymbol *>(symbol)->getType();
       } else if (kind == SymbolKind::FUNCTION) {
-        ast->type = static_cast<FunctionSymbol *>(symbol)->getType();
+        ast->mType = static_cast<FunctionSymbol *>(symbol)->convertToPointer();
       } else if (kind == SymbolKind::ENUMERATION_CONSTANT) {
-        ast->type = static_cast<EnumConstSymbol *>(symbol)->getType();
+        ast->mType = static_cast<EnumConstSymbol *>(symbol)->getType();
       } else {
         throw SemaException("identifier as a primary expression must be object or function or enumeration const",
                             identifierAST->token);

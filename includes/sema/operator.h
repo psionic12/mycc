@@ -67,7 +67,7 @@ enum class StructOrUnion {
   kUNION,
 };
 
-enum class TypeQuailifier {
+enum class TypeQualifier {
   kCONST,
   kVOLATILE,
   kNone,

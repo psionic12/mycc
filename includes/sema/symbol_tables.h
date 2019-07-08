@@ -1,3 +1,5 @@
+#include <utility>
+
 #ifndef MYCCPILER_SYMBOL_TABLES_H
 #define MYCCPILER_SYMBOL_TABLES_H
 
@@ -55,53 +57,69 @@ inline bool operator!=(SymbolKind kind, const ISymbol *symbol) {
 
 class ObjectSymbol : public ISymbol {
  public:
-  ObjectSymbol(std::unique_ptr<Type> &&type, bool is_const = false, bool is_volatile = false)
-      : type_(std::move(type)), const_(is_const), volatile_(is_volatile) {}
+  ObjectSymbol(ObjectType *type, std::set<TypeQualifier> qualifiers)
+      : mObjectType(type), mQualifiers(std::move(qualifiers)) {}
   SymbolKind getKind() const override {
     return SymbolKind::OBJECT;
   }
-  Type *getType() {
-    return type_.get();
+  QualifiedType getQualifiedType() {
+    return QualifiedType(mObjectType, mQualifiers);
   }
  private:
-  std::unique_ptr<Type> type_;
-  bool const_;
-  bool volatile_;
+  std::set<TypeQualifier> mQualifiers;
+  ObjectType *mObjectType;
 };
 
 class FunctionSymbol : public ISymbol {
  public:
-  FunctionSymbol(std::unique_ptr<FunctionType> &&type) : type_(std::move(type)) {}
+  FunctionSymbol(std::unique_ptr<FunctionType> &&type)
+      : mFunctionType(std::move(type)), mPointer(std::make_unique<PointerType>(mFunctionType.get())) {}
   SymbolKind getKind() const override {
     return SymbolKind::FUNCTION;
   }
-  FunctionType *getType() {
-    return type_.get();
+  QualifiedType convertToPointer() {
+    return QualifiedType(mPointer.get(), std::set<TypeQualifier>{TypeQualifier::kNone});
   }
  private:
-  std::unique_ptr<FunctionType> type_;
-
+  std::unique_ptr<FunctionType> mFunctionType;
+  std::unique_ptr<PointerType> mPointer; // this is used for conversion from function type to pointer to function type
 };
 
 class TagSymbol : public ISymbol {
  public:
+  TagSymbol(std::unique_ptr<CompoundType> &&mCompoundType) : mCompoundType(std::move(mCompoundType)) {}
   SymbolKind getKind() const override {
     return SymbolKind::TAG;
   }
+ private:
+  std::unique_ptr<CompoundType> mCompoundType;
 };
 
-class MemberSymbol : public ISymbol {
- public:
-  SymbolKind getKind() const override {
-    return SymbolKind::MEMBER;
-  }
-};
+//class MemberSymbol : public ISymbol {
+// public:
+//  SymbolKind getKind() const override {
+//    return SymbolKind::MEMBER;
+//  }
+//};
 
 class TypedefSymbol : public ISymbol {
  public:
   SymbolKind getKind() const override {
     return SymbolKind::TYPEDEF;
   }
+  TypedefSymbol(Type *mType, const std::set<TypeQualifier> &mQualifiers) : mQualifiers(mQualifiers), mType(mType) {}
+  QualifiedType convertToQualifiedType() {
+    if (auto *p = dynamic_cast<FunctionType *>(mType)) {
+
+    } else if (auto *p = dynamic_cast<ArrayType *>(mType)) {
+
+    } else {
+      return QualifiedType(mType, mQualifiers);
+    }
+  }
+ private:
+  std::set<TypeQualifier> mQualifiers;
+  Type *mType;
 };
 
 class LabelSymbol : public ISymbol {
@@ -116,12 +134,12 @@ class EnumConstSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::ENUMERATION_CONSTANT;
   }
-  EnumConstSymbol(EnumerationType *type_) : type_(type_) {}
-  EnumerationType *getType() const {
-    return type_;
+  EnumConstSymbol(QualifiedType mType) : mType(std::move(mType)) {}
+  const QualifiedType &getType() const {
+    return mType;
   }
  private:
-  EnumerationType *type_;
+  QualifiedType mType;
 };
 
 class SymbolTable : std::map<std::string, std::unique_ptr<ISymbol>> {

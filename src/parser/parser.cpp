@@ -232,16 +232,16 @@ AssignmentOp Parser::parseAssignmentOperator() {
 ///<type-qualifier> ::= const
 ///                   | volatile
 nt<TypeQualifierAST> Parser::parseTypeQualifier() {
-  TypeQuailifier quailifier;
+  TypeQualifier quailifier;
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_CONST:quailifier = TypeQuailifier::kCONST;
+    case TokenKind::TOKEN_CONST:quailifier = TypeQualifier::kCONST;
       break;
-    case TokenKind::TOKEN_VOLATILE:quailifier = TypeQuailifier::kVOLATILE;
+    case TokenKind::TOKEN_VOLATILE:quailifier = TypeQualifier::kVOLATILE;
       break;
     default:throw parseError(R"(type qualifier expected "const" or "volatile")");
   }
   lex.consumeToken();
-  return std::make_unique<TypeQualifierAST>(Terminal<TypeQuailifier>(quailifier, lex.peek()));
+  return std::make_unique<TypeQualifierAST>(Terminal<TypeQualifier>(quailifier, lex.peek()));
 }
 
 ///<enumerator> ::= <identifier>
