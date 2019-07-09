@@ -89,8 +89,8 @@ class AST {
   void printIndent(int indent);
   std::pair<const Token &, const Token &> involvedTokens();
   virtual ~AST() = default;
-  virtual const Token& getLeftMostToken() = 0;
-  virtual const Token& getRightMostToken() = 0;
+  virtual const Token &getLeftMostToken() = 0;
+  virtual const Token &getRightMostToken() = 0;
  private:
   const Kind kind;
   //the id of which production
@@ -150,13 +150,15 @@ class CompoundStatementAST;
 class StatementAST;
 class IExpression {
  public:
-  QualifiedType mType;
+  const Type *mType = nullptr;
+  std::set<TypeQualifier> qualifiers{};
+  bool lvalue = false;
 };
 class StringAST : public AST {
  public:
-  StringAST(const Token& token);
+  StringAST(const Token &token);
   std::unique_ptr<Type> mType;
-  const Token& mToken;
+  const Token &mToken;
   const Token &getLeftMostToken() override;
   const Token &getRightMostToken() override;
 };
@@ -302,8 +304,8 @@ class FloatingConstantAST : public AST {
 };
 class CharacterConstantAST : public AST {
  public:
-  CharacterConstantAST(const Token& token);
-  const Token& mToken;
+  CharacterConstantAST(const Token &token);
+  const Token &mToken;
   char c;
   const Token &getLeftMostToken() override;
   const Token &getRightMostToken() override;

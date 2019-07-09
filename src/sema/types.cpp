@@ -1,8 +1,8 @@
 #include <sema/types.h>
-bool Type::compatible(Type *type) {
+bool Type::compatible(Type *type) const {
   return this == type;
 }
-bool Type::complete() {
+bool Type::complete() const {
   return true;
 }
 unsigned int IntegerType::getSizeInBits() const {
@@ -18,11 +18,11 @@ const IntegerType IntegerType::sUnsignedShortIntType(16);
 const IntegerType IntegerType::sUnsignedIntType(32);
 const IntegerType IntegerType::sUnsignedLongIntType(64);
 const IntegerType IntegerType::sUnsignedLongLongIntType(64);
-bool IntegerType::compatible(Type *type) {
+bool IntegerType::compatible(Type *type) const {
   return dynamic_cast<IntegerType *>(type) || dynamic_cast<FloatingType *>(type);
 }
 IntegerType::IntegerType(unsigned int mSizeInBits) : mSizeInBits(mSizeInBits) {}
-bool FloatingType::compatible(Type *type) {
+bool FloatingType::compatible(Type *type) const {
   return dynamic_cast<IntegerType *>(type) || dynamic_cast<FloatingType *>(type);
 }
 const FloatingType FloatingType::sFloatType(32);
@@ -39,10 +39,10 @@ const std::vector<ObjectType *> &FunctionType::getParameters() const {
   return mParameters;
 }
 ArrayType::ArrayType(ObjectType *elementType)
-    : mElementType(elementType) {}
+    : PointerType(elementType) {}
 ArrayType::ArrayType(ObjectType *elementType, unsigned int size)
-    : mSize(size), mElementType(elementType) {}
-bool ArrayType::complete() {
+    : mSize(size), PointerType(elementType) {}
+bool ArrayType::complete() const {
   return mSize > 0;
 }
 void ArrayType::setSize(unsigned int size) {
@@ -53,11 +53,14 @@ PointerType::PointerType(Type *referencedType)
 Type *PointerType::getReferencedType() const {
   return mReferencedType;
 }
-bool VoidType::complete() {
+const std::set<TypeQualifier> &PointerType::qualifersToReferencedType() const {
+  return mQualifersToReferencedType;
+}
+bool VoidType::complete() const {
   return false;
 }
 CompoundType::CompoundType(std::string tag,
-                           std::vector<std::pair<std::string, Type *>> members)
+                           std::vector<std::pair<std::string, const Type *>> members)
     : mTag(std::move(tag)), mMembers(std::move(members)) {}
 bool CompoundType::isMember(const std::string &name) {
   for (const auto &member : mMembers) {
@@ -70,7 +73,7 @@ bool CompoundType::isMember(const std::string &name) {
 const std::string &CompoundType::getTag() const {
   return mTag;
 }
-Type *CompoundType::getMember(const std::string &name) {
+const Type * CompoundType::getMember(const std::string &name) const {
   for (const auto &member : mMembers) {
     if (name == member.first) {
       return member.second;
@@ -78,12 +81,6 @@ Type *CompoundType::getMember(const std::string &name) {
   }
   return nullptr;
 }
-StructType::StructType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members)
-    : CompoundType(tag, members) {}
-UnionType::UnionType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members)
-    : CompoundType(tag, members) {}
-EnumerationType::EnumerationType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members)
-    : CompoundType(tag, members) {}
 QualifiedType::QualifiedType(ObjectType *type, std::set<TypeQualifier> qualifiers)
     : mType(type), mQualifiers(std::move(qualifiers)) {}
 Type *QualifiedType::getType() const {

@@ -9,8 +9,8 @@ class Type {
  private:
  public:
   virtual ~Type() = default;
-  virtual bool compatible(Type *type);
-  virtual bool complete();
+  virtual bool compatible(Type *type) const;
+  virtual bool complete() const;
 };
 
 class ObjectType : public Type {
@@ -21,7 +21,7 @@ class IntegerType : public ObjectType {
  public:
   IntegerType(unsigned int mSizeInBits);
   unsigned int getSizeInBits() const;
-  bool compatible(Type *type) override;
+  bool compatible(Type *type) const override;
   static const IntegerType sCharType;
   static const IntegerType sShortIntType;
   static const IntegerType sIntType;
@@ -40,7 +40,7 @@ class IntegerType : public ObjectType {
 class FloatingType : public ObjectType {
  public:
   FloatingType(unsigned int mSizeInBits);
-  bool compatible(Type *type) override;
+  bool compatible(Type *type) const override;
   static const FloatingType sFloatType;
   static const FloatingType sDoubleType;
   static const FloatingType sLongDoubleType;
@@ -52,7 +52,7 @@ class FloatingType : public ObjectType {
 class VoidType : public ObjectType {
  public:
   static VoidType sVoidType;
-  bool complete() override;
+  bool complete() const override;
 };
 
 // Types stored in symbol table
@@ -70,55 +70,53 @@ class FunctionType : public Type {
 class PointerType : public ObjectType {
  public:
   PointerType(Type *referencedType);
+  const std::set<TypeQualifier> &qualifersToReferencedType() const;
+  Type *getReferencedType() const;
  private:
   Type *mReferencedType;
- public:
-  Type *getReferencedType() const;
+  std::set<TypeQualifier> mQualifersToReferencedType;
+
 };
 
 // Types create dynamically
-class ArrayType : public Type {
+class ArrayType : public PointerType {
  public:
   ArrayType(ObjectType *elementType);
   ArrayType(ObjectType *elementType, unsigned int size);
-  bool complete() override;
+  bool complete() const override;
   void setSize(unsigned int size);
  private:
   //TODO is int enough?
   unsigned int mSize = 0;
-  ObjectType *mElementType;
 };
 
 // Types stored in symbol table
 class CompoundType : public ObjectType {
  public:
   CompoundType(std::string tag,
-               std::vector<std::pair<std::string, Type *>> members);
+               std::vector<std::pair<std::string, const Type *>> members);
   bool isMember(const std::string &name);
-  Type *getMember(const std::string &name);
+  const Type * getMember(const std::string &name) const;
  private:
   std::string mTag;
-  std::vector<std::pair<std::string, Type *>> mMembers;
+  std::vector<std::pair<std::string, const Type *>> mMembers;
  public:
   const std::string &getTag() const;
 };
 
 //TODO
 class StructType : public CompoundType {
- public:
-  StructType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members);
+
 };
 
 //TODO
 class UnionType : public CompoundType {
- public:
-  UnionType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members);
+
 };
 
 //TODO
 class EnumerationType : public CompoundType {
- public:
-  EnumerationType(const std::string &tag, const std::vector<std::pair<std::string, Type *>> &members);
+
 };
 
 class QualifiedType {

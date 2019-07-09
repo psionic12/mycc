@@ -645,11 +645,7 @@ void IdentifierAST::print(int indent) {
   std::cout << token.getValue() << std::endl;
 }
 StringAST::StringAST(const Token &token) : AST(AST::Kind::STRING), mToken(token) {
-  std::set<TypeQualifier> quailifiers;
-  quailifiers.emplace(TypeQualifier::kCONST);
-  mType = std::make_unique<ArrayType>(std::move(quailifiers),
-                                      IntegerType::getIntegerType(false, true, false, IntegerType::Kind::kChar),
-                                      mToken.getValue().size());
+  mType = std::make_unique<ArrayType>(IntegerType::sCharType, mToken.getValue().size());
 }
 const Token &StringAST::getLeftMostToken() {
   return mToken;

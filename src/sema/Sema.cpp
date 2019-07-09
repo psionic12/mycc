@@ -76,11 +76,12 @@ void Sema::analyzeCastExpression(CastExpressionAST *ast) {
 void Sema::analyzeUnaryExpression(UnaryExpressionAST *ast) {
 
 }
-Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
+void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
   switch (ast->getProduction()) {
     case 0: {
       auto *primary = static_cast<PrimaryExpressionAST *>(ast->left.get());
       analyzePrimaryExpression(primary);
+      ast->mType = primary->mType;
       break;
     }
     case 1: {
@@ -89,34 +90,35 @@ Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
       analyzePostfixExpression(postfix);
       auto *exp = static_cast<ExpressionAST *>(ast->right.get());
       analyzeExpression(exp);
-      auto *pointer = dynamic_cast<PointerType *>(postfix->type);
-      if (!pointer) {
+      const auto *tPointer = dynamic_cast<const PointerType *>(postfix->mType);
+      if (!tPointer) {
         throw SemaException("array left side should be pointer to complete object type",
                             postfix->involvedTokens());
       }
-      auto *object = dynamic_cast<ObjectType *>(pointer->getReferencedType());
-      if (!object || !object->complete()) {
+      const auto *tObject = dynamic_cast<const ObjectType *>(tPointer->getReferencedType());
+      if (!tObject || !tObject->complete()) {
         throw SemaException("array left side should be pointer to complete object type",
                             postfix->involvedTokens());
       }
 
-      if (!(dynamic_cast<IntegerType *>(exp->type))) {
+      if (!(dynamic_cast<const IntegerType *>(exp->mType))) {
         throw SemaException("array right side should be an integer type",
                             postfix->involvedTokens());
       }
-      ast->type = pointer->getReferencedType();
+      ast->mType = tPointer->getReferencedType();
+      ast->qualifiers = tPointer->qualifersToReferencedType();
       break;
     }
     case 2: {
       //6.5.2.2 Function calls
       auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
       analyzePostfixExpression(postfix);
-      auto *p = dynamic_cast<PointerType *>(postfix->type);
-      auto *function = dynamic_cast<FunctionType *>(p->getReferencedType());
-      if (!function) {
+      auto *p = dynamic_cast<const PointerType *>(postfix->mType);
+      auto *tFunction = dynamic_cast<FunctionType *>(p->getReferencedType());
+      if (!tFunction) {
         throw SemaException("left side must be a function type", postfix->involvedTokens());
       }
-      auto *returnType = function->getReturnType();
+      auto *returnType = tFunction->getReturnType();
       if (dynamic_cast<ArrayType *>(returnType)) {
         throw SemaException("return type cannot be array type", postfix->involvedTokens());
       }
@@ -124,14 +126,14 @@ Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
         throw SemaException("return type cannot be function type", postfix->involvedTokens());
       }
       auto *arguments = static_cast<ArgumentExpressionList *>(ast->right.get());
-      if (function->getParameters().size() != arguments->getArgumentList().size()) {
+      if (tFunction->getParameters().size() != arguments->getArgumentList().size()) {
         throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
       }
-      auto para = function->getParameters().begin();
+      auto para = tFunction->getParameters().begin();
       auto arg = arguments->getArgumentList().begin();
-      while (para != function->getParameters().end()) {
+      while (para != tFunction->getParameters().end()) {
         analyzeAssignmentExpression(arg->get());
-        auto *argType = dynamic_cast<ObjectType *>((*arg)->type);
+        auto *argType = dynamic_cast<const ObjectType *>((*arg)->mType);
         if (!argType) {
           throw SemaException("arguments must be object type", postfix->involvedTokens());
         }
@@ -142,7 +144,7 @@ Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
           throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
         }
       }
-      ast->type = function->getReturnType();
+      ast->mType = tFunction->getReturnType();
       break;
     }
     case 3:
@@ -150,21 +152,21 @@ Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
       //6.5.2.3 Structure and union members
       auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
       analyzePostfixExpression(postfix);
-      CompoundType *compoundType;
+      const CompoundType *tCompoundType;
       if (ast->getProduction() == 3) {
-        if (!dynamic_cast<StructType *>(postfix->type) && !dynamic_cast<UnionType *>(postfix->type)) {
+        if (!dynamic_cast<const StructType *>(postfix->mType) && !dynamic_cast<const UnionType *>(postfix->mType)) {
           throw SemaException("left side must be a struct type or union type", postfix->involvedTokens());
         } else {
-          compoundType = dynamic_cast<CompoundType *>(postfix->type);
+          tCompoundType = dynamic_cast<const CompoundType *>(postfix->mType);
         }
       } else {
-        if (auto *p = dynamic_cast<PointerType *>(postfix->type)) {
+        if (const auto *p = dynamic_cast<const PointerType *>(postfix->mType)) {
           if (!dynamic_cast<StructType *>(p->getReferencedType())
               && !dynamic_cast<UnionType *>(p->getReferencedType())) {
             throw SemaException("left side must be a pointer to a struct type or union type",
                                 postfix->involvedTokens());
           } else {
-            compoundType = dynamic_cast<CompoundType *>(p->getReferencedType());
+            tCompoundType = dynamic_cast<CompoundType *>(p->getReferencedType());
           }
         } else {
           throw SemaException("left side must be a pointer type", postfix->involvedTokens());
@@ -172,17 +174,18 @@ Type *Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
       }
       auto *id = static_cast<IdentifierAST *>(ast->right.get());
       const std::string &memberName = id->token.getValue();
-      ast->type = compoundType->getMember(memberName);
-      if (!ast->type) {
-        throw SemaException(std::string(memberName).append(" is not a member of ").append(compoundType->getTag()),
+      ast->mType = tCompoundType->getMember(memberName);
+      if (!ast->mType) {
+        throw SemaException(std::string(memberName).append(" is not a member of ").append(tCompoundType->getTag()),
                             postfix->involvedTokens());
       }
+      ast->lvalue = postfix->lvalue;
+
       break;
     }
   }
-  return ast->type;
 }
-Type *Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
+void Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
   switch (ast->getProduction()) {
     case 0: { // identifier
       auto *identifierAST = static_cast<IdentifierAST *>(ast->ast.get());
@@ -190,8 +193,8 @@ Type *Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
       SymbolKind kind = symbol->getKind();
       if (kind == SymbolKind::OBJECT) {
         ast->mType = static_cast<ObjectSymbol *>(symbol)->getType();
-      } else if (kind == SymbolKind::FUNCTION) {
-        ast->mType = static_cast<FunctionSymbol *>(symbol)->convertToPointer();
+        ast->qualifiers = static_cast<ObjectSymbol *>(symbol)->getQualifiers();
+        ast->lvalue = true;
       } else if (kind == SymbolKind::ENUMERATION_CONSTANT) {
         ast->mType = static_cast<EnumConstSymbol *>(symbol)->getType();
       } else {
@@ -205,127 +208,110 @@ Type *Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
       bool isBase10 = integerConstAST->mToken.getValue()[0] != 0;
       unsigned long long int n = integerConstAST->value;
 
-      IntegerType *uIntType = IntegerType::getIntegerType(false, false, false, IntegerType::Kind::kInt);
-      IntegerType *uLongType = IntegerType::getIntegerType(false, false, false, IntegerType::Kind::kLongInt);
-      IntegerType *uLongLongType = IntegerType::getIntegerType(false, false, false, IntegerType::Kind::kLongLongInt);
-
-      unsigned int intSize = uIntType->getSizeInBits();
-      unsigned int longSize = uLongType->getSizeInBits();
-      unsigned int longLongSize = uLongLongType->getSizeInBits();
-
-      bool isSigned;
-      IntegerType::Kind kind;
+      unsigned int intSize = IntegerType::sIntType.getSizeInBits();
+      unsigned int longSize = IntegerType::sLongIntType.getSizeInBits();
+      unsigned int longLongSize = IntegerType::sLongLongIntType.getSizeInBits();
 
       switch (integerConstAST->suffix) {
         case IntegerConstantAST::Suffix::None:
           if (isBase10) {
-            isSigned = true;
             if (!(n >> (intSize - 1))) {
-              kind = IntegerType::Kind::kInt;
+              ast->mType = &IntegerType::sIntType;
             } else if (!(n >> (longSize - 1))) {
-              kind = IntegerType::Kind::kLongInt;
+              ast->mType = &IntegerType::sLongIntType;
             } else {
-              kind = IntegerType::Kind::kLongLongInt;
+              ast->mType = &IntegerType::sLongLongIntType;
             }
           } else {
             if (!(n >> (intSize - 1))) {
-              isSigned = true;
-              kind = IntegerType::Kind::kInt;
+              ast->mType = &IntegerType::sIntType;
             } else if (!(n >> (intSize))) {
-              isSigned = false;
-              kind = IntegerType::Kind::kInt;
+              ast->mType = &IntegerType::sUnsignedIntType;
             } else if (!(n >> (longSize - 1))) {
-              isSigned = true;
-              kind = IntegerType::Kind::kLongInt;
+              ast->mType = &IntegerType::sLongIntType;
             } else if (!(n >> (longSize))) {
-              isSigned = false;
-              kind = IntegerType::Kind::kLongInt;
+              ast->mType = &IntegerType::sUnsignedLongIntType;
             } else {
-              isSigned = !(n >> (longLongSize - 1));
-              kind = IntegerType::Kind::kLongLongInt;
+              ast->mType =
+                  !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType : &IntegerType::sUnsignedLongLongIntType;
             }
           }
           break;
-        case IntegerConstantAST::Suffix::U:isSigned = false;
+        case IntegerConstantAST::Suffix::U:
           if (!(n >> (intSize - 1))) {
-            kind = IntegerType::Kind::kInt;
+            ast->mType = &IntegerType::sUnsignedIntType;
           } else if (!(n >> (longSize - 1))) {
-            kind = IntegerType::Kind::kLongInt;
+            ast->mType = &IntegerType::sUnsignedLongIntType;
           } else {
-            kind = IntegerType::Kind::kLongLongInt;
+            ast->mType = &IntegerType::sUnsignedLongLongIntType;
           }
           break;
         case IntegerConstantAST::Suffix::L:
           if (isBase10) {
-            isSigned = true;
             if (!(n >> (longSize - 1))) {
-              kind = IntegerType::Kind::kLongInt;
+              ast->mType = &IntegerType::sLongIntType;
             } else {
-              kind = IntegerType::Kind::kLongLongInt;
+              ast->mType = &IntegerType::sLongLongIntType;
             }
           } else {
             if (!(n >> (longSize - 1))) {
-              isSigned = true;
-              kind = IntegerType::Kind::kLongInt;
+              ast->mType = &IntegerType::sLongIntType;
             } else if (!(n >> (longSize))) {
-              isSigned = false;
-              kind = IntegerType::Kind::kLongInt;
+              ast->mType = &IntegerType::sUnsignedLongIntType;
             } else {
-              isSigned = !(n >> (longLongSize - 1));
-              kind = IntegerType::Kind::kLongLongInt;
+              ast->mType =
+                  !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType : &IntegerType::sUnsignedLongLongIntType;
             }
           }
           break;
-        case IntegerConstantAST::Suffix::UL:isSigned = false;
+        case IntegerConstantAST::Suffix::UL:
           if (!(n >> (longSize - 1))) {
-            kind = IntegerType::Kind::kLongInt;
+            ast->mType = &IntegerType::sUnsignedLongIntType;
           } else {
-            kind = IntegerType::Kind::kLongLongInt;
+            ast->mType = &IntegerType::sUnsignedLongLongIntType;
           }
           break;
         case IntegerConstantAST::Suffix::LL:
           if (isBase10) {
-            isSigned = true;
-            kind = IntegerType::Kind::kLongLongInt;
+            ast->mType = &IntegerType::sLongLongIntType;
           } else {
-            isSigned = !(n >> (longLongSize - 1));
-            kind = IntegerType::Kind::kLongLongInt;
+            ast->mType =
+                !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType : &IntegerType::sUnsignedLongLongIntType;
           }
           break;
-        case IntegerConstantAST::Suffix::ULL:isSigned = false;
-          kind = IntegerType::Kind::kLongLongInt;
+        case IntegerConstantAST::Suffix::ULL:ast->mType = &IntegerType::sUnsignedLongLongIntType;
           break;
       }
-      ast->type = IntegerType::getIntegerType(isSigned, true, false, kind);
     }
     case 2: {
       auto *floatingConstAST = static_cast<FloatingConstantAST *>(ast->ast.get());
-      FloatingType::Kind kind;
       switch (floatingConstAST->mSuffix) {
-        case FloatingConstantAST::Suffix::None:kind = FloatingType::Kind::kDouble;
+        case FloatingConstantAST::Suffix::None:ast->mType = &FloatingType::sDoubleType;
           break;
-        case FloatingConstantAST::Suffix::F:kind = FloatingType::Kind::kFloat;
+        case FloatingConstantAST::Suffix::F: ast->mType = &FloatingType::sFloatType;
           break;
-        case FloatingConstantAST::Suffix::L:kind = FloatingType::Kind::kLongDouble;
+        case FloatingConstantAST::Suffix::L: ast->mType = &FloatingType::sLongDoubleType;
           break;
       }
-      ast->type = FloatingType::getFloatingType(true, false, kind);
       break;
     }
-    case 3:ast->type = IntegerType::getIntegerType(false, true, false, IntegerType::Kind::kChar);
+    case 3:ast->mType = &IntegerType::sCharType;
     case 4: {
       auto *stringAST = static_cast<StringAST *>(ast->ast.get());
-      ast->type = stringAST->mType.get();
+      ast->mType = stringAST->mType.get();
+      ast->qualifiers.emplace(TypeQualifier::kCONST);
+      ast->lvalue = true;
       break;
     }
     case 5: {
       auto *exp = static_cast<ExpressionAST *>(ast->ast.get());
-      ast->type = exp->type;
+      ast->mType = exp->mType;
+      ast->qualifiers = exp->qualifiers;
+      ast->lvalue = exp->lvalue;
       break;
     }
     default:break;
   }
-  return ast->type;
 }
 void Sema::analyzeExpression(ExpressionAST *ast) {
 
