@@ -38,9 +38,9 @@ Type *FunctionType::getReturnType() const {
 const std::vector<ObjectType *> &FunctionType::getParameters() const {
   return mParameters;
 }
-ArrayType::ArrayType(ObjectType *elementType)
+ArrayType::ArrayType(const ObjectType *elementType)
     : PointerType(elementType) {}
-ArrayType::ArrayType(ObjectType *elementType, unsigned int size)
+ArrayType::ArrayType(const ObjectType *elementType, unsigned int size)
     : mSize(size), PointerType(elementType) {}
 bool ArrayType::complete() const {
   return mSize > 0;
@@ -48,9 +48,9 @@ bool ArrayType::complete() const {
 void ArrayType::setSize(unsigned int size) {
   mSize = size;
 }
-PointerType::PointerType(Type *referencedType)
+PointerType::PointerType(const Type *referencedType)
     : mReferencedType(referencedType) {}
-Type *PointerType::getReferencedType() const {
+const Type * PointerType::getReferencedType() const {
   return mReferencedType;
 }
 const std::set<TypeQualifier> &PointerType::qualifersToReferencedType() const {
@@ -60,26 +60,18 @@ bool VoidType::complete() const {
   return false;
 }
 CompoundType::CompoundType(std::string tag,
-                           std::vector<std::pair<std::string, const Type *>> members)
+                           std::vector<std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>>> members)
     : mTag(std::move(tag)), mMembers(std::move(members)) {}
-bool CompoundType::isMember(const std::string &name) {
-  for (const auto &member : mMembers) {
-    if (name == member.first) {
-      return true;
-    }
-  }
-  return false;
-}
 const std::string &CompoundType::getTag() const {
   return mTag;
 }
-const Type * CompoundType::getMember(const std::string &name) const {
+std::pair<const Type *, std::set<TypeQualifier>> CompoundType::getMember(const std::string &name) const {
   for (const auto &member : mMembers) {
     if (name == member.first) {
       return member.second;
     }
   }
-  return nullptr;
+  throw TypeException();
 }
 QualifiedType::QualifiedType(ObjectType *type, std::set<TypeQualifier> qualifiers)
     : mType(type), mQualifiers(std::move(qualifiers)) {}

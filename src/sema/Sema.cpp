@@ -82,6 +82,7 @@ void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
       auto *primary = static_cast<PrimaryExpressionAST *>(ast->left.get());
       analyzePrimaryExpression(primary);
       ast->mType = primary->mType;
+      ast->mLvalue = primary->mLvalue;
       break;
     }
     case 1: {
@@ -106,7 +107,8 @@ void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
                             postfix->involvedTokens());
       }
       ast->mType = tPointer->getReferencedType();
-      ast->qualifiers = tPointer->qualifersToReferencedType();
+      ast->mQualifiers = tPointer->qualifersToReferencedType();
+      ast->mLvalue = true;
       break;
     }
     case 2: {
@@ -114,23 +116,23 @@ void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
       auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
       analyzePostfixExpression(postfix);
       auto *p = dynamic_cast<const PointerType *>(postfix->mType);
-      auto *tFunction = dynamic_cast<FunctionType *>(p->getReferencedType());
+      auto *tFunction = dynamic_cast<const FunctionType *>(p->getReferencedType());
       if (!tFunction) {
         throw SemaException("left side must be a function type", postfix->involvedTokens());
       }
       auto *returnType = tFunction->getReturnType();
-      if (dynamic_cast<ArrayType *>(returnType)) {
+      if (dynamic_cast<const ArrayType *>(returnType)) {
         throw SemaException("return type cannot be array type", postfix->involvedTokens());
       }
-      if (dynamic_cast<FunctionType *>(returnType)) {
+      if (dynamic_cast<const FunctionType *>(returnType)) {
         throw SemaException("return type cannot be function type", postfix->involvedTokens());
       }
       auto *arguments = static_cast<ArgumentExpressionList *>(ast->right.get());
-      if (tFunction->getParameters().size() != arguments->getArgumentList().size()) {
+      if (tFunction->getParameters().size() != arguments->mArgumentList.size()) {
         throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
       }
       auto para = tFunction->getParameters().begin();
-      auto arg = arguments->getArgumentList().begin();
+      auto arg = arguments->mArgumentList.begin();
       while (para != tFunction->getParameters().end()) {
         analyzeAssignmentExpression(arg->get());
         auto *argType = dynamic_cast<const ObjectType *>((*arg)->mType);
@@ -145,6 +147,7 @@ void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
         }
       }
       ast->mType = tFunction->getReturnType();
+      ast->mLvalue = false;
       break;
     }
     case 3:
@@ -161,12 +164,12 @@ void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
         }
       } else {
         if (const auto *p = dynamic_cast<const PointerType *>(postfix->mType)) {
-          if (!dynamic_cast<StructType *>(p->getReferencedType())
-              && !dynamic_cast<UnionType *>(p->getReferencedType())) {
+          if (!dynamic_cast<const StructType *>(p->getReferencedType())
+              && !dynamic_cast<const UnionType *>(p->getReferencedType())) {
             throw SemaException("left side must be a pointer to a struct type or union type",
                                 postfix->involvedTokens());
           } else {
-            tCompoundType = dynamic_cast<CompoundType *>(p->getReferencedType());
+            tCompoundType = dynamic_cast<const CompoundType *>(p->getReferencedType());
           }
         } else {
           throw SemaException("left side must be a pointer type", postfix->involvedTokens());
@@ -174,13 +177,35 @@ void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
       }
       auto *id = static_cast<IdentifierAST *>(ast->right.get());
       const std::string &memberName = id->token.getValue();
-      ast->mType = tCompoundType->getMember(memberName);
+      std::tie(ast->mType, ast->mQualifiers) = tCompoundType->getMember(memberName);
       if (!ast->mType) {
         throw SemaException(std::string(memberName).append(" is not a member of ").append(tCompoundType->getTag()),
                             postfix->involvedTokens());
       }
-      ast->lvalue = postfix->lvalue;
-
+      ast->mLvalue = postfix->mLvalue;
+      ast->mQualifiers.insert(postfix->mQualifiers.begin(), postfix->mQualifiers.end());
+      ast->mLvalue = postfix->mLvalue;
+      break;
+    }
+    case 5:
+    case 6: {
+      // 6.5.2.4 Postfix increment and decrement operators
+      auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
+      analyzePostfixExpression(postfix);
+      if (!dynamic_cast<const IntegerType *>(postfix->mType) &&
+          !dynamic_cast<const FloatingType *>(postfix->mType) &&
+          !dynamic_cast<const PointerType *>(postfix->mType)) {
+        throw SemaException(
+            "The operand of the postfix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
+            postfix->involvedTokens());
+      }
+      if (postfix->mQualifiers.find(TypeQualifier::kCONST) == postfix->mQualifiers.end()
+          || !postfix->mLvalue) {
+        throw SemaException("The operand shall be a modifiable lvalue", postfix->involvedTokens());
+      }
+      ast->mType = postfix->mType;
+      ast->mLvalue = postfix->mLvalue;
+      ast->mQualifiers = postfix->mQualifiers;
       break;
     }
   }
@@ -193,8 +218,8 @@ void Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
       SymbolKind kind = symbol->getKind();
       if (kind == SymbolKind::OBJECT) {
         ast->mType = static_cast<ObjectSymbol *>(symbol)->getType();
-        ast->qualifiers = static_cast<ObjectSymbol *>(symbol)->getQualifiers();
-        ast->lvalue = true;
+        ast->mQualifiers = static_cast<ObjectSymbol *>(symbol)->getQualifiers();
+        ast->mLvalue = true;
       } else if (kind == SymbolKind::ENUMERATION_CONSTANT) {
         ast->mType = static_cast<EnumConstSymbol *>(symbol)->getType();
       } else {
@@ -299,15 +324,15 @@ void Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
     case 4: {
       auto *stringAST = static_cast<StringAST *>(ast->ast.get());
       ast->mType = stringAST->mType.get();
-      ast->qualifiers.emplace(TypeQualifier::kCONST);
-      ast->lvalue = true;
+      ast->mQualifiers.emplace(TypeQualifier::kCONST);
+      ast->mLvalue = true;
       break;
     }
     case 5: {
       auto *exp = static_cast<ExpressionAST *>(ast->ast.get());
       ast->mType = exp->mType;
-      ast->qualifiers = exp->qualifiers;
-      ast->lvalue = exp->lvalue;
+      ast->mQualifiers = exp->mQualifiers;
+      ast->mLvalue = exp->mLvalue;
       break;
     }
     default:break;

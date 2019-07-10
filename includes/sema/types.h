@@ -5,6 +5,9 @@
 #include <vector>
 #include <memory>
 #include "operator.h"
+
+class TypeException {};
+
 class Type {
  private:
  public:
@@ -69,11 +72,11 @@ class FunctionType : public Type {
 // Types created dynamically
 class PointerType : public ObjectType {
  public:
-  PointerType(Type *referencedType);
+  PointerType(const Type *referencedType);
   const std::set<TypeQualifier> &qualifersToReferencedType() const;
-  Type *getReferencedType() const;
+  const Type * getReferencedType() const;
  private:
-  Type *mReferencedType;
+  const Type *mReferencedType;
   std::set<TypeQualifier> mQualifersToReferencedType;
 
 };
@@ -81,8 +84,8 @@ class PointerType : public ObjectType {
 // Types create dynamically
 class ArrayType : public PointerType {
  public:
-  ArrayType(ObjectType *elementType);
-  ArrayType(ObjectType *elementType, unsigned int size);
+  ArrayType(const ObjectType *elementType);
+  ArrayType(const ObjectType *elementType, unsigned int size);
   bool complete() const override;
   void setSize(unsigned int size);
  private:
@@ -94,12 +97,11 @@ class ArrayType : public PointerType {
 class CompoundType : public ObjectType {
  public:
   CompoundType(std::string tag,
-               std::vector<std::pair<std::string, const Type *>> members);
-  bool isMember(const std::string &name);
-  const Type * getMember(const std::string &name) const;
+               std::vector<std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>>>);
+  std::pair<const Type *, std::set<TypeQualifier>> getMember(const std::string &name) const;
  private:
   std::string mTag;
-  std::vector<std::pair<std::string, const Type *>> mMembers;
+  std::vector<std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>>> mMembers;
  public:
   const std::string &getTag() const;
 };

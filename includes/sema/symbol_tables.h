@@ -110,6 +110,14 @@ class TypedefSymbol : public ISymbol {
     return SymbolKind::TYPEDEF;
   }
   TypedefSymbol(Type *mType) : mType(mType) {}
+  // used in parser, just indicate the identifier is a typedef, the represent type will set in sema phrase
+  TypedefSymbol() : mType(nullptr) {}
+  Type *getMType() const {
+    return mType;
+  }
+  void setMType(Type *mType) {
+    TypedefSymbol::mType = mType;
+  }
  private:
   Type *mType;
 };

@@ -151,8 +151,8 @@ class StatementAST;
 class IExpression {
  public:
   const Type *mType = nullptr;
-  std::set<TypeQualifier> qualifiers{};
-  bool lvalue = false;
+  std::set<TypeQualifier> mQualifiers{};
+  bool mLvalue = false;
 };
 class StringAST : public AST {
  public:
@@ -167,18 +167,24 @@ class IdentifierAST : public AST {
   IdentifierAST(const Token &token);
   const Token &token;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class TypedefNameAST : public AST {
  public:
   TypedefNameAST(nt<IdentifierAST> identifier);
   const nt<IdentifierAST> id;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class TypeQualifierAST : public AST {
  public:
   TypeQualifierAST(Terminal<TypeQualifier> op);
   const Terminal<TypeQualifier> op;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class JumpStatementAST : public AST {
  public:
@@ -188,6 +194,8 @@ class JumpStatementAST : public AST {
   const nt<IdentifierAST> id;
   const nt<ExpressionAST> expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class IterationStatementAST : public AST {
  public:
@@ -202,6 +210,11 @@ class IterationStatementAST : public AST {
   const nt<ExpressionAST> condition_expression;
   const nt<ExpressionAST> step_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
+ private:
+  const Token& left_most;
+  const Token& right_most;
 };
 class SelectionStatementAST : public AST {
  public:
@@ -211,12 +224,16 @@ class SelectionStatementAST : public AST {
   const nt<StatementAST> statement;
   const nt<StatementAST> else_statement;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class ExpressionStatementAST : public AST {
  public:
   ExpressionStatementAST(nt<ExpressionAST> expression);
   const nt<ExpressionAST> expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class LabeledStatementAST : public AST {
  public:
@@ -227,6 +244,8 @@ class LabeledStatementAST : public AST {
   const nt<StatementAST> statement;
   const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class StatementAST : public AST {
  public:
@@ -238,12 +257,17 @@ class StatementAST : public AST {
   StatementAST(nt<JumpStatementAST>);
   const nt<AST> ast;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class InitializerListAST : public AST {
  public:
   InitializerListAST(nts<InitializerAST> initializer);
   const nts<InitializerAST> initializer;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
   void print(int indent) override;
+
 };
 class InitializerAST : public AST {
  public:
@@ -251,6 +275,8 @@ class InitializerAST : public AST {
   InitializerAST(nt<InitializerListAST> initializer_list);
   const nt<AST> ast;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 
 typedef std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> InitDeclarators;
@@ -261,12 +287,17 @@ class EnumeratorAST : public AST {
   const nt<IdentifierAST> id;
   const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class EnumeratorListAST : public AST {
  public:
   EnumeratorListAST(nts<EnumeratorAST> enumerator);
-  const nts<EnumeratorAST> enumerator;
+  const nts<EnumeratorAST> enumerators;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
   void print(int indent) override;
+
 };
 class ParameterDeclarationAST : public AST {
  public:
@@ -274,6 +305,8 @@ class ParameterDeclarationAST : public AST {
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
   const nt<DeclaratorAST> declarator;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class ParameterListAST : public AST {
  public:
@@ -281,11 +314,15 @@ class ParameterListAST : public AST {
   const nts<ParameterDeclarationAST> parameter_declaration;
   SymbolTable &table;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class EnumerationConstantAST : public AST {
  public:
   EnumerationConstantAST(nt<IdentifierAST> id);
   const nt<IdentifierAST> id;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class FloatingConstantAST : public AST {
  public:
@@ -339,6 +376,8 @@ class AssignmentExpressionAST : public AST, public IExpression {
   const std::unique_ptr<Terminal<AssignmentOp>> op;
   const nt<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class PrimaryExpressionAST : public AST, public IExpression {
  public:
@@ -357,10 +396,9 @@ class ArgumentExpressionList : public AST, public IExpression {
  public:
   ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList);
   void print(int indent) override;
- private:
-  nts<AssignmentExpressionAST> mArgumentList;
- public:
-  const nts<AssignmentExpressionAST> &getArgumentList() const;
+  const nts<AssignmentExpressionAST> mArgumentList;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class PostfixExpressionAST : public AST, public IExpression {
  public:
@@ -380,13 +418,17 @@ class PostfixExpressionAST : public AST, public IExpression {
   void print(int indent) override;
   nt<AST> left;
   nt<AST> right;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class TypeNameAST : public AST {
  public:
   TypeNameAST(nts<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator);
-  const nts<SpecifierQualifierAST> specifier;
+  const nts<SpecifierQualifierAST> specifiers;
   const nt<DeclaratorAST> declarator;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class UnaryExpressionAST : public AST {
  public:
@@ -405,6 +447,11 @@ class UnaryExpressionAST : public AST {
   const nt<CastExpressionAST> cast_expression;
   const nt<TypeNameAST> type_name;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
+ private:
+  const Token& left_most;
+  const Token& right_most;
 };
 class CastExpressionAST : public AST {
  public:
@@ -414,12 +461,16 @@ class CastExpressionAST : public AST {
   const nt<TypeNameAST> type_name;
   const nt<CastExpressionAST> cast_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class ExpressionAST : public AST, public IExpression {
  public:
   ExpressionAST(nts<AssignmentExpressionAST> assignment_expression);
   const nts<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class LogicalOrExpressionAST : public AST {
  public:
@@ -429,6 +480,8 @@ class LogicalOrExpressionAST : public AST {
   const std::unique_ptr<Terminal<InfixOp>> op;
   const nt<LogicalOrExpressionAST> right;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class ConditionalExpressionAST : public AST {
  public:
@@ -440,12 +493,16 @@ class ConditionalExpressionAST : public AST {
   const nt<ExpressionAST> expression;
   const nt<ConditionalExpressionAST> conditional_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class ParameterTypeListAST : public AST {
  public:
   ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple);
   const nt<ParameterListAST> parameter_list;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class DirectDeclaratorAST : public AST {
  public:
@@ -458,6 +515,8 @@ class DirectDeclaratorAST : public AST {
   const nt<AST> term1;  //<identifier> or <declarator>
   const std::vector<std::pair<Term2, nt<AST>>> term2s;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class PointerAST : public AST {
  public:
@@ -465,12 +524,16 @@ class PointerAST : public AST {
   const nts<TypeQualifierAST> type_qualifiers;
   const nt<PointerAST> pointer;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class ConstantExpressionAST : public AST {
  public:
   ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
   const nt<ConditionalExpressionAST> conditional_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class StructDeclaratorAST : public AST {
  public:
@@ -480,12 +543,16 @@ class StructDeclaratorAST : public AST {
   const nt<DeclaratorAST> declarator;
   const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class StructDeclaratorListAST : public AST {
  public:
   StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators);
   const nts<StructDeclaratorAST> struct_declarators;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class StructDeclarationAST : public AST {
  public:
@@ -494,6 +561,8 @@ class StructDeclarationAST : public AST {
   const nts<SpecifierQualifierAST> specifier_qualifier;
   const nt<StructDeclaratorListAST> struct_declarator_list;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class EnumSpecifierAST : public AST {
  public:
@@ -503,6 +572,8 @@ class EnumSpecifierAST : public AST {
   const nt<IdentifierAST> id;
   const nt<EnumeratorListAST> enum_list;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class StructOrUnionSpecifierAST : public AST {
  public:
@@ -511,12 +582,16 @@ class StructOrUnionSpecifierAST : public AST {
   const nt<IdentifierAST> id;
   const nts<StructDeclarationAST> declarations;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
-class ProtoTypeSpecifierAST : public AST, Terminal<ProtoTypeSpecifier> {
+class ProtoTypeSpecifierAST : public AST, public Terminal<ProtoTypeSpecifier> {
  public:
   ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier);
   const Terminal<ProtoTypeSpecifier> specifier;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class TypeSpecifierAST : public AST {
  public:
@@ -526,6 +601,8 @@ class TypeSpecifierAST : public AST {
   TypeSpecifierAST(nt<TypedefNameAST> specifier);
   const nt<AST> specifier;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class SpecifierQualifierAST : public AST {
  public:
@@ -533,12 +610,16 @@ class SpecifierQualifierAST : public AST {
   SpecifierQualifierAST(nt<TypeQualifierAST> speciler);
   const nt<AST> speciler;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class StorageClassSpecifierAST : public AST {
  public:
   StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier);
   const Terminal<StorageSpecifier> storage_speicifier;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class DeclaratorAST : public AST {
  public:
@@ -546,6 +627,8 @@ class DeclaratorAST : public AST {
   const nt<PointerAST> pointer;
   const nt<DirectDeclaratorAST> direct_declarator;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class DeclarationSpecifiersAST : public AST {
  public:
@@ -557,6 +640,8 @@ class DeclarationSpecifiersAST : public AST {
   const nts<TypeQualifierAST> type_qualifiers;
   bool empty();
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class DeclarationAST : public AST {
  public:
@@ -566,6 +651,8 @@ class DeclarationAST : public AST {
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
   const InitDeclarators init_declarators;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class CompoundStatementAST : public AST {
  public:
@@ -576,6 +663,8 @@ class CompoundStatementAST : public AST {
   const nts<StatementAST> statements;
   SymbolTable &table;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class FunctionDefinitionAST : public AST {
  public:
@@ -588,6 +677,8 @@ class FunctionDefinitionAST : public AST {
   const nts<DeclarationAST> declarations;
   const nt<CompoundStatementAST> compound_statement;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 
 };
 class ExternalDeclarationAST : public AST {
@@ -595,6 +686,8 @@ class ExternalDeclarationAST : public AST {
   explicit ExternalDeclarationAST(nt<AST> def);
   const nt<AST> def;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 class TranslationUnitAST : public AST {
  public:
@@ -602,5 +695,7 @@ class TranslationUnitAST : public AST {
   const nts<ExternalDeclarationAST> external_declarations;
   SymbolTable &table;
   void print(int indent) override;
+  const Token &getLeftMostToken() override;
+  const Token &getRightMostToken() override;
 };
 #endif //MYCCPILER_AST_H
