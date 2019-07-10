@@ -213,8 +213,8 @@ class IterationStatementAST : public AST {
   const Token &getLeftMostToken() override;
   const Token &getRightMostToken() override;
  private:
-  const Token& left_most;
-  const Token& right_most;
+  const Token &left_most;
+  const Token &right_most;
 };
 class SelectionStatementAST : public AST {
  public:
@@ -430,7 +430,7 @@ class TypeNameAST : public AST {
   const Token &getLeftMostToken() override;
   const Token &getRightMostToken() override;
 };
-class UnaryExpressionAST : public AST {
+class UnaryExpressionAST : public AST, public IExpression {
  public:
   enum class PrefixType : int {
     PLUSPLUS = 1,
@@ -450,8 +450,8 @@ class UnaryExpressionAST : public AST {
   const Token &getLeftMostToken() override;
   const Token &getRightMostToken() override;
  private:
-  const Token& left_most;
-  const Token& right_most;
+  const Token &left_most;
+  const Token &right_most;
 };
 class CastExpressionAST : public AST {
  public:

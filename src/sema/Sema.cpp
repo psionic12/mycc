@@ -74,7 +74,46 @@ void Sema::analyzeCastExpression(CastExpressionAST *ast) {
 
 }
 void Sema::analyzeUnaryExpression(UnaryExpressionAST *ast) {
-
+  switch (ast->getProduction()) {
+    case 0: {
+      auto *postfix = ast->postfix_expression.get();
+      analyzePostfixExpression(postfix);
+      ast->mType = postfix->mType;
+      ast->mQualifiers = postfix->mQualifiers;
+      ast->mLvalue = postfix->mLvalue;
+      break;
+    }
+    case 1:
+    case 2: {
+      //6.5.3.1 Prefix increment and decrement operators
+      auto *unary = ast->unary_expression.get();
+      analyzeUnaryExpression(unary);
+      if (!dynamic_cast<const IntegerType *>(unary->mType) &&
+          !dynamic_cast<const FloatingType *>(unary->mType) &&
+          !dynamic_cast<const PointerType *>(unary->mType)) {
+        throw SemaException(
+            "The operand of the prefix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
+            unary->involvedTokens());
+      }
+      if (unary->mQualifiers.find(TypeQualifier::kCONST) == unary->mQualifiers.end()
+          || !unary->mLvalue) {
+        throw SemaException("The operand shall be a modifiable lvalue", unary->involvedTokens());
+      }
+      ast->mType = unary->mType;
+      ast->mLvalue = unary->mLvalue;
+      ast->mQualifiers = unary->mQualifiers;
+      break;
+    }
+    case 3: {
+      //6.5.3.2 Address and indirection operators
+      auto op = ast->op->type;
+      auto *cast_exp = ast->cast_expression.get();
+      analyzeCastExpression(cast_exp);
+      switch (op) {
+        case UnaryOp::AMP:break;
+      }
+    }
+  }
 }
 void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
   switch (ast->getProduction()) {
@@ -82,6 +121,7 @@ void Sema::analyzePostfixExpression(PostfixExpressionAST *ast) {
       auto *primary = static_cast<PrimaryExpressionAST *>(ast->left.get());
       analyzePrimaryExpression(primary);
       ast->mType = primary->mType;
+      ast->mQualifiers = primary->mQualifiers;
       ast->mLvalue = primary->mLvalue;
       break;
     }
