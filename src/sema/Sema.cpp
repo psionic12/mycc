@@ -425,7 +425,7 @@ void Sema::analyzeDeclaration(DeclarationAST *declaration) {
 
   if (!hasDeclarator && !hasTag && !hasEnumMembers) {
     throw SemaException("A declaration shall declare at least a declarator, a tag, or the members of an enumeration",
-                        declaration->getLeftMostToken());
+                        *declaration->mLeftMost);
   }
 }
 void Sema::analyzeInitDeclarators(const InitDeclarators &initDeclarators) {

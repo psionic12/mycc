@@ -20,19 +20,27 @@ class ParserException : public std::exception {
 
 class Parser {
  public:
-  Parser(std::ifstream &ifstream, SymbolTables& symbolTables);
+  Parser(std::ifstream &ifstream, SymbolTables &symbolTables);
   nt<TranslationUnitAST> parseTranslationUnit();
  private:
   std::ifstream &in;
   Lex lex;
-  SymbolTables& symbolTables;
-  SymbolTable* table;
+  SymbolTables &symbolTables;
+  SymbolTable *table;
+  const Token *mStartToken = nullptr;
   InfixOp isInfixOp(TokenKind kind);
   const std::string &accept(TokenKind kind);
   bool expect(TokenKind kind);
-  ParserException parseError(const std::string& msg);
-  ParserException parseError(const std::string&, const Token& token);
+  ParserException parseError(const std::string &msg);
+  ParserException parseError(const std::string &, const Token &token);
   int precedence(InfixOp op);
+  template<typename T, typename... Args>
+  std::unique_ptr<T> make_ast(Args &&... args) {
+    auto ptr = std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+    static_cast<AST *>(ptr.get())->mLeftMost = mStartToken;
+    static_cast<AST *>(ptr.get())->mRightMost = &lex.peek(-1);
+    return ptr;
+  }
  public:
   nt<ExternalDeclarationAST> parseExternalDeclaration();
   nt<FunctionDefinitionAST> parseFunctionDefinition();

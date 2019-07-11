@@ -18,12 +18,6 @@ void TranslationUnitAST::print(int indent) {
   AST::print(indent);
   external_declarations.print(++indent);
 }
-const Token &TranslationUnitAST::getLeftMostToken() {
-  return (*(external_declarations.begin()))->getLeftMostToken();
-}
-const Token &TranslationUnitAST::getRightMostToken() {
-  return (*(external_declarations.end()))->getRightMostToken();
-}
 ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def)
     : AST(AST::Kind::EXTERNAL_DECLARATION), def(std::move(def)) {
   const DeclarationSpecifiersAST *ds;
@@ -47,12 +41,6 @@ void ExternalDeclarationAST::print(int indent) {
   AST::print(indent);
   def->print(++indent);
 }
-const Token &ExternalDeclarationAST::getLeftMostToken() {
-  return def->getLeftMostToken();
-}
-const Token &ExternalDeclarationAST::getRightMostToken() {
-  return def->getRightMostToken();
-}
 FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declaration_spcifiers,
                                              nt<DeclaratorAST> declarator,
                                              nts<DeclarationAST> declarations,
@@ -72,12 +60,6 @@ void FunctionDefinitionAST::print(int indent) {
   declarations.print(indent);
   compound_statement->print(indent);
 }
-const Token &FunctionDefinitionAST::getLeftMostToken() {
-  return declaration_spcifiers->getLeftMostToken();
-}
-const Token &FunctionDefinitionAST::getRightMostToken() {
-  return compound_statement->getRightMostToken();
-}
 CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
                                            nts<StatementAST> statements,
                                            SymbolTable &table)
@@ -89,12 +71,6 @@ void CompoundStatementAST::print(int indent) {
   ++indent;
   declarations.print(indent);
   statements.print(indent);
-}
-const Token &CompoundStatementAST::getLeftMostToken() {
-  return declarations.begin()->get()->getLeftMostToken();
-}
-const Token &CompoundStatementAST::getRightMostToken() {
-  return statements.back()->getRightMostToken();
 }
 DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                                InitDeclarators init_declarators,
@@ -125,23 +101,13 @@ void DeclarationAST::print(int indent) {
     if (ds.second) ds.second->print(indent);
   }
 }
-const Token &DeclarationAST::getLeftMostToken() {
-  return declaration_specifiers->getLeftMostToken();
-}
-const Token &DeclarationAST::getRightMostToken() {
-  return init_declarators.back().second->getRightMostToken();
-}
 DeclarationSpecifiersAST::DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
                                                    nts<TypeSpecifierAST> type_specifiers,
-                                                   nts<TypeQualifierAST> type_qualifiers,
-                                                   const Token &left_most,
-                                                   const Token &right_most)
+                                                   nts<TypeQualifierAST> type_qualifiers)
     : AST(AST::Kind::DECLARATION_SPECIFIER),
       storage_specifiers(std::move(storage_specifiers)),
       type_specifiers(std::move(type_specifiers)),
-      type_qualifiers(std::move(type_qualifiers)),
-      left_most(left_most),
-      right_most(right_most) {}
+      type_qualifiers(std::move(type_qualifiers)) {}
 void DeclarationSpecifiersAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -152,12 +118,6 @@ void DeclarationSpecifiersAST::print(int indent) {
 bool DeclarationSpecifiersAST::empty() {
   return storage_specifiers.empty() && type_qualifiers.empty() && type_specifiers.empty();
 }
-const Token &DeclarationSpecifiersAST::getLeftMostToken() {
-  return left_most;
-}
-const Token &DeclarationSpecifiersAST::getRightMostToken() {
-  return right_most;
-}
 DeclaratorAST::DeclaratorAST(nt<PointerAST> pointer,
                              nt<DirectDeclaratorAST> direct_declarator)
     : AST(AST::Kind::DECLARATOR), pointer(std::move(pointer)), direct_declarator(std::move(direct_declarator)) {}
@@ -167,23 +127,11 @@ void DeclaratorAST::print(int indent) {
   if (pointer) pointer->print(indent);
   if (direct_declarator) direct_declarator->print(indent);
 }
-const Token &DeclaratorAST::getLeftMostToken() {
-  return pointer->getLeftMostToken();
-}
-const Token &DeclaratorAST::getRightMostToken() {
-  return direct_declarator->getRightMostToken();
-}
 StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier)
     : AST(AST::Kind::STORAGE_CLASS_SPECIFIER), storage_speicifier(storage_speicifier) {}
 void StorageClassSpecifierAST::print(int indent) {
   AST::print(indent);
   storage_speicifier.print(++indent);
-}
-const Token &StorageClassSpecifierAST::getLeftMostToken() {
-  return storage_speicifier.token;
-}
-const Token &StorageClassSpecifierAST::getRightMostToken() {
-  return storage_speicifier.token;
 }
 SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeQualifierAST> speciler)
     : AST(AST::Kind::SPECIFIER_QUALIFIER, 1),
@@ -195,23 +143,11 @@ void SpecifierQualifierAST::print(int indent) {
   AST::print(indent);
   speciler->print(++indent);
 }
-const Token &SpecifierQualifierAST::getLeftMostToken() {
-  return speciler->getLeftMostToken();
-}
-const Token &SpecifierQualifierAST::getRightMostToken() {
-  return speciler->getRightMostToken();
-}
 ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier)
     : AST(AST::Kind::PROTO_TYPE_SPECIFIER), Terminal<ProtoTypeSpecifier>(specifier), specifier(specifier) {}
 void ProtoTypeSpecifierAST::print(int indent) {
   AST::print(indent);
   specifier.print(++indent);
-}
-const Token &ProtoTypeSpecifierAST::getLeftMostToken() {
-  return specifier.token;
-}
-const Token &ProtoTypeSpecifierAST::getRightMostToken() {
-  return specifier.token;
 }
 TypeSpecifierAST::TypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier)
     : AST(AST::Kind::TYPE_SPECIFIER), specifier(std::make_unique<ProtoTypeSpecifierAST>(specifier)) {}
@@ -225,12 +161,6 @@ void TypeSpecifierAST::print(int indent) {
   AST::print(indent);
   specifier->print(++indent);
 }
-const Token &TypeSpecifierAST::getLeftMostToken() {
-  return specifier->getLeftMostToken();
-}
-const Token &TypeSpecifierAST::getRightMostToken() {
-  return specifier->getRightMostToken();
-}
 StructOrUnionSpecifierAST::StructOrUnionSpecifierAST(StructOrUnion type,
                                                      nt<IdentifierAST> id,
                                                      nts<StructDeclarationAST> declarations)
@@ -242,12 +172,6 @@ void StructOrUnionSpecifierAST::print(int indent) {
   type == StructOrUnion::kSTRUCT ? std::cout << "STRUCT" << std::endl : std::cout << "UNION" << std::endl;
   if (id != nullptr) id->print(indent);
   declarations.print(indent);
-}
-const Token &StructOrUnionSpecifierAST::getLeftMostToken() {
-  return id->getLeftMostToken();
-}
-const Token &StructOrUnionSpecifierAST::getRightMostToken() {
-  return declarations.back()->getRightMostToken();
 }
 EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier,
                                    nt<EnumeratorListAST> enumeratorList)
@@ -262,20 +186,6 @@ void EnumSpecifierAST::print(int indent) {
   if (id) id->print(indent);
   if (enum_list) enum_list->print(indent);
 }
-const Token &EnumSpecifierAST::getLeftMostToken() {
-  if (getProduction() != 1) {
-    return id->getLeftMostToken();
-  } else {
-    return enum_list->getLeftMostToken();
-  }
-}
-const Token &EnumSpecifierAST::getRightMostToken() {
-  if (getProduction() != 2) {
-    return enum_list->getRightMostToken();
-  } else {
-    return id->getRightMostToken();
-  }
-}
 StructDeclarationAST::StructDeclarationAST(nts<SpecifierQualifierAST> specifier_qualifier,
                                            nt<StructDeclaratorListAST> struct_declarator_list)
     : AST(AST::Kind::STRUCT_DECLARATION),
@@ -287,23 +197,11 @@ void StructDeclarationAST::print(int indent) {
   specifier_qualifier.print(indent);
   struct_declarator_list->print(indent);
 }
-const Token &StructDeclarationAST::getLeftMostToken() {
-  return specifier_qualifier.begin()->get()->getLeftMostToken();
-}
-const Token &StructDeclarationAST::getRightMostToken() {
-  return struct_declarator_list->getRightMostToken();
-}
 StructDeclaratorListAST::StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators) : AST(
     AST::Kind::STRUCT_DECLARATOR_LIST), struct_declarators(std::move(struct_declarators)) {}
 void StructDeclaratorListAST::print(int indent) {
   AST::print(indent);
   struct_declarators.print(++indent);
-}
-const Token &StructDeclaratorListAST::getLeftMostToken() {
-  return struct_declarators.begin()->get()->getLeftMostToken();
-}
-const Token &StructDeclaratorListAST::getRightMostToken() {
-  return struct_declarators.back()->getRightMostToken();
 }
 StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST> declarator)
     : AST(AST::Kind::STRUCT_DECLARATOR, 0),
@@ -324,33 +222,13 @@ void StructDeclaratorAST::print(int indent) {
   if (declarator != nullptr) declarator->print(indent);
   if (constant_expression != nullptr) constant_expression->print(indent);
 }
-const Token &StructDeclaratorAST::getLeftMostToken() {
-  if (getProduction() != 2) {
-    return declarator->getLeftMostToken();
-  } else {
-    return constant_expression->getLeftMostToken();
-  }
-}
 
-const Token &StructDeclaratorAST::getRightMostToken() {
-  if (getProduction() != 0) {
-    return constant_expression->getRightMostToken();
-  } else {
-    return declarator->getRightMostToken();
-  }
-}
 ConstantExpressionAST::ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression)
     : AST(AST::Kind::CONSTANT_EXPRESSION), conditional_expression(std::move(conditional_expression)) {}
 void ConstantExpressionAST::print(int indent) {
   AST::print(indent);
   ++indent;
   conditional_expression->print(indent);
-}
-const Token &ConstantExpressionAST::getLeftMostToken() {
-  return conditional_expression->getLeftMostToken();
-}
-const Token &ConstantExpressionAST::getRightMostToken() {
-  return conditional_expression->getRightMostToken();
 }
 PointerAST::PointerAST(nts<TypeQualifierAST> type_qualifiers, nt<PointerAST> pointer)
     : AST(AST::Kind::POINTER), type_qualifiers(std::move(type_qualifiers)), pointer(std::move(pointer)) {}
@@ -359,12 +237,6 @@ void PointerAST::print(int indent) {
   ++indent;
   type_qualifiers.print(indent);
   if (pointer) pointer->print(indent);
-}
-const Token &PointerAST::getLeftMostToken() {
-  return type_qualifiers.begin()->get()->getLeftMostToken();
-}
-const Token &PointerAST::getRightMostToken() {
-  return pointer->getRightMostToken();
 }
 DirectDeclaratorAST::DirectDeclaratorAST(nt<AST> term1,
                                          std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s)
@@ -382,23 +254,11 @@ void DirectDeclaratorAST::print(int indent) {
     }
   }
 }
-const Token &DirectDeclaratorAST::getLeftMostToken() {
-  return term1->getLeftMostToken();
-}
-const Token &DirectDeclaratorAST::getRightMostToken() {
-  return term2s.back().second->getRightMostToken();
-}
 ParameterTypeListAST::ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple)
     : AST(AST::Kind::PARAMETER_TYPE_LIST, hasMultiple ? 1 : 0), parameter_list(std::move(parameter_list)) {}
 void ParameterTypeListAST::print(int indent) {
   AST::print(indent);
   parameter_list->print(++indent);
-}
-const Token &ParameterTypeListAST::getLeftMostToken() {
-  return parameter_list->getLeftMostToken();
-}
-const Token &ParameterTypeListAST::getRightMostToken() {
-  return parameter_list->getRightMostToken();
 }
 ConditionalExpressionAST::ConditionalExpressionAST(nt<LogicalOrExpressionAST> logical_or_expression)
     : AST(AST::Kind::CONDITIONAL_EXPRESSION, 0),
@@ -420,13 +280,6 @@ void ConditionalExpressionAST::print(int indent) {
     conditional_expression->print(indent);
   }
 }
-const Token &ConditionalExpressionAST::getLeftMostToken() {
-  return logical_or_expression->getLeftMostToken();
-}
-const Token &ConditionalExpressionAST::getRightMostToken() {
-  return conditional_expression ? conditional_expression->getRightMostToken()
-                                : logical_or_expression->getRightMostToken();
-}
 LogicalOrExpressionAST::LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left,
                                                Terminal<InfixOp> op,
                                                nt<LogicalOrExpressionAST> right)
@@ -446,12 +299,6 @@ void LogicalOrExpressionAST::print(int indent) {
     left->print(indent);
   }
 }
-const Token &LogicalOrExpressionAST::getLeftMostToken() {
-  return left->getLeftMostToken();
-}
-const Token &LogicalOrExpressionAST::getRightMostToken() {
-  return right ? right->getRightMostToken() : left->getRightMostToken();
-}
 ExpressionAST::ExpressionAST(nts<AssignmentExpressionAST> assignment_expression)
     : AST(AST::Kind::EXPRESSION, 0),
       assignment_expression(std::move(
@@ -460,12 +307,6 @@ void ExpressionAST::print(int indent) {
   AST::print(indent);
   ++indent;
   assignment_expression.print(indent);
-}
-const Token &ExpressionAST::getLeftMostToken() {
-  return assignment_expression.begin()->get()->getLeftMostToken();
-}
-const Token &ExpressionAST::getRightMostToken() {
-  return assignment_expression.back()->getRightMostToken();
 }
 CastExpressionAST::CastExpressionAST(nt<UnaryExpressionAST> unary_expression)
     : AST(AST::Kind::CAST_EXPRESSION, 0),
@@ -488,35 +329,20 @@ void CastExpressionAST::print(int indent) {
     cast_expression->print(indent);
   }
 }
-const Token &CastExpressionAST::getLeftMostToken() {
-  return getProduction() == 0 ? unary_expression->getLeftMostToken() : type_name->getLeftMostToken();
-}
-const Token &CastExpressionAST::getRightMostToken() {
-  return getProduction() == 0 ? unary_expression->getLeftMostToken() : cast_expression->getRightMostToken();
-}
 UnaryExpressionAST::UnaryExpressionAST(nt<TypeNameAST> type_name)
     : AST(AST::Kind::UNARY_EXPRESSION, 5),
-      type_name(std::move(type_name)),
-      left_most(this->type_name->getLeftMostToken()),
-      right_most(this->type_name->getRightMostToken()) {}
+      type_name(std::move(type_name)) {}
 UnaryExpressionAST::UnaryExpressionAST(Terminal<UnaryOp> op, nt<CastExpressionAST> cast_expression)
     : op(std::make_unique<Terminal<UnaryOp>>(op)),
       cast_expression(std::move(cast_expression)),
-      AST(AST::Kind::UNARY_EXPRESSION, 3),
-      left_most(op.token),
-      right_most(this->cast_expression->getRightMostToken()) {}
+      AST(AST::Kind::UNARY_EXPRESSION, 3) {}
 UnaryExpressionAST::UnaryExpressionAST(nt<UnaryExpressionAST> unary_expression,
                                        UnaryExpressionAST::PrefixType type)
     : AST(AST::Kind::UNARY_EXPRESSION, static_cast<int>(type)),
-      unary_expression(std::move(unary_expression)),
-      left_most(this->unary_expression->getLeftMostToken()),
-      right_most(this->unary_expression->getRightMostToken()) {}
+      unary_expression(std::move(unary_expression)) {}
 UnaryExpressionAST::UnaryExpressionAST(nt<PostfixExpressionAST> postfix_expression)
     : AST(AST::Kind::UNARY_EXPRESSION, 0),
-      postfix_expression(std::move(postfix_expression)),
-      left_most(this->postfix_expression->getLeftMostToken()),
-      right_most(this->
-          postfix_expression->getRightMostToken()) {
+      postfix_expression(std::move(postfix_expression)) {
 }
 void UnaryExpressionAST::print(int indent) {
   AST::print(indent);
@@ -535,12 +361,6 @@ void UnaryExpressionAST::print(int indent) {
       break;
   }
 }
-const Token &UnaryExpressionAST::getLeftMostToken() {
-  return left_most;
-}
-const Token &UnaryExpressionAST::getRightMostToken() {
-  return right_most;
-}
 
 TypeNameAST::TypeNameAST(nts<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator)
     : AST(AST::Kind::TYPE_NAME), specifiers(std::move(specifier)), declarator(std::move(declarator)) {}
@@ -549,12 +369,6 @@ void TypeNameAST::print(int indent) {
   ++indent;
   specifiers.print(indent);
   if (declarator) declarator->print(indent);
-}
-const Token &TypeNameAST::getLeftMostToken() {
-  return specifiers.begin()->get()->getLeftMostToken();
-}
-const Token &TypeNameAST::getRightMostToken() {
-  return declarator->getRightMostToken();
 }
 PostfixExpressionAST::PostfixExpressionAST(nt<PrimaryExpressionAST> primary)
     : AST(AST::Kind::POSTFIX_EXPRESSION, 0),
@@ -586,12 +400,6 @@ void PostfixExpressionAST::print(int indent) {
     right->print(indent);
   }
 }
-const Token &PostfixExpressionAST::getLeftMostToken() {
-  return left->getLeftMostToken();
-}
-const Token &PostfixExpressionAST::getRightMostToken() {
-  return right ? right->getRightMostToken() : left->getRightMostToken();
-}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<IdentifierAST> id)
     : AST(AST::Kind::PRIMARY_EXPRESSION, 0), ast(std::move(id)) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<IntegerConstantAST> interger_constant)
@@ -607,12 +415,6 @@ PrimaryExpressionAST::PrimaryExpressionAST(nt<ExpressionAST> exp)
 void PrimaryExpressionAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
-}
-const Token &PrimaryExpressionAST::getLeftMostToken() {
-  return ast->getLeftMostToken();
-}
-const Token &PrimaryExpressionAST::getRightMostToken() {
-  return ast->getRightMostToken();
 }
 AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression)
     : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0), conditional_expression(std::move(conditional_expression)) {}
@@ -630,21 +432,8 @@ void AssignmentExpressionAST::print(int indent) {
     assignment_expression->print(indent);
   }
 }
-const Token &AssignmentExpressionAST::getLeftMostToken() {
-  return conditional_expression->getLeftMostToken();
-}
-const Token &AssignmentExpressionAST::getRightMostToken() {
-  return assignment_expression ? assignment_expression->getRightMostToken()
-                               : conditional_expression->getRightMostToken();
-}
 CharacterConstantAST::CharacterConstantAST(const Token &token)
     : AST(AST::Kind::CHARACTER_CONSTANT), mToken(token), c(token.getValue().c_str()[0]) {}
-const Token &CharacterConstantAST::getLeftMostToken() {
-  return mToken;
-}
-const Token &CharacterConstantAST::getRightMostToken() {
-  return mToken;
-}
 FloatingConstantAST::FloatingConstantAST(const Token &token)
     : AST(AST::Kind::FLOATING_CONSTANT), mToken(token) {
   std::string::size_type sz;
@@ -673,31 +462,13 @@ void FloatingConstantAST::print(int indent) {
   AST::printIndent(++indent);
   std::cout << mToken.getValue() << std::endl;
 }
-const Token &FloatingConstantAST::getLeftMostToken() {
-  return mToken;
-}
-const Token &FloatingConstantAST::getRightMostToken() {
-  return mToken;
-}
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST> id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
-const Token &EnumerationConstantAST::getLeftMostToken() {
-  return id->getLeftMostToken();
-}
-const Token &EnumerationConstantAST::getRightMostToken() {
-  return id->getRightMostToken();
-}
 ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table)
     : AST(AST::Kind::PARAMETER_LIST), parameter_declaration(std::move(parameter_declaration)), table(table) {}
 void ParameterListAST::print(int indent) {
   AST::print(indent);
   parameter_declaration.print(++indent);
-}
-const Token &ParameterListAST::getLeftMostToken() {
-  return parameter_declaration.begin()->get()->getLeftMostToken();
-}
-const Token &ParameterListAST::getRightMostToken() {
-  return parameter_declaration.begin()->get()->getRightMostToken();
 }
 ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                                                  nt<DeclaratorAST> declarator)
@@ -709,23 +480,11 @@ void ParameterDeclarationAST::print(int indent) {
   declaration_specifiers->print(indent);
   if (declarator) declarator->print(indent);
 }
-const Token &ParameterDeclarationAST::getLeftMostToken() {
-  return declaration_specifiers->getLeftMostToken();
-}
-const Token &ParameterDeclarationAST::getRightMostToken() {
-  return declarator->getRightMostToken();
-}
 EnumeratorListAST::EnumeratorListAST(nts<EnumeratorAST> enumerator)
     : AST(AST::Kind::ENUMERATOR_LIST), enumerators(std::move(enumerator)) {}
 void EnumeratorListAST::print(int indent) {
   AST::print(indent);
   enumerators.print(++indent);
-}
-const Token &EnumeratorListAST::getLeftMostToken() {
-  return enumerators.begin()->get()->getLeftMostToken();
-}
-const Token &EnumeratorListAST::getRightMostToken() {
-  return enumerators.back()->getRightMostToken();
 }
 EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id) : AST(AST::Kind::ENUMERATOR, 0), id(std::move(id)) {}
 EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id, nt<ConstantExpressionAST> constant_expression)
@@ -738,12 +497,6 @@ void EnumeratorAST::print(int indent) {
     constant_expression->print(indent);
   }
 }
-const Token &EnumeratorAST::getLeftMostToken() {
-  return id->getLeftMostToken();
-}
-const Token &EnumeratorAST::getRightMostToken() {
-  return constant_expression ? constant_expression->getRightMostToken() : id->getRightMostToken();
-}
 InitializerAST::InitializerAST(nt<AssignmentExpressionAST> assignment_expression)
     : AST(AST::Kind::INITIALIZER, 0), ast(std::move(assignment_expression)) {}
 InitializerAST::InitializerAST(nt<InitializerListAST> initializer_list)
@@ -752,23 +505,11 @@ void InitializerAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
 }
-const Token &InitializerAST::getLeftMostToken() {
-  return ast->getLeftMostToken();
-}
-const Token &InitializerAST::getRightMostToken() {
-  return ast->getRightMostToken();
-}
 InitializerListAST::InitializerListAST(nts<InitializerAST> initializer)
     : AST(AST::Kind::INITIALIZER_LIST), initializer(std::move(initializer)) {}
 void InitializerListAST::print(int indent) {
   AST::print(indent);
   initializer.print(++indent);
-}
-const Token &InitializerListAST::getLeftMostToken() {
-  return initializer.begin()->get()->getRightMostToken();
-}
-const Token &InitializerListAST::getRightMostToken() {
-  return initializer.back()->getRightMostToken();
 }
 StatementAST::StatementAST(nt<LabeledStatementAST> ast) : AST(AST::Kind::STATEMENT, 0), ast(std::move(ast)) {}
 StatementAST::StatementAST(nt<ExpressionStatementAST> ast) : AST(AST::Kind::STATEMENT, 1), ast(std::move(ast)) {}
@@ -779,12 +520,6 @@ StatementAST::StatementAST(nt<JumpStatementAST> ast) : AST(AST::Kind::STATEMENT,
 void StatementAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
-}
-const Token &StatementAST::getLeftMostToken() {
-  return ast->getLeftMostToken();
-}
-const Token &StatementAST::getRightMostToken() {
-  return ast->getRightMostToken();
 }
 LabeledStatementAST::LabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement)
     : AST(AST::Kind::LABELED_STATEMENT, 0), id(std::move(id)), statement(std::move(statement)) {}
@@ -804,27 +539,11 @@ void LabeledStatementAST::print(int indent) {
   }
   statement->print(indent);
 }
-const Token &LabeledStatementAST::getLeftMostToken() {
-  switch (getProduction()) {
-    case 0:return id->getLeftMostToken();
-    case 1:return constant_expression->getLeftMostToken();
-    default: return statement->getLeftMostToken();
-  }
-}
-const Token &LabeledStatementAST::getRightMostToken() {
-  return statement->getRightMostToken();
-}
 ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST> expression)
     : AST(AST::Kind::EXPRESSION_STATEMENT), expression(std::move(expression)) {}
 void ExpressionStatementAST::print(int indent) {
   AST::print(indent);
   expression->print(++indent);
-}
-const Token &ExpressionStatementAST::getLeftMostToken() {
-  return expression->getLeftMostToken();
-}
-const Token &ExpressionStatementAST::getRightMostToken() {
-  return expression->getRightMostToken();
 }
 SelectionStatementAST::SelectionStatementAST(nt<ExpressionAST> expression,
                                              nt<StatementAST> statement,
@@ -846,24 +565,14 @@ void SelectionStatementAST::print(int indent) {
     else_statement->print(indent);
   }
 }
-const Token &SelectionStatementAST::getLeftMostToken() {
-  return expression->getLeftMostToken();
-}
-const Token &SelectionStatementAST::getRightMostToken() {
-  return else_statement ? else_statement->getRightMostToken() : statement->getRightMostToken();
-}
 IterationStatementAST::IterationStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement)
     : AST(AST::Kind::ITERATION_STATEMENT, 0),
       expression(std::move(expression)),
-      statement(std::move(statement)),
-      left_most(this->expression->getLeftMostToken()),
-      right_most(this->statement->getLeftMostToken()) {}
+      statement(std::move(statement)) {}
 IterationStatementAST::IterationStatementAST(nt<StatementAST> statement, nt<ExpressionAST> expression)
     : AST(AST::Kind::ITERATION_STATEMENT, 1),
       statement(std::move(statement)),
-      expression(std::move(expression)),
-      left_most(this->statement->getLeftMostToken()),
-      right_most(this->expression->getLeftMostToken()) {}
+      expression(std::move(expression)) {}
 IterationStatementAST::IterationStatementAST(nt<ExpressionAST> expression,
                                              nt<ExpressionAST> condition_expression,
                                              nt<ExpressionAST> step_expression,
@@ -872,9 +581,7 @@ IterationStatementAST::IterationStatementAST(nt<ExpressionAST> expression,
       expression(std::move(expression)),
       condition_expression(std::move(condition_expression)),
       step_expression(std::move(step_expression)),
-      statement(std::move(statement)),
-      left_most(this->expression->getLeftMostToken()),
-      right_most(this->statement->getLeftMostToken()) {}
+      statement(std::move(statement)) {}
 void IterationStatementAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -890,12 +597,6 @@ void IterationStatementAST::print(int indent) {
     step_expression->print(indent);
     statement->print(indent);
   }
-}
-const Token &IterationStatementAST::getLeftMostToken() {
-  return left_most;
-}
-const Token &IterationStatementAST::getRightMostToken() {
-  return right_most;
 }
 JumpStatementAST::JumpStatementAST(nt<IdentifierAST> id) : AST(AST::Kind::JUMP_STATEMENT, 0), id(std::move(id)) {}
 JumpStatementAST::JumpStatementAST(bool is_continue) : AST(AST::Kind::JUMP_STATEMENT, is_continue ? 1 : 2) {}
@@ -916,34 +617,16 @@ void JumpStatementAST::print(int indent) {
     expression->print(indent);
   }
 }
-const Token &JumpStatementAST::getLeftMostToken() {
-  return id ? id->getLeftMostToken() : expression->getLeftMostToken();
-}
-const Token &JumpStatementAST::getRightMostToken() {
-  return id ? id->getRightMostToken() : expression->getRightMostToken();
-}
 TypeQualifierAST::TypeQualifierAST(Terminal<TypeQualifier> op) : AST(AST::Kind::TYPE_QUALIFIER), op(op) {}
 void TypeQualifierAST::print(int indent) {
   AST::print(indent);
   op.print(++indent);
-}
-const Token &TypeQualifierAST::getLeftMostToken() {
-  return op.token;
-}
-const Token &TypeQualifierAST::getRightMostToken() {
-  return op.token;
 }
 TypedefNameAST::TypedefNameAST(nt<IdentifierAST> identifier)
     : AST(AST::Kind::TYPEDEF_NAME), id(std::move(identifier)) {}
 void TypedefNameAST::print(int indent) {
   AST::print(indent);
   id->print(++indent);
-}
-const Token &TypedefNameAST::getLeftMostToken() {
-  return id->token;
-}
-const Token &TypedefNameAST::getRightMostToken() {
-  return id->token;
 }
 IdentifierAST::IdentifierAST(const Token &token)
     : AST(AST::Kind::IDENTIFIER), token(token) {}
@@ -952,20 +635,8 @@ void IdentifierAST::print(int indent) {
   AST::printIndent(++indent);
   std::cout << token.getValue() << std::endl;
 }
-const Token &IdentifierAST::getLeftMostToken() {
-  return token;
-}
-const Token &IdentifierAST::getRightMostToken() {
-  return token;
-}
 StringAST::StringAST(const Token &token) : AST(AST::Kind::STRING), mToken(token) {
   mType = std::make_unique<ArrayType>(&IntegerType::sCharType, mToken.getValue().size());
-}
-const Token &StringAST::getLeftMostToken() {
-  return mToken;
-}
-const Token &StringAST::getRightMostToken() {
-  return mToken;
 }
 AST::AST(AST::Kind kind, int id) : kind(kind), productionId(id) {}
 const char *AST::toString() {
@@ -1037,7 +708,7 @@ void AST::printIndent(int indent) {
   }
 }
 std::pair<const Token &, const Token &> AST::involvedTokens() {
-  return {getLeftMostToken(), getRightMostToken()};
+  return {*mLeftMost, *mRightMost};
 }
 IntegerConstantAST::IntegerConstantAST(const Token &token)
     : AST(AST::Kind::INTEGER_CONSTANT), mToken(token) {
@@ -1104,12 +775,6 @@ void IntegerConstantAST::print(int indent) {
   printIndent(++indent);
   std::cout << mToken.getValue() << std::endl;
 }
-const Token &IntegerConstantAST::getLeftMostToken() {
-  return mToken;
-}
-const Token &IntegerConstantAST::getRightMostToken() {
-  return mToken;
-}
 void ArgumentExpressionList::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -1119,9 +784,3 @@ void ArgumentExpressionList::print(int indent) {
 }
 ArgumentExpressionList::ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList)
     : AST(AST::Kind::ARGUMENT_EXPRESSION_LIST), mArgumentList(std::move(argumentList)) {}
-const Token &ArgumentExpressionList::getLeftMostToken() {
-  return mArgumentList.begin()->get()->getLeftMostToken();
-}
-const Token &ArgumentExpressionList::getRightMostToken() {
-  return mArgumentList.back()->getRightMostToken();
-}
