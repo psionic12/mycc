@@ -48,7 +48,7 @@ class Sema {
   void analyzeEnumerator(EnumeratorAST *ast);
   void analyzeTypedefName(TypedefNameAST *ast);
   void analyzeDeclaration(DeclarationAST *declaration);
-  void analyzeInitDeclarators(InitDeclarators *ast);
+  void analyzeInitDeclarators(const InitDeclarators &initDeclarators);
   void analyzeInitializer(InitializerAST *ast);
   void analyzeInitializerList(InitializerListAST *ast);
   void analyzeCompoundStatement(CompoundStatementAST *ast);

@@ -409,9 +409,26 @@ void Sema::analyzeTypedefName(TypedefNameAST *ast) {
 
 }
 void Sema::analyzeDeclaration(DeclarationAST *declaration) {
+  analyzeDeclarationSpecifiers(declaration->declaration_specifiers.get());
+  analyzeInitDeclarators(declaration->init_declarators);
+  bool hasDeclarator = !declaration->init_declarators.empty();
+  bool hasTag = false;
+  bool hasEnumMembers = false;
+  for (auto &type_specifier : declaration->declaration_specifiers->type_specifiers) {
+    if (type_specifier->getProduction() == 9) {
+      hasTag = static_cast<StructOrUnionSpecifierAST *> (type_specifier->specifier.get())->id != nullptr;
+    } else if (type_specifier->getProduction() == 10) {
+      auto enum_list = static_cast<EnumSpecifierAST *> (type_specifier->specifier.get())->enum_list.get();
+      hasEnumMembers = enum_list && !enum_list->enumerators.empty();
+    }
+  }
 
+  if (!hasDeclarator && !hasTag && !hasEnumMembers) {
+    throw SemaException("A declaration shall declare at least a declarator, a tag, or the members of an enumeration",
+                        declaration->getLeftMostToken());
+  }
 }
-void Sema::analyzeInitDeclarators(InitDeclarators *ast) {
+void Sema::analyzeInitDeclarators(const InitDeclarators &initDeclarators) {
 
 }
 void Sema::analyzeInitializer(InitializerAST *ast) {

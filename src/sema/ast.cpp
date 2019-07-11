@@ -94,7 +94,7 @@ const Token &CompoundStatementAST::getLeftMostToken() {
   return declarations.begin()->get()->getLeftMostToken();
 }
 const Token &CompoundStatementAST::getRightMostToken() {
-  return statements.end()->get()->getRightMostToken();
+  return statements.back()->getRightMostToken();
 }
 DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                                InitDeclarators init_declarators,
@@ -129,15 +129,19 @@ const Token &DeclarationAST::getLeftMostToken() {
   return declaration_specifiers->getLeftMostToken();
 }
 const Token &DeclarationAST::getRightMostToken() {
-  return init_declarators.end()->second->getRightMostToken();
+  return init_declarators.back().second->getRightMostToken();
 }
 DeclarationSpecifiersAST::DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
                                                    nts<TypeSpecifierAST> type_specifiers,
-                                                   nts<TypeQualifierAST> type_qualifiers)
+                                                   nts<TypeQualifierAST> type_qualifiers,
+                                                   const Token &left_most,
+                                                   const Token &right_most)
     : AST(AST::Kind::DECLARATION_SPECIFIER),
       storage_specifiers(std::move(storage_specifiers)),
       type_specifiers(std::move(type_specifiers)),
-      type_qualifiers(std::move(type_qualifiers)) {}
+      type_qualifiers(std::move(type_qualifiers)),
+      left_most(left_most),
+      right_most(right_most) {}
 void DeclarationSpecifiersAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -149,10 +153,10 @@ bool DeclarationSpecifiersAST::empty() {
   return storage_specifiers.empty() && type_qualifiers.empty() && type_specifiers.empty();
 }
 const Token &DeclarationSpecifiersAST::getLeftMostToken() {
-  return storage_specifiers.begin()->token;
+  return left_most;
 }
 const Token &DeclarationSpecifiersAST::getRightMostToken() {
-  return type_qualifiers.end()->get()->getRightMostToken();
+  return right_most;
 }
 DeclaratorAST::DeclaratorAST(nt<PointerAST> pointer,
                              nt<DirectDeclaratorAST> direct_declarator)
@@ -243,7 +247,7 @@ const Token &StructOrUnionSpecifierAST::getLeftMostToken() {
   return id->getLeftMostToken();
 }
 const Token &StructOrUnionSpecifierAST::getRightMostToken() {
-  return declarations.end()->get()->getRightMostToken();
+  return declarations.back()->getRightMostToken();
 }
 EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier,
                                    nt<EnumeratorListAST> enumeratorList)
@@ -255,8 +259,8 @@ EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier)
 void EnumSpecifierAST::print(int indent) {
   AST::print(indent);
   ++indent;
-  id->print(indent);
-  enum_list->print(indent);
+  if (id) id->print(indent);
+  if (enum_list) enum_list->print(indent);
 }
 const Token &EnumSpecifierAST::getLeftMostToken() {
   if (getProduction() != 1) {
@@ -299,7 +303,7 @@ const Token &StructDeclaratorListAST::getLeftMostToken() {
   return struct_declarators.begin()->get()->getLeftMostToken();
 }
 const Token &StructDeclaratorListAST::getRightMostToken() {
-  return struct_declarators.end()->get()->getRightMostToken();
+  return struct_declarators.back()->getRightMostToken();
 }
 StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST> declarator)
     : AST(AST::Kind::STRUCT_DECLARATOR, 0),
@@ -382,7 +386,7 @@ const Token &DirectDeclaratorAST::getLeftMostToken() {
   return term1->getLeftMostToken();
 }
 const Token &DirectDeclaratorAST::getRightMostToken() {
-  return term2s.end()->second->getRightMostToken();
+  return term2s.back().second->getRightMostToken();
 }
 ParameterTypeListAST::ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple)
     : AST(AST::Kind::PARAMETER_TYPE_LIST, hasMultiple ? 1 : 0), parameter_list(std::move(parameter_list)) {}
@@ -461,7 +465,7 @@ const Token &ExpressionAST::getLeftMostToken() {
   return assignment_expression.begin()->get()->getLeftMostToken();
 }
 const Token &ExpressionAST::getRightMostToken() {
-  return assignment_expression.end()->get()->getRightMostToken();
+  return assignment_expression.back()->getRightMostToken();
 }
 CastExpressionAST::CastExpressionAST(nt<UnaryExpressionAST> unary_expression)
     : AST(AST::Kind::CAST_EXPRESSION, 0),
@@ -721,7 +725,7 @@ const Token &EnumeratorListAST::getLeftMostToken() {
   return enumerators.begin()->get()->getLeftMostToken();
 }
 const Token &EnumeratorListAST::getRightMostToken() {
-  return enumerators.end()->get()->getRightMostToken();
+  return enumerators.back()->getRightMostToken();
 }
 EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id) : AST(AST::Kind::ENUMERATOR, 0), id(std::move(id)) {}
 EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id, nt<ConstantExpressionAST> constant_expression)
@@ -764,7 +768,7 @@ const Token &InitializerListAST::getLeftMostToken() {
   return initializer.begin()->get()->getRightMostToken();
 }
 const Token &InitializerListAST::getRightMostToken() {
-  return initializer.end()->get()->getRightMostToken();
+  return initializer.back()->getRightMostToken();
 }
 StatementAST::StatementAST(nt<LabeledStatementAST> ast) : AST(AST::Kind::STATEMENT, 0), ast(std::move(ast)) {}
 StatementAST::StatementAST(nt<ExpressionStatementAST> ast) : AST(AST::Kind::STATEMENT, 1), ast(std::move(ast)) {}
@@ -1119,5 +1123,5 @@ const Token &ArgumentExpressionList::getLeftMostToken() {
   return mArgumentList.begin()->get()->getLeftMostToken();
 }
 const Token &ArgumentExpressionList::getRightMostToken() {
-  return mArgumentList.end()->get()->getRightMostToken();
+  return mArgumentList.back()->getRightMostToken();
 }

@@ -633,8 +633,10 @@ class DeclaratorAST : public AST {
 class DeclarationSpecifiersAST : public AST {
  public:
   DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
-                           nts<TypeSpecifierAST> type_specifiers,
-                           nts<TypeQualifierAST> type_qualifiers);
+                             nts<TypeSpecifierAST> type_specifiers,
+                             nts<TypeQualifierAST> type_qualifiers,
+                             const Token &left_most,
+                             const Token &right_most);
   const ts<StorageSpecifier> storage_specifiers;
   const nts<TypeSpecifierAST> type_specifiers;
   const nts<TypeQualifierAST> type_qualifiers;
@@ -642,6 +644,9 @@ class DeclarationSpecifiersAST : public AST {
   void print(int indent) override;
   const Token &getLeftMostToken() override;
   const Token &getRightMostToken() override;
+ private:
+  const Token& left_most;
+  const Token& right_most;
 };
 class DeclarationAST : public AST {
  public:
@@ -653,6 +658,8 @@ class DeclarationAST : public AST {
   void print(int indent) override;
   const Token &getLeftMostToken() override;
   const Token &getRightMostToken() override;
+  const Token &left_most;
+  const Token &right_most;
 };
 class CompoundStatementAST : public AST {
  public:

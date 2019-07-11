@@ -259,21 +259,27 @@ nt<EnumeratorAST> Parser::parseEnumerator() {
 ///                    | <enumerator-list> , <enumerator>
 nt<EnumeratorListAST> Parser::parseEnumeratorList() {
   nts<EnumeratorAST> list;
-  do {
+  while (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     list.emplace_back(parseEnumerator());
-  } while (expect(TokenKind::TOKEN_COMMA));
+    expect(TokenKind::TOKEN_COMMA);
+  }
   return std::make_unique<EnumeratorListAST>(std::move(list));
 }
 
 ///<enum-specifier> ::= enum <identifier> { <enumerator-list> }
 ///                   | enum { <enumerator-list> }
 ///                   | enum <identifier>
+
+///          enum-specifier:
+//                enum identifieropt { enumerator-list }
+//                enum identifieropt { enumerator-list , }
+//                enum identifier
 nt<EnumSpecifierAST> Parser::parseEnumSpecifier() {
   accept(TokenKind::TOKEN_ENUM);
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     auto id = parseIdentifier();
     if (expect(TokenKind::TOKEN_LBRACE)) {
-      auto p = std::make_unique<EnumSpecifierAST>(parseEnumeratorList());
+      auto p = std::make_unique<EnumSpecifierAST>(std::move(id), parseEnumeratorList());
       accept(TokenKind::TOKEN_RBRACE);
       return p;
     } else {
