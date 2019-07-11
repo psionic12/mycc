@@ -3,6 +3,7 @@ void Sema::analyze() {
   analyzeTranslationUnitAST(root.get());
 }
 void Sema::analyzeTranslationUnitAST(TranslationUnitAST *ast) {
+  table = &ast->table;
   for (const auto &ds : ast->external_declarations) {
     analyzeExternalDeclaration(ds.get());
   }
@@ -26,6 +27,14 @@ void Sema::analyzeIdentifier(IdentifierAST *ast) {
 
 }
 void Sema::analyzeDeclarationSpecifiers(DeclarationSpecifiersAST *ast) {
+  if (ast->storage_specifiers.size() > 1) {
+    throw SemaException(
+        "At most, one storage-class specifier may be given in the declaration specifiers in a declaration",
+        ast->storage_specifiers.back().token);
+  }
+  //TODO The declaration of an identifier for a function that has block scope shall have no explicit storage-class specifier other than extern.
+  //TODO If an aggregate or union object is declared with a storage-class specifier other than typedef, the properties resulting from the storage-class specifier, except with respect to linkage, also apply to the members of the object, and so on recursively for any aggregate or union member objects.
+  //TODO At least one type specifier shall be given in the declaration specifiers in each declaration,  and in the specifier-qualifier list in each struct declaration and type name.
 
 }
 void Sema::analyzeStorageClassSpecifier(StorageClassSpecifierAST *ast) {
@@ -427,6 +436,7 @@ void Sema::analyzeDeclaration(DeclarationAST *declaration) {
     throw SemaException("A declaration shall declare at least a declarator, a tag, or the members of an enumeration",
                         *declaration->mLeftMost);
   }
+  //TODO 6.7.3
 }
 void Sema::analyzeInitDeclarators(const InitDeclarators &initDeclarators) {
 
