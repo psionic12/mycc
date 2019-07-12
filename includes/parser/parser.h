@@ -43,7 +43,7 @@ class Parser {
   }
  public:
   nt<ExternalDeclarationAST> parseExternalDeclaration();
-  nt<FunctionDefinitionAST> parseFunctionDefinition();
+//  nt<FunctionDefinitionAST> parseFunctionDefinition();
   nt<DeclarationSpecifiersAST> parseDeclarationSpecifiers();
   StorageSpecifier parseStorageClassSpecifier();
   nt<TypeSpecifierAST> parseTypeSpecifier();
@@ -79,7 +79,7 @@ class Parser {
   InitDeclarators parseInitDeclarators();
   nt<InitializerAST> parseInitializer();
   nt<InitializerListAST> parseInitializerList();
-  nt<CompoundStatementAST> parseCompoundStatement(bool function = false);
+  nt<CompoundStatementAST> parseCompoundStatement();
   nt<StatementAST> parseStatement();
   nt<LabeledStatementAST> parseLabeledStatement();
   nt<ExpressionStatementAST> parseExpressionStatement();

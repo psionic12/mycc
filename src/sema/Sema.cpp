@@ -3,7 +3,8 @@ void Sema::analyze() {
   analyzeTranslationUnitAST(root.get());
 }
 void Sema::analyzeTranslationUnitAST(TranslationUnitAST *ast) {
-  table = &ast->table;
+  mObjectTable = &ast->mObjectTable;
+  mTagTable = &ast->mTagTable;
   for (const auto &ds : ast->external_declarations) {
     analyzeExternalDeclaration(ds.get());
   }
@@ -16,12 +17,13 @@ void Sema::analyzeExternalDeclaration(ExternalDeclarationAST *ast) {
   }
 }
 void Sema::analyzeFunctionDefinition(FunctionDefinitionAST *ast) {
+  mLabelTable = &ast->mLabelTable;
   for (const auto &specifier : ast->declaration_spcifiers->storage_specifiers) {
     if (specifier.type != StorageSpecifier::kEXTERN && specifier.type != StorageSpecifier::kSTATIC) {
       throw SemaException("declaration specifiers shall be either extern or static", specifier.token);
     }
   }
-
+  mLabelTable = nullptr;
 }
 void Sema::analyzeIdentifier(IdentifierAST *ast) {
 
@@ -35,7 +37,21 @@ void Sema::analyzeDeclarationSpecifiers(DeclarationSpecifiersAST *ast) {
   //TODO The declaration of an identifier for a function that has block scope shall have no explicit storage-class specifier other than extern.
   //TODO If an aggregate or union object is declared with a storage-class specifier other than typedef, the properties resulting from the storage-class specifier, except with respect to linkage, also apply to the members of the object, and so on recursively for any aggregate or union member objects.
   //TODO At least one type specifier shall be given in the declaration specifiers in each declaration,  and in the specifier-qualifier list in each struct declaration and type name.
+  auto it = ast->type_specifiers.begin();
+  switch (it->get()->getProduction()) {
+    case 0 ://void
+      break;
+    case 7 :// float
+      break;
+    case 9 :// strcut or union
+      break;
+    case 10:// enum
+      break;
+    case 11:// typedef
+      break;
+    default:break;
 
+  }
 }
 void Sema::analyzeStorageClassSpecifier(StorageClassSpecifierAST *ast) {
 
@@ -263,7 +279,7 @@ void Sema::analyzePrimaryExpression(PrimaryExpressionAST *ast) {
   switch (ast->getProduction()) {
     case 0: { // identifier
       auto *identifierAST = static_cast<IdentifierAST *>(ast->ast.get());
-      auto *symbol = table->lookup(identifierAST->token);
+      auto *symbol = mObjectTable->lookup(identifierAST->token);
       SymbolKind kind = symbol->getKind();
       if (kind == SymbolKind::OBJECT) {
         ast->mType = static_cast<ObjectSymbol *>(symbol)->getType();
@@ -400,7 +416,7 @@ void Sema::analyzeParameterTypeList(ParameterTypeListAST *ast) {
 
 }
 void Sema::analyzeParameterList(ParameterListAST *ast) {
-
+  SymbolScope s(mObjectTable, &ast->mObjectTable);
 }
 void Sema::analyzeParameterDeclaration(ParameterDeclarationAST *ast) {
 
@@ -448,7 +464,8 @@ void Sema::analyzeInitializerList(InitializerListAST *ast) {
 
 }
 void Sema::analyzeCompoundStatement(CompoundStatementAST *ast) {
-
+  SymbolScope s1(mObjectTable, &ast->mObjectTable);
+  SymbolScope s2(mTagTable, &ast->mTagTable);
 }
 void Sema::analyzeStatement(StatementAST *ast) {
 

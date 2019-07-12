@@ -50,7 +50,7 @@ void ArrayType::setSize(unsigned int size) {
 }
 PointerType::PointerType(const Type *referencedType)
     : mReferencedType(referencedType) {}
-const Type * PointerType::getReferencedType() const {
+const Type *PointerType::getReferencedType() const {
   return mReferencedType;
 }
 const std::set<TypeQualifier> &PointerType::qualifersToReferencedType() const {
@@ -60,8 +60,11 @@ bool VoidType::complete() const {
   return false;
 }
 CompoundType::CompoundType(std::string tag,
-                           std::vector<std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>>> members)
-    : mTag(std::move(tag)), mMembers(std::move(members)) {}
+                           std::vector<std::pair<std::string,
+                                                 std::pair<const Type *, std::set<TypeQualifier>>>> members)
+    : mTag(std::move(tag)),
+      mMembers(std::move(members)),
+      symbolTable(ScopeKind::FILE, nullptr)/*TODO does scope kind matters?*/ {}
 const std::string &CompoundType::getTag() const {
   return mTag;
 }

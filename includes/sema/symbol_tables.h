@@ -2,14 +2,35 @@
 
 #ifndef MYCCPILER_SYMBOL_TABLES_H
 #define MYCCPILER_SYMBOL_TABLES_H
-
-#include <llvm/IR/Value.h>
-#include <llvm/IR/Function.h>
-#include <llvm/IR/Module.h>
 #include <map>
 #include <list>
 #include <tokens/token.h>
-#include "ast.h"
+#include <set>
+#include <memory>
+#include "operator.h"
+class Type;
+
+class ObjectType;
+
+class IntegerType;
+
+class FloatingType;
+
+class VoidType;
+
+class FunctionType;
+
+class PointerType;
+
+class ArrayType;
+
+class CompoundType;
+
+class StructType;
+
+class UnionType;
+
+class EnumerationType;
 
 enum class Linkage {
   kExternal,
@@ -144,34 +165,33 @@ class EnumConstSymbol : public ISymbol {
 
 class SymbolTable : std::map<std::string, std::unique_ptr<ISymbol>> {
  public:
-  SymbolTable(ScopeKind kind, SymbolTable *father, llvm::Module &module)
-      : scope_kind(kind), father(father), module(module) {}
+  SymbolTable(ScopeKind kind, SymbolTable *father)
+      : scope_kind(kind), father(father) {}
   ISymbol *lookup(const Token &token);
   ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
 
   // TODO move this to parser
   bool isTypedef(const Token &token);
+  void setFather(SymbolTable *father);
+  SymbolTable *getFather() const;
  private:
   ScopeKind scope_kind;
   SymbolTable *father;
-  llvm::Module &module;
 };
 
 class SymbolTables {
  public:
-  SymbolTables(llvm::Module &module) : module(module) {
-
-  }
   SymbolTable *createTable(ScopeKind kind, SymbolTable *father);
  private:
   std::list<SymbolTable> tables;
-  llvm::Module &module;
 };
 
 class SymbolScope {
  public:
   SymbolScope(SymbolTable *&outter, SymbolTable *inner) : outter(outter), outter_valule(outter) {
     outter = inner;
+    if(!inner->getFather())
+    inner->setFather(outter);
   }
   ~SymbolScope() {
     outter = outter_valule;

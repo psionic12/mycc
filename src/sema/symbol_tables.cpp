@@ -1,4 +1,5 @@
 #include <sema/symbol_tables.h>
+#include <sema/ast.h>
 ISymbol * SymbolTable::lookup(const Token &token) {
   try {
     return at(token.getValue()).get();
@@ -21,7 +22,13 @@ ISymbol * SymbolTable::insert(const Token &token, std::unique_ptr<ISymbol> &&sym
     return emplace(token.getValue(), std::move(symbol)).first->second.get();
   }
 }
+void SymbolTable::setFather(SymbolTable *father) {
+  SymbolTable::father = father;
+}
+SymbolTable *SymbolTable::getFather() const {
+  return father;
+}
 SymbolTable *SymbolTables::createTable(ScopeKind kind, SymbolTable *father) {
-  tables.emplace_back(kind, father, module);
+  tables.emplace_back(kind, father);
   return &tables.back();
 }

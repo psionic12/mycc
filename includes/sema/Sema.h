@@ -5,14 +5,17 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
 #include "symbol_tables.h"
+#include "ast.h"
 class Sema {
  public:
   Sema(nt<TranslationUnitAST> &&root, llvm::Module &module, llvm::IRBuilder<> &builder)
-      : root(std::move(root)), table(&this->root->table), module(module), builder(builder) {}
+      : root(std::move(root)), mObjectTable(&this->root->mObjectTable), module(module), builder(builder) {}
   void analyze();
  private:
   nt<TranslationUnitAST> root;
-  SymbolTable *table;
+  SymbolTable *mObjectTable;
+  SymbolTable *mTagTable;
+  SymbolTable *mLabelTable;
   llvm::Module &module;
   llvm::IRBuilder<> &builder;
   void analyzeTranslationUnitAST(TranslationUnitAST *ast);

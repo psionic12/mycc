@@ -7,7 +7,7 @@
 #include <memory>
 #include <sema/operator.h>
 #include <tokens/token.h>
-#include <llvm/IR/Value.h>
+#include <iostream>
 #include "types.h"
 class SymbolTable;
 class SemaException : public std::exception {
@@ -89,8 +89,8 @@ class AST {
   void printIndent(int indent);
   std::pair<const Token &, const Token &> involvedTokens();
   virtual ~AST() = default;
-  const Token* mLeftMost;
-  const Token* mRightMost;
+  const Token *mLeftMost;
+  const Token *mRightMost;
  private:
   const Kind kind;
   //the id of which production
@@ -278,7 +278,7 @@ class ParameterListAST : public AST {
  public:
   ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table);
   const nts<ParameterDeclarationAST> parameter_declaration;
-  SymbolTable &table;
+  SymbolTable &mObjectTable;
   void print(int indent) override;
 };
 class EnumerationConstantAST : public AST {
@@ -446,6 +446,7 @@ class DirectDeclaratorAST : public AST {
   const nt<AST> term1;  //<identifier> or <declarator>
   const std::vector<std::pair<Term2, nt<AST>>> term2s;
   void print(int indent) override;
+  ParameterListAST* getParameterList();
 };
 class PointerAST : public AST {
  public:
@@ -538,8 +539,8 @@ class DeclaratorAST : public AST {
 class DeclarationSpecifiersAST : public AST {
  public:
   DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
-                             nts<TypeSpecifierAST> type_specifiers,
-                             nts<TypeQualifierAST> type_qualifiers);
+                           nts<TypeSpecifierAST> type_specifiers,
+                           nts<TypeQualifierAST> type_qualifiers);
   const ts<StorageSpecifier> storage_specifiers;
   const nts<TypeSpecifierAST> type_specifiers;
   const nts<TypeQualifierAST> type_qualifiers;
@@ -558,23 +559,27 @@ class DeclarationAST : public AST {
 class CompoundStatementAST : public AST {
  public:
   CompoundStatementAST(nts<DeclarationAST> declarations,
-                       nts<StatementAST> statements,
-                       SymbolTable &table);
+                         nts<StatementAST> statements,
+                         SymbolTable &objectTable,
+                         SymbolTable &tagTable);
   const nts<DeclarationAST> declarations;
   const nts<StatementAST> statements;
-  SymbolTable &table;
+  SymbolTable &mObjectTable;
+  SymbolTable &mTagTable;
   void print(int indent) override;
 };
 class FunctionDefinitionAST : public AST {
  public:
   FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declaration_spcifiers,
-                        nt<DeclaratorAST> declarator,
-                        nts<DeclarationAST> declarations,
-                        nt<CompoundStatementAST> compound_statement);
+                          nt<DeclaratorAST> declarator,
+                          nts<DeclarationAST> declarations,
+                          nt<CompoundStatementAST> compound_statement,
+                          SymbolTable &lableTable);
   const nt<DeclarationSpecifiersAST> declaration_spcifiers;
   const nt<DeclaratorAST> declarator;
   const nts<DeclarationAST> declarations;
   const nt<CompoundStatementAST> compound_statement;
+  SymbolTable &mLabelTable;
   void print(int indent) override;
 
 };
@@ -586,9 +591,12 @@ class ExternalDeclarationAST : public AST {
 };
 class TranslationUnitAST : public AST {
  public:
-  TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations, SymbolTable &table);
+  TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations,
+                       SymbolTable &objectTable,
+                       SymbolTable &tagTable);
   const nts<ExternalDeclarationAST> external_declarations;
-  SymbolTable &table;
+  SymbolTable &mObjectTable;
+  SymbolTable &mTagTable;
   void print(int indent) override;
 };
 #endif //MYCCPILER_AST_H

@@ -12,8 +12,11 @@ SemaException::SemaException(std::string error, const Token &start, const Token 
 }
 SemaException::SemaException(std::string error, std::pair<const Token &, const Token &> range)
     : SemaException(std::move(error), range.first, range.second) {}
-TranslationUnitAST::TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations, SymbolTable &table)
-    : AST(AST::Kind::TRANSLATION_UNIT), external_declarations(std::move(external_declarations)), table(table) {}
+TranslationUnitAST::TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations,
+                                       SymbolTable &objectTable,
+                                       SymbolTable &tagTable)
+    : AST(AST::Kind::TRANSLATION_UNIT), external_declarations(std::move(external_declarations)),
+      mObjectTable(objectTable), mTagTable(tagTable) {}
 void TranslationUnitAST::print(int indent) {
   AST::print(indent);
   external_declarations.print(++indent);
@@ -44,13 +47,18 @@ void ExternalDeclarationAST::print(int indent) {
 FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declaration_spcifiers,
                                              nt<DeclaratorAST> declarator,
                                              nts<DeclarationAST> declarations,
-                                             nt<CompoundStatementAST> compound_statement)
+                                             nt<CompoundStatementAST> compound_statement,
+                                             SymbolTable &lableTable)
     : AST(AST::Kind::FUNCTION_DEFINITION),
       declaration_spcifiers(std::move(declaration_spcifiers)),
       declarator(std::move(declarator)),
       declarations(std::move(declarations)),
-      compound_statement(std::move(compound_statement)) {
-  // TODO proto scope is the father of function block;
+      compound_statement(std::move(compound_statement)),
+      mLabelTable(lableTable) {
+  if (auto *para_list = this->declarator->direct_declarator->getParameterList()) {
+    this->compound_statement->mObjectTable.setFather(&para_list->mObjectTable);
+  }
+
 }
 void FunctionDefinitionAST::print(int indent) {
   AST::print(indent);
@@ -62,10 +70,11 @@ void FunctionDefinitionAST::print(int indent) {
 }
 CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
                                            nts<StatementAST> statements,
-                                           SymbolTable &table)
+                                           SymbolTable &objectTable,
+                                           SymbolTable &tagTable)
     : AST(AST::Kind::COMPOUND_STATEMENT),
       declarations(std::move(declarations)),
-      statements(std::move(statements)), table(table) {}
+      statements(std::move(statements)), mObjectTable(objectTable), mTagTable(tagTable) {}
 void CompoundStatementAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -150,13 +159,14 @@ void ProtoTypeSpecifierAST::print(int indent) {
   specifier.print(++indent);
 }
 TypeSpecifierAST::TypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier)
-    : AST(AST::Kind::TYPE_SPECIFIER), specifier(std::make_unique<ProtoTypeSpecifierAST>(specifier)) {}
+    : AST(AST::Kind::TYPE_SPECIFIER, static_cast<int>(specifier.type)),
+      specifier(std::make_unique<ProtoTypeSpecifierAST>(specifier)) {}
 TypeSpecifierAST::TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier)
     : AST(AST::Kind::TYPE_SPECIFIER, 9), specifier(std::move(specifier)) {}
-TypeSpecifierAST::TypeSpecifierAST(nt<EnumSpecifierAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER,
-                                                                         10), specifier(std::move(specifier)) {}
-TypeSpecifierAST::TypeSpecifierAST(nt<TypedefNameAST> specifier) : AST(AST::Kind::TYPE_SPECIFIER,
-                                                                       11), specifier(std::move(specifier)) {}
+TypeSpecifierAST::TypeSpecifierAST(nt<EnumSpecifierAST> specifier)
+    : AST(AST::Kind::TYPE_SPECIFIER, 10), specifier(std::move(specifier)) {}
+TypeSpecifierAST::TypeSpecifierAST(nt<TypedefNameAST> specifier)
+    : AST(AST::Kind::TYPE_SPECIFIER, 11), specifier(std::move(specifier)) {}
 void TypeSpecifierAST::print(int indent) {
   AST::print(indent);
   specifier->print(++indent);
@@ -253,6 +263,14 @@ void DirectDeclaratorAST::print(int indent) {
       std::cout << static_cast<int>(term.first) << std::endl;
     }
   }
+}
+ParameterListAST *DirectDeclaratorAST::getParameterList() {
+  for (const auto &term : term2s) {
+    if (term.first == Term2::PARA_LIST) {
+      return static_cast<ParameterListAST *>(term.second.get());
+    }
+  }
+  return nullptr;
 }
 ParameterTypeListAST::ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple)
     : AST(AST::Kind::PARAMETER_TYPE_LIST, hasMultiple ? 1 : 0), parameter_list(std::move(parameter_list)) {}
@@ -465,7 +483,7 @@ void FloatingConstantAST::print(int indent) {
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST> id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
 ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table)
-    : AST(AST::Kind::PARAMETER_LIST), parameter_declaration(std::move(parameter_declaration)), table(table) {}
+    : AST(AST::Kind::PARAMETER_LIST), parameter_declaration(std::move(parameter_declaration)), mObjectTable(table) {}
 void ParameterListAST::print(int indent) {
   AST::print(indent);
   parameter_declaration.print(++indent);

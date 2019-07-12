@@ -1,7 +1,5 @@
 #ifndef MYCCPILER_OPERATOR_H
 #define MYCCPILER_OPERATOR_H
-
-#include <iostream>
 enum class InfixOp {
   BARBAR,
   AMPAMP,
@@ -49,13 +47,13 @@ enum class UnaryOp {
 enum class ProtoTypeSpecifier {
   kVOID,
   kCHAR,
-  kSHORT,
   kINT,
+  kSHORT,
   kLONG,
-  kFLOAT,
-  kDOUBLE,
   kSIGNED,
   kUNSIGNED,
+  kFLOAT,
+  kDOUBLE,
 };
 
 enum class StorageSpecifier {

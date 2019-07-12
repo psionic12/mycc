@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include "operator.h"
+#include "symbol_tables.h"
 
 class TypeException {};
 
@@ -102,6 +103,7 @@ class CompoundType : public ObjectType {
  private:
   std::string mTag;
   std::vector<std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>>> mMembers;
+  SymbolTable symbolTable;
  public:
   const std::string &getTag() const;
 };

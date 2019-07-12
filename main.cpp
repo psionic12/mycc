@@ -10,7 +10,7 @@ int main() {
   llvm::LLVMContext TheContext;
   llvm::Module module("test", TheContext);
   llvm::IRBuilder<> builder(TheContext);
-  SymbolTables tables(module);
+  SymbolTables tables;
   auto parser = Parser(testFile, tables);
   auto tr = parser.parseTranslationUnit();
   tr->print(0);

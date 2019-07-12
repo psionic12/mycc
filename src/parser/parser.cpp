@@ -98,18 +98,19 @@ InfixOp Parser::isInfixOp(TokenKind kind) {
 /// <translation-unit> ::= {<external-declaration>}*
 nt<TranslationUnitAST>
 Parser::parseTranslationUnit() {
-  const Token *mStartToken = &lex.peek();
+  mStartToken = &lex.peek();
   nts<ExternalDeclarationAST> declarations;
   while (lex.peek() != TokenKind::TOKEN_EOF) {
     declarations.push_back(parseExternalDeclaration());
   }
-  return make_ast<TranslationUnitAST>(std::move(declarations), *table);
+  auto *tagTable = symbolTables.createTable(ScopeKind::FILE, nullptr);
+  return make_ast<TranslationUnitAST>(std::move(declarations), *table, *tagTable);
 }
 
 ///<external-declaration> ::= <function-definition>
 ///                         | <declaration>
 nt<ExternalDeclarationAST> Parser::parseExternalDeclaration() {
-  const Token *mStartToken = &lex.peek();
+  mStartToken = &lex.peek();
   // conflict, we merge to productions.
   //<declaration> 		  ::= {<declaration-specifier>}+ {<init-declarator>}* ;
   //<function-definition> ::= {<declaration-specifier>}+ <declarator> 		  {<declaration>}* <compound-statement>
@@ -129,10 +130,12 @@ nt<ExternalDeclarationAST> Parser::parseExternalDeclaration() {
     // has <declaration> or next token is a '{', this is a function definition
     if (!declarations.empty() || lex.peek() == TokenKind::TOKEN_LBRACE) {
       auto declarator = std::move(init_declarators.back().first);
+      auto *labelTable = symbolTables.createTable(ScopeKind::FUNCTION, nullptr);
       auto function_definition = make_ast<FunctionDefinitionAST>(std::move(specifiers),
-                                                                         std::move(declarator),
-                                                                         std::move(declarations),
-                                                                         parseCompoundStatement(true));
+                                                                 std::move(declarator),
+                                                                 std::move(declarations),
+                                                                 parseCompoundStatement(),
+                                                                 *labelTable);
       // common mistake
       if (expect(TokenKind::TOKEN_SEMI)) {
         throw SemaException("function definition should end without semi", lex.peek(-1));
@@ -287,6 +290,10 @@ nt<EnumSpecifierAST> Parser::parseEnumSpecifier() {
   mStartToken = &lex.peek();
   accept(TokenKind::TOKEN_ENUM);
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
+    if (table->isTypedef(lex.peek())) {
+      throw ParserException(std::string("cannot combine type \"") + lex.peek().getValue() + "\" with enum",
+                            lex.peek());
+    }
     auto id = parseIdentifier();
     if (expect(TokenKind::TOKEN_LBRACE)) {
       auto p = make_ast<EnumSpecifierAST>(std::move(id), parseEnumeratorList());
@@ -384,8 +391,8 @@ nt<AssignmentExpressionAST> Parser::parseAssignmentExpression() {
     case TokenKind::TOKEN_CARETEQ:
     case TokenKind::TOKEN_BAREQ:
       return make_ast<AssignmentExpressionAST>(std::move(LHS),
-                                                       Terminal<AssignmentOp>(parseAssignmentOperator(), lex.peek()),
-                                                       parseAssignmentExpression());
+                                               Terminal<AssignmentOp>(parseAssignmentOperator(), lex.peek()),
+                                               parseAssignmentExpression());
     default:return make_ast<AssignmentExpressionAST>(std::move(LHS));
   }
 }
@@ -425,8 +432,8 @@ nt<LogicalOrExpressionAST> Parser::parseLogicalOrExpression(int calling_prec) {
       lex.consumeToken();
       auto term2 = parseLogicalOrExpression(prec);
       term1 = make_ast<LogicalOrExpressionAST>(std::move(term1),
-                                                       Terminal<InfixOp>(op, lex.peek()),
-                                                       std::move(term2));
+                                               Terminal<InfixOp>(op, lex.peek()),
+                                               std::move(term2));
     }
 
   }
@@ -461,8 +468,8 @@ nts<DeclarationAST> Parser::parseDeclarations() {
       case TokenKind::TOKEN_VOLATILE: {
         auto ds = parseDeclarationSpecifiers();
         auto p = make_ast<DeclarationAST>(std::move(ds),
-                                                  parseInitDeclarators(),
-                                                  *table);
+                                          parseInitDeclarators(),
+                                          *table);
         declarations.push_back(std::move(p));
         accept(TokenKind::TOKEN_SEMI);
         continue;
@@ -478,7 +485,7 @@ nts<DeclarationAST> Parser::parseDeclarations() {
 ///                          | <type-specifier>
 ///                          | <type-qualifier>
 nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
-  const Token *mStartToken = &lex.peek();
+  mStartToken = &lex.peek();
   bool typeCompleted = false;
   ts<StorageSpecifier> storage_specifiers;
   nts<TypeSpecifierAST> type_specifiers;
@@ -493,7 +500,7 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), token);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (!table->isTypedef(lex.peek()) || typeCompleted) {
+        if (typeCompleted || !table->isTypedef(lex.peek())) {
           break;
         } else {
           type_specifiers.push_back(parseTypeSpecifier());
@@ -502,17 +509,31 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
         }
       case TokenKind::TOKEN_CHAR:
       case TokenKind::TOKEN_DOUBLE:
-      case TokenKind::TOKEN_ENUM:
-      case TokenKind::TOKEN_FLOAT:
       case TokenKind::TOKEN_INT:
       case TokenKind::TOKEN_LONG:
       case TokenKind::TOKEN_SHORT:
       case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_UNSIGNED:
+        if (typeCompleted) {
+          throw parseError(std::string("cannot combine ") + (lex.peek().getValue()) + (" with ")
+                               + type_specifiers.back().get()->mLeftMost->getValue(), lex.peek());
+        } else {
+          type_specifiers.push_back(parseTypeSpecifier());
+          continue;
+        }
+      case TokenKind::TOKEN_VOID:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_UNION:
-      case TokenKind::TOKEN_UNSIGNED:
-      case TokenKind::TOKEN_VOID:type_specifiers.push_back(parseTypeSpecifier());
-        continue;
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_FLOAT:
+        if (typeCompleted) {
+          throw parseError(std::string("cannot combine ") + (lex.peek().getValue()) + (" with ")
+                               + type_specifiers.back().get()->mLeftMost->getValue(), lex.peek());
+        } else {
+          type_specifiers.push_back(parseTypeSpecifier());
+          typeCompleted = true;
+          continue;
+        }
       case TokenKind::TOKEN_CONST:
       case TokenKind::TOKEN_VOLATILE:type_qualifiers.push_back(parseTypeQualifier());
         continue;
@@ -521,8 +542,8 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
     break;
   }
   return make_ast<DeclarationSpecifiersAST>(std::move(storage_specifiers),
-                                                    std::move(type_specifiers),
-                                                    std::move(type_qualifiers));
+                                            std::move(type_specifiers),
+                                            std::move(type_qualifiers));
 }
 
 ///<init-declarator> ::= <declarator>
@@ -742,7 +763,7 @@ nt<ParameterDeclarationAST> Parser::parseParameterDeclaration() {
 ///                            | extern
 ///                            | typedef
 StorageSpecifier Parser::parseStorageClassSpecifier() {
-  const Token *mStartToken = &lex.peek();
+  mStartToken = &lex.peek();
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_AUTO:lex.consumeToken();
       return StorageSpecifier::kAUTO;
@@ -825,6 +846,10 @@ nt<StructOrUnionSpecifierAST> Parser::parseStructOrUnionSpecifier() {
   }
   nt<IdentifierAST> id = nullptr;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
+    if (table->isTypedef(lex.peek())) {
+      throw ParserException(std::string("cannot combine type \"") + lex.peek().getValue() + "\" with struct or union",
+                            lex.peek());
+    }
     id = parseIdentifier();
   }
   nts<StructDeclarationAST> declarations;
@@ -927,22 +952,22 @@ nt<InitializerListAST> Parser::parseInitializerList() {
 
 ///<function-definition> ::= {<declaration-specifier>}* <declarator> {<declaration>}* <compound-statement>
 // we use {<declaration-specifier>}+ here
-nt<FunctionDefinitionAST> Parser::parseFunctionDefinition() {
-  const Token *mStartToken = &lex.peek();
-  auto specifiers = parseDeclarationSpecifiers();
-  auto declarator = parseDeclarator();
-  auto declarations = parseDeclarations();
-  auto compound = parseCompoundStatement(true);
-  return make_ast<FunctionDefinitionAST>(std::move(specifiers),
-                                                 std::move(declarator),
-                                                 std::move(declarations),
-                                                 std::move(compound));
-}
+//nt<FunctionDefinitionAST> Parser::parseFunctionDefinition() {
+//  mStartToken = &lex.peek();
+//  auto specifiers = parseDeclarationSpecifiers();
+//  auto declarator = parseDeclarator();
+//  auto declarations = parseDeclarations();
+//  auto compound = parseCompoundStatement();
+//  return make_ast<FunctionDefinitionAST>(std::move(specifiers),
+//                                         std::move(declarator),
+//                                         std::move(declarations),
+//                                         std::move(compound));
+//}
 
 ///<compound-statement> ::= { {<declaration>}* {<statement>}* }
-nt<CompoundStatementAST> Parser::parseCompoundStatement(bool function) {
+nt<CompoundStatementAST> Parser::parseCompoundStatement() {
   mStartToken = &lex.peek();
-  SymbolScope s(table, symbolTables.createTable(function ? ScopeKind::FUNCTION : ScopeKind::BLOCK, table));
+  SymbolScope s(table, symbolTables.createTable(ScopeKind::BLOCK, table));
   accept(TokenKind::TOKEN_LBRACE);
   auto declarations = parseDeclarations();
 
@@ -951,7 +976,8 @@ nt<CompoundStatementAST> Parser::parseCompoundStatement(bool function) {
     statements.push_back(parseStatement());
   }
   accept(TokenKind::TOKEN_RBRACE);
-  return make_ast<CompoundStatementAST>(std::move(declarations), std::move(statements), *table);
+  auto *tagTable = symbolTables.createTable(ScopeKind::BLOCK, nullptr);
+  return make_ast<CompoundStatementAST>(std::move(declarations), std::move(statements), *table, *tagTable);
 }
 
 ///<statement> ::= <labeled-statement>
@@ -971,7 +997,7 @@ nt<StatementAST> Parser::parseStatement() {
       } else {
         return make_ast<StatementAST>(parseExpressionStatement());
       }
-    case TokenKind::TOKEN_LBRACE:return make_ast<StatementAST>(parseCompoundStatement(false));
+    case TokenKind::TOKEN_LBRACE:return make_ast<StatementAST>(parseCompoundStatement());
     case TokenKind::TOKEN_IF:
     case TokenKind::TOKEN_SWITCH:return make_ast<StatementAST>(parseSelectionStatement());
     case TokenKind::TOKEN_DO:
@@ -1078,9 +1104,9 @@ nt<IterationStatementAST> Parser::parseIterationStatement() {
       accept(TokenKind::TOKEN_RPAREN);
     }
     return make_ast<IterationStatementAST>(std::move(term1),
-                                                   std::move(term2),
-                                                   std::move(term3),
-                                                   parseStatement());
+                                           std::move(term2),
+                                           std::move(term3),
+                                           parseStatement());
   }
 }
 
@@ -1202,19 +1228,19 @@ nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
         } while (expect(TokenKind::TOKEN_COMMA));
 
         p = make_ast<PostfixExpressionAST>(std::move(p),
-                                                   make_ast<ArgumentExpressionList>(std::move(arguments)));
+                                           make_ast<ArgumentExpressionList>(std::move(arguments)));
         accept(TokenKind::TOKEN_RPAREN);
         continue;
       }
       case TokenKind::TOKEN_DOT:lex.consumeToken();
         p = make_ast<PostfixExpressionAST>(std::move(p),
-                                                   PostfixExpressionAST::identifierOperator::DOT,
-                                                   parseIdentifier());
+                                           PostfixExpressionAST::identifierOperator::DOT,
+                                           parseIdentifier());
         continue;
       case TokenKind::TOKEN_ARROW:lex.consumeToken();
         p = make_ast<PostfixExpressionAST>(std::move(p),
-                                                   PostfixExpressionAST::identifierOperator::ARROW,
-                                                   parseIdentifier());
+                                           PostfixExpressionAST::identifierOperator::ARROW,
+                                           parseIdentifier());
         continue;
       case TokenKind::TOKEN_PLUSPLUS:lex.consumeToken();
         p = make_ast<PostfixExpressionAST>(std::move(p), PostfixExpressionAST::Xcrement::PLUSPLUS);
