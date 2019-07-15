@@ -55,7 +55,7 @@ class FloatingType : public ObjectType {
 // Types saved as public static members
 class VoidType : public ObjectType {
  public:
-  static VoidType sVoidType;
+  static const VoidType sVoidType;
   bool complete() const override;
 };
 

@@ -56,6 +56,7 @@ const Type *PointerType::getReferencedType() const {
 const std::set<TypeQualifier> &PointerType::qualifersToReferencedType() const {
   return mQualifersToReferencedType;
 }
+const VoidType VoidType::sVoidType;
 bool VoidType::complete() const {
   return false;
 }
