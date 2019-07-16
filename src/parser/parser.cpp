@@ -1,8 +1,7 @@
 #include <memory>
-
-#include <memory>
 #include <parser/parser.h>
 #include <tokens/token.h>
+#include <tokens/specifier_combination.h>
 Parser::Parser(std::ifstream &ifstream, SymbolTables &symbolTables)
     : in(ifstream), lex(ifstream), symbolTables(symbolTables) {
   table = symbolTables.createTable(ScopeKind::FILE, nullptr);
@@ -486,10 +485,10 @@ nts<DeclarationAST> Parser::parseDeclarations() {
 ///                          | <type-qualifier>
 nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
   mStartToken = &lex.peek();
-  bool typeCompleted = false;
   ts<StorageSpecifier> storage_specifiers;
   nts<TypeSpecifierAST> type_specifiers;
   nts<TypeQualifierAST> type_qualifiers;
+  TokenCombinations tc;
   while (true) {
     const auto &token = lex.peek();
     switch (token.getKind()) {
@@ -500,12 +499,8 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_TYPEDEF:storage_specifiers.emplace_back(parseStorageClassSpecifier(), token);
         continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (typeCompleted || !table->isTypedef(lex.peek())) {
+        if (!table->isTypedef(lex.peek())) {
           break;
-        } else {
-          type_specifiers.push_back(parseTypeSpecifier());
-          typeCompleted = true;
-          continue;
         }
       case TokenKind::TOKEN_CHAR:
       case TokenKind::TOKEN_DOUBLE:
@@ -514,26 +509,17 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_SHORT:
       case TokenKind::TOKEN_SIGNED:
       case TokenKind::TOKEN_UNSIGNED:
-        if (typeCompleted) {
-          throw parseError(std::string("cannot combine ") + (lex.peek().getValue()) + (" with ")
-                               + type_specifiers.back().get()->mLeftMost->getValue(), lex.peek());
-        } else {
-          type_specifiers.push_back(parseTypeSpecifier());
-          continue;
-        }
       case TokenKind::TOKEN_VOID:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_ENUM:
       case TokenKind::TOKEN_FLOAT:
-        if (typeCompleted) {
+        if(!tc.put(token.getKind())){
           throw parseError(std::string("cannot combine ") + (lex.peek().getValue()) + (" with ")
                                + type_specifiers.back().get()->mLeftMost->getValue(), lex.peek());
-        } else {
-          type_specifiers.push_back(parseTypeSpecifier());
-          typeCompleted = true;
-          continue;
         }
+          type_specifiers.push_back(parseTypeSpecifier());
+          continue;
       case TokenKind::TOKEN_CONST:
       case TokenKind::TOKEN_VOLATILE:type_qualifiers.push_back(parseTypeQualifier());
         continue;
@@ -542,7 +528,7 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
     break;
   }
   return make_ast<DeclarationSpecifiersAST>(std::move(storage_specifiers),
-                                            std::move(type_specifiers),
+                                            make_ast<TypeSpecifiersAST>(tc.getType(), std::move(type_specifiers)),
                                             std::move(type_qualifiers));
 }
 

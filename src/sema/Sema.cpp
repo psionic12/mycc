@@ -39,25 +39,62 @@ void Sema::analyzeDeclarationSpecifiers(DeclarationSpecifiersAST *ast) {
   //TODO If an aggregate or union object is declared with a storage-class specifier other than typedef, the properties resulting from the storage-class specifier, except with respect to linkage, also apply to the members of the object, and so on recursively for any aggregate or union member objects.
   //TODO At least one type specifier shall be given in the declaration specifiers in each declaration,  and in the specifier-qualifier list in each struct declaration and type name.
   const Type *type;
-  auto it = ast->type_specifiers.begin();
-  switch (it->get()->getProduction()) {
-    case 0 : {//void
-      type = &VoidType::sVoidType;
+  switch (ast->type_specifiers->combination_kind) {
+    case CombinationKind::kUnknown:type = nullptr;
       break;
+    case CombinationKind::kVoid:type = &VoidType::sVoidType;
+      break;
+    case CombinationKind::kUnsignedChar:
+    case CombinationKind::kChar:type = &IntegerType::sUnsignedCharType;
+      break;
+    case CombinationKind::kSignedChar:type = &IntegerType::sCharType;
+      break;
+    case CombinationKind::kShort:
+    case CombinationKind::kShortInt:
+    case CombinationKind::kSignedShort:
+    case CombinationKind::kSignedShortInt:type = &IntegerType::sShortIntType;
+      break;
+    case CombinationKind::kUnsignedShort:
+    case CombinationKind::kUnsignedShortInt:type = &IntegerType::sUnsignedShortIntType;
+      break;
+    case CombinationKind::kInt:
+    case CombinationKind::kSigned:
+    case CombinationKind::kSignedInt:type = &IntegerType::sIntType;
+      break;
+    case CombinationKind::kUnsigned:
+    case CombinationKind::kUnsignedInt:type = &IntegerType::sUnsignedIntType;
+      break;
+    case CombinationKind::kLong:
+    case CombinationKind::kSignedLong:
+    case CombinationKind::kSignedLongInt:type = &IntegerType::sLongIntType;
+      break;
+    case CombinationKind::kUnsignedLong:
+    case CombinationKind::kUnsignedLongInt:type = &IntegerType::sUnsignedLongIntType;
+      break;
+    case CombinationKind::kLongLong:
+    case CombinationKind::kSignedLongLong:
+    case CombinationKind::kLongLongInt:
+    case CombinationKind::kSignedLongLongInt: type = &IntegerType::sLongLongIntType;
+      break;
+    case CombinationKind::kUnsignedLongLong:
+    case CombinationKind::kUnsignedLongLongInt:type = &IntegerType::sUnsignedLongLongIntType;
+      break;
+    case CombinationKind::kFloat:type = &FloatingType::sFloatType;
+      break;
+    case CombinationKind::kDouble:type = &FloatingType::sDoubleType;
+      break;
+    case CombinationKind::kLongDouble:type = &FloatingType::sLongDoubleType;
+      break;
+    case CombinationKind::kStruct: {
+      auto *structAST =
+          static_cast<StructOrUnionSpecifierAST *>(ast->type_specifiers->type_specifiers.back()->specifier.get());
+      for(auto& declaration :structAST->declarations ) {
+        analyzeStructDeclaration(declaration.get());
+      }
     }
-    case 7 : {// float
-      type = &FloatingType::sFloatType;
-      break;
-    }
-    case 9 : {// strcut or union)
-      break;
-    }
-    case 10:// enum
-      break;
-    case 11:// typedef
-      break;
-    default:break;
-
+    case CombinationKind::kUnion:break;
+    case CombinationKind::kEnum:break;
+    case CombinationKind::kTypeName:break;
   }
 }
 void Sema::analyzeStorageClassSpecifier(StorageClassSpecifierAST *ast) {
@@ -446,7 +483,8 @@ void Sema::analyzeDeclaration(DeclarationAST *declaration) {
   bool hasDeclarator = !declaration->init_declarators.empty();
   bool hasTag = false;
   bool hasEnumMembers = false;
-  for (auto &type_specifier : declaration->declaration_specifiers->type_specifiers) {
+  // TODO make this more readable
+  for (auto &type_specifier : declaration->declaration_specifiers->type_specifiers->type_specifiers) {
     if (type_specifier->getProduction() == 9) {
       hasTag = static_cast<StructOrUnionSpecifierAST *> (type_specifier->specifier.get())->id != nullptr;
     } else if (type_specifier->getProduction() == 10) {

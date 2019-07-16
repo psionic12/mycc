@@ -8,6 +8,7 @@
 #include <sema/operator.h>
 #include <tokens/token.h>
 #include <iostream>
+#include <tokens/combination_kind.h>
 #include "types.h"
 class SymbolTable;
 class SemaException : public std::exception {
@@ -31,6 +32,7 @@ class AST {
     COMPOUND_STATEMENT,
     STORAGE_CLASS_SPECIFIER,
     TYPE_SPECIFIER,
+    TYPE_SPECIFIERS,
     TYPE_QUALIFIER,
     PROTO_TYPE_SPECIFIER,
     STRUCT_OR_UNION_SPECIFIER,
@@ -446,7 +448,7 @@ class DirectDeclaratorAST : public AST {
   const nt<AST> term1;  //<identifier> or <declarator>
   const std::vector<std::pair<Term2, nt<AST>>> term2s;
   void print(int indent) override;
-  ParameterListAST* getParameterList();
+  ParameterListAST *getParameterList();
 };
 class PointerAST : public AST {
  public:
@@ -516,6 +518,14 @@ class TypeSpecifierAST : public AST {
   const nt<AST> specifier;
   void print(int indent) override;
 };
+class TypeSpecifiersAST : public AST {
+ public:
+  TypeSpecifiersAST(CombinationKind kind, nts<TypeSpecifierAST> specifiers);
+  const CombinationKind combination_kind;
+  nts<TypeSpecifierAST> type_specifiers;
+  bool empty();
+  void print(int indent) override;
+};
 class SpecifierQualifierAST : public AST {
  public:
   SpecifierQualifierAST(nt<TypeSpecifierAST> speciler);
@@ -539,10 +549,10 @@ class DeclaratorAST : public AST {
 class DeclarationSpecifiersAST : public AST {
  public:
   DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
-                           nts<TypeSpecifierAST> type_specifiers,
+                           nt<TypeSpecifiersAST> type_specifiers,
                            nts<TypeQualifierAST> type_qualifiers);
   const ts<StorageSpecifier> storage_specifiers;
-  const nts<TypeSpecifierAST> type_specifiers;
+  const nt<TypeSpecifiersAST> type_specifiers;
   const nts<TypeQualifierAST> type_qualifiers;
   bool empty();
   void print(int indent) override;
@@ -559,9 +569,9 @@ class DeclarationAST : public AST {
 class CompoundStatementAST : public AST {
  public:
   CompoundStatementAST(nts<DeclarationAST> declarations,
-                         nts<StatementAST> statements,
-                         SymbolTable &objectTable,
-                         SymbolTable &tagTable);
+                       nts<StatementAST> statements,
+                       SymbolTable &objectTable,
+                       SymbolTable &tagTable);
   const nts<DeclarationAST> declarations;
   const nts<StatementAST> statements;
   SymbolTable &mObjectTable;
@@ -571,10 +581,10 @@ class CompoundStatementAST : public AST {
 class FunctionDefinitionAST : public AST {
  public:
   FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declaration_spcifiers,
-                          nt<DeclaratorAST> declarator,
-                          nts<DeclarationAST> declarations,
-                          nt<CompoundStatementAST> compound_statement,
-                          SymbolTable &lableTable);
+                        nt<DeclaratorAST> declarator,
+                        nts<DeclarationAST> declarations,
+                        nt<CompoundStatementAST> compound_statement,
+                        SymbolTable &lableTable);
   const nt<DeclarationSpecifiersAST> declaration_spcifiers;
   const nt<DeclaratorAST> declarator;
   const nts<DeclarationAST> declarations;
@@ -592,8 +602,8 @@ class ExternalDeclarationAST : public AST {
 class TranslationUnitAST : public AST {
  public:
   TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations,
-                       SymbolTable &objectTable,
-                       SymbolTable &tagTable);
+                     SymbolTable &objectTable,
+                     SymbolTable &tagTable);
   const nts<ExternalDeclarationAST> external_declarations;
   SymbolTable &mObjectTable;
   SymbolTable &mTagTable;

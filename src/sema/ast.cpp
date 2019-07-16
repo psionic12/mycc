@@ -111,7 +111,7 @@ void DeclarationAST::print(int indent) {
   }
 }
 DeclarationSpecifiersAST::DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
-                                                   nts<TypeSpecifierAST> type_specifiers,
+                                                   nt<TypeSpecifiersAST> type_specifiers,
                                                    nts<TypeQualifierAST> type_qualifiers)
     : AST(AST::Kind::DECLARATION_SPECIFIER),
       storage_specifiers(std::move(storage_specifiers)),
@@ -122,10 +122,10 @@ void DeclarationSpecifiersAST::print(int indent) {
   ++indent;
   storage_specifiers.print(indent);
   type_qualifiers.print(indent);
-  type_specifiers.print(indent);
+  type_specifiers->print(indent);
 }
 bool DeclarationSpecifiersAST::empty() {
-  return storage_specifiers.empty() && type_qualifiers.empty() && type_specifiers.empty();
+  return storage_specifiers.empty() && type_qualifiers.empty() && type_specifiers->empty();
 }
 DeclaratorAST::DeclaratorAST(nt<PointerAST> pointer,
                              nt<DirectDeclaratorAST> direct_declarator)
@@ -802,3 +802,17 @@ void ArgumentExpressionList::print(int indent) {
 }
 ArgumentExpressionList::ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList)
     : AST(AST::Kind::ARGUMENT_EXPRESSION_LIST), mArgumentList(std::move(argumentList)) {}
+TypeSpecifiersAST::TypeSpecifiersAST(CombinationKind kind, nts<TypeSpecifierAST> specifiers)
+    : AST(AST::Kind::TYPE_SPECIFIERS), combination_kind(kind), type_specifiers(std::move(specifiers)) {
+
+}
+void TypeSpecifiersAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  for (auto &ast: type_specifiers) {
+    ast->print(indent);
+  }
+}
+bool TypeSpecifiersAST::empty() {
+  return type_specifiers.empty();
+}
