@@ -373,8 +373,8 @@ class PostfixExpressionAST : public AST, public IExpression {
 };
 class TypeNameAST : public AST {
  public:
-  TypeNameAST(nts<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator);
-  const nts<SpecifierQualifierAST> specifiers;
+  TypeNameAST(nt<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator);
+  const nt<SpecifierQualifierAST> specifiers;
   const nt<DeclaratorAST> declarator;
   void print(int indent) override;
 };
@@ -480,9 +480,9 @@ class StructDeclaratorListAST : public AST {
 };
 class StructDeclarationAST : public AST {
  public:
-  StructDeclarationAST(nts<SpecifierQualifierAST> specifier_qualifier,
+  StructDeclarationAST(nt<SpecifierQualifierAST> specifier_qualifier,
                        nt<StructDeclaratorListAST> struct_declarator_list);
-  const nts<SpecifierQualifierAST> specifier_qualifier;
+  const nt<SpecifierQualifierAST> specifier_qualifier;
   const nt<StructDeclaratorListAST> struct_declarator_list;
   void print(int indent) override;
 };
@@ -528,9 +528,9 @@ class TypeSpecifiersAST : public AST {
 };
 class SpecifierQualifierAST : public AST {
  public:
-  SpecifierQualifierAST(nt<TypeSpecifierAST> speciler);
-  SpecifierQualifierAST(nt<TypeQualifierAST> speciler);
-  const nt<AST> speciler;
+  SpecifierQualifierAST(nt<TypeSpecifiersAST> types, nts<TypeQualifierAST> qualifiers);
+  nt<TypeSpecifiersAST> types;
+  nts<TypeQualifierAST> qualifiers;
   void print(int indent) override;
 };
 class StorageClassSpecifierAST : public AST {

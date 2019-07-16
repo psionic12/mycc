@@ -49,7 +49,7 @@ class Parser {
   nt<TypeSpecifierAST> parseTypeSpecifier();
   nt<StructOrUnionSpecifierAST> parseStructOrUnionSpecifier();
   nt<StructDeclarationAST> parseStructDeclaration();
-  nts<SpecifierQualifierAST> parseSpecifierQualifiers();
+  nt<SpecifierQualifierAST> parseSpecifierQualifiers();
   nt<StructDeclaratorListAST> parseStructDeclaratorList();
   nt<StructDeclaratorAST> parseStructDeclarator();
   nt<DeclaratorAST> parseDeclarator();

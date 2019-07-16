@@ -514,12 +514,12 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_UNION:
       case TokenKind::TOKEN_ENUM:
       case TokenKind::TOKEN_FLOAT:
-        if(!tc.put(token.getKind())){
+        if (!tc.put(token.getKind())) {
           throw parseError(std::string("cannot combine ") + (lex.peek().getValue()) + (" with ")
                                + type_specifiers.back().get()->mLeftMost->getValue(), lex.peek());
         }
-          type_specifiers.push_back(parseTypeSpecifier());
-          continue;
+        type_specifiers.push_back(parseTypeSpecifier());
+        continue;
       case TokenKind::TOKEN_CONST:
       case TokenKind::TOKEN_VOLATILE:type_qualifiers.push_back(parseTypeQualifier());
         continue;
@@ -876,7 +876,7 @@ nt<StructOrUnionSpecifierAST> Parser::parseStructOrUnionSpecifier() {
 ///<struct-declaration> ::= {<specifier-qualifier>}* <struct-declarator-list> ;
 nt<StructDeclarationAST> Parser::parseStructDeclaration() {
   mStartToken = &lex.peek();
-  nts<SpecifierQualifierAST> qualifiers = parseSpecifierQualifiers();
+  nt<SpecifierQualifierAST> qualifiers = parseSpecifierQualifiers();
   auto ast = make_ast<StructDeclarationAST>(std::move(qualifiers), parseStructDeclaratorList());
   accept(TokenKind::TOKEN_SEMI);
   return ast;
@@ -1244,7 +1244,7 @@ nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
 ///<type-name> ::= {<specifier-qualifier>}+ {<abstract-declarator>}?
 nt<TypeNameAST> Parser::parseTypeName() {
   mStartToken = &lex.peek();
-  nts<SpecifierQualifierAST> qualifiers = parseSpecifierQualifiers();
+  nt<SpecifierQualifierAST> qualifiers = parseSpecifierQualifiers();
 
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_LPAREN:
@@ -1258,41 +1258,44 @@ ParserException Parser::parseError(const std::string &msg, const Token &token) {
 }
 ///<specifier-qualifier> ::= <type-specifier>
 ///                        | <type-qualifier>
-nts<SpecifierQualifierAST> Parser::parseSpecifierQualifiers() {
+nt<SpecifierQualifierAST> Parser::parseSpecifierQualifiers() {
   mStartToken = &lex.peek();
-  bool typeCompleted = false;
-  nts<SpecifierQualifierAST> qualifiers;
+  nts<TypeSpecifierAST> type_specifiers;
+  nts<TypeQualifierAST> type_qualifiers;
+  TokenCombinations tc;
   while (true) {
     switch (lex.peek().getKind()) {
-      case TokenKind::TOKEN_VOLATILE:
-      case TokenKind::TOKEN_CONST:qualifiers.push_back(make_ast<SpecifierQualifierAST>(parseTypeQualifier()));
-        continue;
       case TokenKind::TOKEN_IDENTIFIER:
-        if (!table->isTypedef(lex.peek()) || typeCompleted) {
+        if (!table->isTypedef(lex.peek())) {
           break;
-        } else {
-          qualifiers.push_back(make_ast<SpecifierQualifierAST>(parseTypeSpecifier()));
-          typeCompleted = true;
-          continue;
         }
       case TokenKind::TOKEN_CHAR:
       case TokenKind::TOKEN_DOUBLE:
-      case TokenKind::TOKEN_ENUM:
-      case TokenKind::TOKEN_FLOAT:
       case TokenKind::TOKEN_INT:
       case TokenKind::TOKEN_LONG:
       case TokenKind::TOKEN_SHORT:
       case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
       case TokenKind::TOKEN_STRUCT:
       case TokenKind::TOKEN_UNION:
-      case TokenKind::TOKEN_UNSIGNED:
-      case TokenKind::TOKEN_VOID:qualifiers.push_back(make_ast<SpecifierQualifierAST>(parseTypeSpecifier()));
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_FLOAT:
+        if (!tc.put(lex.peek().getKind())) {
+          throw parseError(std::string("cannot combine ") + (lex.peek().getValue()) + (" with ")
+                               + type_specifiers.back().get()->mLeftMost->getValue(), lex.peek());
+        }
+        type_specifiers.push_back(parseTypeSpecifier());
+        continue;
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_VOLATILE:type_qualifiers.push_back(parseTypeQualifier());
         continue;
       default:break;
     }
     break;
   }
-  return qualifiers;
+  return make_ast<SpecifierQualifierAST>(make_ast<TypeSpecifiersAST>(tc.getType(), std::move(type_specifiers)),
+                                         std::move(type_qualifiers));
 }
 
 ParserException::ParserException(std::string

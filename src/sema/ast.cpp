@@ -142,15 +142,15 @@ void StorageClassSpecifierAST::print(int indent) {
   AST::print(indent);
   storage_speicifier.print(++indent);
 }
-SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeQualifierAST> speciler)
-    : AST(AST::Kind::SPECIFIER_QUALIFIER, 1),
-      speciler(std::move(speciler)) {}
-SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeSpecifierAST> speciler)
-    : AST(AST::Kind::SPECIFIER_QUALIFIER, 0),
-      speciler(std::move(speciler)) {}
 void SpecifierQualifierAST::print(int indent) {
   AST::print(indent);
-  speciler->print(++indent);
+  ++indent;
+  if(types) types->print(indent);
+  qualifiers.print(indent);
+}
+SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeSpecifiersAST> types, nts<TypeQualifierAST> qualifiers)
+    : AST(AST::Kind::SPECIFIER_QUALIFIER), types(std::move(types)), qualifiers(std::move(qualifiers)) {
+
 }
 ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier)
     : AST(AST::Kind::PROTO_TYPE_SPECIFIER), Terminal<ProtoTypeSpecifier>(specifier), specifier(specifier) {}
@@ -196,7 +196,7 @@ void EnumSpecifierAST::print(int indent) {
   if (id) id->print(indent);
   if (enum_list) enum_list->print(indent);
 }
-StructDeclarationAST::StructDeclarationAST(nts<SpecifierQualifierAST> specifier_qualifier,
+StructDeclarationAST::StructDeclarationAST(nt<SpecifierQualifierAST> specifier_qualifier,
                                            nt<StructDeclaratorListAST> struct_declarator_list)
     : AST(AST::Kind::STRUCT_DECLARATION),
       specifier_qualifier(std::move(specifier_qualifier)),
@@ -204,7 +204,7 @@ StructDeclarationAST::StructDeclarationAST(nts<SpecifierQualifierAST> specifier_
 void StructDeclarationAST::print(int indent) {
   AST::print(indent);
   ++indent;
-  specifier_qualifier.print(indent);
+  specifier_qualifier->print(indent);
   struct_declarator_list->print(indent);
 }
 StructDeclaratorListAST::StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators) : AST(
@@ -380,12 +380,12 @@ void UnaryExpressionAST::print(int indent) {
   }
 }
 
-TypeNameAST::TypeNameAST(nts<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator)
+TypeNameAST::TypeNameAST(nt<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator)
     : AST(AST::Kind::TYPE_NAME), specifiers(std::move(specifier)), declarator(std::move(declarator)) {}
 void TypeNameAST::print(int indent) {
   AST::print(indent);
   ++indent;
-  specifiers.print(indent);
+  specifiers->print(indent);
   if (declarator) declarator->print(indent);
 }
 PostfixExpressionAST::PostfixExpressionAST(nt<PrimaryExpressionAST> primary)
