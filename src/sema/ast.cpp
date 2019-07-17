@@ -145,7 +145,7 @@ void StorageClassSpecifierAST::print(int indent) {
 void SpecifierQualifierAST::print(int indent) {
   AST::print(indent);
   ++indent;
-  if(types) types->print(indent);
+  if (types) types->print(indent);
   qualifiers.print(indent);
 }
 SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeSpecifiersAST> types, nts<TypeQualifierAST> qualifiers)

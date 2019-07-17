@@ -457,7 +457,7 @@ class PointerAST : public AST {
   const nt<PointerAST> pointer;
   void print(int indent) override;
 };
-class ConstantExpressionAST : public AST {
+class ConstantExpressionAST : public AST, public IExpression {
  public:
   ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
   const nt<ConditionalExpressionAST> conditional_expression;
@@ -525,6 +525,7 @@ class TypeSpecifiersAST : public AST {
   nts<TypeSpecifierAST> type_specifiers;
   bool empty();
   void print(int indent) override;
+  const ObjectType *type;
 };
 class SpecifierQualifierAST : public AST {
  public:

@@ -26,9 +26,7 @@ void Sema::analyzeFunctionDefinition(FunctionDefinitionAST *ast) {
   }
   mLabelTable = nullptr;
 }
-void Sema::analyzeIdentifier(IdentifierAST *ast) {
-
-}
+void Sema::analyzeIdentifier(IdentifierAST *ast) {}
 void Sema::analyzeDeclarationSpecifiers(DeclarationSpecifiersAST *ast) {
   if (ast->storage_specifiers.size() > 1) {
     throw SemaException(
@@ -38,7 +36,7 @@ void Sema::analyzeDeclarationSpecifiers(DeclarationSpecifiersAST *ast) {
   //TODO The declaration of an identifier for a function that has block scope shall have no explicit storage-class specifier other than extern.
   //TODO If an aggregate or union object is declared with a storage-class specifier other than typedef, the properties resulting from the storage-class specifier, except with respect to linkage, also apply to the members of the object, and so on recursively for any aggregate or union member objects.
   //TODO At least one type specifier shall be given in the declaration specifiers in each declaration,  and in the specifier-qualifier list in each struct declaration and type name.
-  const Type *type;
+  const ObjectType *type;
   switch (ast->type_specifiers->combination_kind) {
     case CombinationKind::kUnknown:type = nullptr;
       break;
@@ -88,14 +86,38 @@ void Sema::analyzeDeclarationSpecifiers(DeclarationSpecifiersAST *ast) {
     case CombinationKind::kStruct: {
       auto *structAST =
           static_cast<StructOrUnionSpecifierAST *>(ast->type_specifiers->type_specifiers.back()->specifier.get());
-      for(auto& declaration :structAST->declarations ) {
-        analyzeStructDeclaration(declaration.get());
+      ISymbol *symbol;
+      if (structAST->id) {
+        const auto &token = structAST->id->token;
+        symbol = mTagTable->insert(token,
+                                   std::make_unique<TagSymbol>(std::make_unique<CompoundType>(token.getValue())));
+      } else {
+        std::string tagName = mTagTable->getAnonymousName();
+        symbol = mTagTable->insert(tagName, std::make_unique<TagSymbol>(std::make_unique<CompoundType>(tagName)));
       }
+      type = static_cast<TagSymbol *>(symbol)->getTagType();
+
+      for (const auto &declaration :structAST->declarations) {
+        analyzeStructDeclaration(declaration.get());
+        if (declaration != structAST->declarations.back()) {
+          if (declaration->specifier_qualifier->types->type->complete()) {
+            throw SemaException("A structure or union shall not contain a member with incomplete or function type",
+                                declaration->involvedTokens());
+          }
+        }
+      }
+      //TODO A struct-declaration that does not declare an anonymous structure or anonymous union shall contain a struct-declarator-list.
+
+      break;
     }
-    case CombinationKind::kUnion:break;
-    case CombinationKind::kEnum:break;
-    case CombinationKind::kTypeName:break;
+    case CombinationKind::kUnion:type = nullptr;
+      break;
+    case CombinationKind::kEnum:type = nullptr;
+      break;
+    case CombinationKind::kTypeName:type = nullptr;
+      break;
   }
+  ast->type_specifiers->type = type;
 }
 void Sema::analyzeStorageClassSpecifier(StorageClassSpecifierAST *ast) {
 
@@ -128,7 +150,21 @@ void Sema::analyzeTypeQualifier(TypeQualifierAST *ast) {
 
 }
 void Sema::analyzeDirectDeclarator(DirectDeclaratorAST *ast) {
+  for (auto it = ast->term2s.rbegin(); it != ast->term2s.rend(); ++it) {
+    switch (it->first) {
+      case DirectDeclaratorAST::Term2::CONST_EXPR:
+        // 6.7.6.2 Array declarators
+        if (it->second
+            && !dynamic_cast<const IntegerType *>(static_cast<ConstantExpressionAST *>(it->second.get())->mType)) {
+          throw SemaException("the expression shall have an integer type", it->second->involvedTokens());
+        }
+        //TODO The element type shall not be an incomplete or function type.
 
+        break;
+      case DirectDeclaratorAST::Term2::PARA_LIST:break;
+      case DirectDeclaratorAST::Term2::ID :break;
+    }
+  }
 }
 void Sema::analyzeConstantExpression(ConstantExpressionAST *ast) {
 

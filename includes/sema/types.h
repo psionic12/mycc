@@ -97,15 +97,16 @@ class ArrayType : public PointerType {
 // Types stored in symbol table
 class CompoundType : public ObjectType {
  public:
-  CompoundType(std::string tag,
-               std::vector<std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>>>);
+  CompoundType(std::string tag);
   std::pair<const Type *, std::set<TypeQualifier>> getMember(const std::string &name) const;
+  bool complete() const override;
  private:
   std::string mTag;
   std::vector<std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>>> mMembers;
   SymbolTable symbolTable;
  public:
   const std::string &getTag() const;
+  void addMember(std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>> member);
 };
 
 //TODO

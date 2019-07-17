@@ -60,12 +60,6 @@ const VoidType VoidType::sVoidType;
 bool VoidType::complete() const {
   return false;
 }
-CompoundType::CompoundType(std::string tag,
-                           std::vector<std::pair<std::string,
-                                                 std::pair<const Type *, std::set<TypeQualifier>>>> members)
-    : mTag(std::move(tag)),
-      mMembers(std::move(members)),
-      symbolTable(ScopeKind::FILE, nullptr)/*TODO does scope kind matters?*/ {}
 const std::string &CompoundType::getTag() const {
   return mTag;
 }
@@ -76,6 +70,14 @@ std::pair<const Type *, std::set<TypeQualifier>> CompoundType::getMember(const s
     }
   }
   throw TypeException();
+}
+CompoundType::CompoundType(std::string tag) : mTag(std::move(tag)), mMembers{},
+                                              symbolTable(ScopeKind::FILE, nullptr)/*TODO does scope kind matters?*/ {}
+bool CompoundType::complete() const {
+  return mMembers.empty();
+}
+void CompoundType::addMember(std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>> member) {
+  mMembers.emplace_back(std::move(member));
 }
 QualifiedType::QualifiedType(ObjectType *type, std::set<TypeQualifier> qualifiers)
     : mType(type), mQualifiers(std::move(qualifiers)) {}

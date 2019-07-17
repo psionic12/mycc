@@ -107,7 +107,7 @@ class ObjectSymbol : public ISymbol {
 
 class TagSymbol : public ISymbol {
  public:
-  TagSymbol(std::unique_ptr<CompoundType> &&mCompoundType) : mCompoundType(std::move(mCompoundType)) {}
+  TagSymbol(std::unique_ptr<CompoundType> &&compoundType) : mCompoundType(std::move(compoundType)) {}
   SymbolKind getKind() const override {
     return SymbolKind::TAG;
   }
@@ -168,15 +168,17 @@ class SymbolTable : std::map<std::string, std::unique_ptr<ISymbol>> {
   SymbolTable(ScopeKind kind, SymbolTable *father)
       : scope_kind(kind), father(father) {}
   ISymbol *lookup(const Token &token);
-  ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
-
+  ISymbol * insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
+  ISymbol * insert(std::string name, std::unique_ptr<ISymbol> &&symbol);
   // TODO move this to parser
   bool isTypedef(const Token &token);
   void setFather(SymbolTable *father);
   SymbolTable *getFather() const;
+  std::string getAnonymousName();
  private:
   ScopeKind scope_kind;
   SymbolTable *father;
+  int anonymousId = 0;
 };
 
 class SymbolTables {
