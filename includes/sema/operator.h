@@ -44,7 +44,7 @@ enum class UnaryOp {
   BANG,
 };
 
-enum class ProtoTypeSpecifier {
+enum class ProtoTypeSpecifierOp {
   kVOID,
   kCHAR,
   kINT,

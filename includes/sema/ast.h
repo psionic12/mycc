@@ -503,15 +503,15 @@ class StructOrUnionSpecifierAST : public AST {
   const nts<StructDeclarationAST> declarations;
   void print(int indent) override;
 };
-class ProtoTypeSpecifierAST : public AST, public Terminal<ProtoTypeSpecifier> {
+class ProtoTypeSpecifierAST : public AST, public Terminal<ProtoTypeSpecifierOp> {
  public:
-  ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier);
-  const Terminal<ProtoTypeSpecifier> specifier;
+  ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifierOp> specifier);
+  const Terminal<ProtoTypeSpecifierOp> specifier;
   void print(int indent) override;
 };
 class TypeSpecifierAST : public AST {
  public:
-  TypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier);
+  TypeSpecifierAST(Terminal<ProtoTypeSpecifierOp> specifier);
   TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier);
   TypeSpecifierAST(nt<EnumSpecifierAST> specifier);
   TypeSpecifierAST(nt<TypedefNameAST> specifier);

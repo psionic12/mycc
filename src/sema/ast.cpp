@@ -152,13 +152,13 @@ SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeSpecifiersAST> types, nts<Ty
     : AST(AST::Kind::SPECIFIER_QUALIFIER), types(std::move(types)), qualifiers(std::move(qualifiers)) {
 
 }
-ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier)
-    : AST(AST::Kind::PROTO_TYPE_SPECIFIER), Terminal<ProtoTypeSpecifier>(specifier), specifier(specifier) {}
+ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifierOp> specifier)
+    : AST(AST::Kind::PROTO_TYPE_SPECIFIER), Terminal<ProtoTypeSpecifierOp>(specifier), specifier(specifier) {}
 void ProtoTypeSpecifierAST::print(int indent) {
   AST::print(indent);
   specifier.print(++indent);
 }
-TypeSpecifierAST::TypeSpecifierAST(Terminal<ProtoTypeSpecifier> specifier)
+TypeSpecifierAST::TypeSpecifierAST(Terminal<ProtoTypeSpecifierOp> specifier)
     : AST(AST::Kind::TYPE_SPECIFIER, static_cast<int>(specifier.type)),
       specifier(std::make_unique<ProtoTypeSpecifierAST>(specifier)) {}
 TypeSpecifierAST::TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier)

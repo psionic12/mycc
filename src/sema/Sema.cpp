@@ -159,7 +159,7 @@ void Sema::analyzeDirectDeclarator(DirectDeclaratorAST *ast) {
           throw SemaException("the expression shall have an integer type", it->second->involvedTokens());
         }
         //TODO The element type shall not be an incomplete or function type.
-
+        //TODO variable length array type
         break;
       case DirectDeclaratorAST::Term2::PARA_LIST:break;
       case DirectDeclaratorAST::Term2::ID :break;

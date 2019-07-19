@@ -9,7 +9,7 @@ add_executable(myccpiler
         main.cpp
         src/lex/lex.cpp
         src/parser/parser.cpp
-        src/sema/ast.cpp src/sema/symbol_tables.cpp src/sema/Sema.cpp src/sema/types.cpp)
+        src/sema/ast.cpp src/sema/symbol_tables.cpp src/sema/Sema.cpp src/sema/types.cpp src/sema/ast2.h)
 target_include_directories(myccpiler PUBLIC includes)
 
 llvm_map_components_to_libnames(llvm_libs support core irreader)

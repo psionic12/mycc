@@ -779,25 +779,25 @@ StorageSpecifier Parser::parseStorageClassSpecifier() {
 //                   | <typedef-name>
 nt<TypeSpecifierAST> Parser::parseTypeSpecifier() {
   mStartToken = &lex.peek();
-  ProtoTypeSpecifier specifier;
+  ProtoTypeSpecifierOp specifier;
   switch (lex.peek().getKind()) {
-    case TokenKind::TOKEN_VOID:specifier = (ProtoTypeSpecifier::kVOID);
+    case TokenKind::TOKEN_VOID:specifier = (ProtoTypeSpecifierOp::kVOID);
       goto handle_proto_type;
-    case TokenKind::TOKEN_CHAR:specifier = (ProtoTypeSpecifier::kCHAR);
+    case TokenKind::TOKEN_CHAR:specifier = (ProtoTypeSpecifierOp::kCHAR);
       goto handle_proto_type;
-    case TokenKind::TOKEN_SHORT:specifier = (ProtoTypeSpecifier::kSHORT);
+    case TokenKind::TOKEN_SHORT:specifier = (ProtoTypeSpecifierOp::kSHORT);
       goto handle_proto_type;
-    case TokenKind::TOKEN_INT:specifier = (ProtoTypeSpecifier::kINT);
+    case TokenKind::TOKEN_INT:specifier = (ProtoTypeSpecifierOp::kINT);
       goto handle_proto_type;
-    case TokenKind::TOKEN_LONG:specifier = (ProtoTypeSpecifier::kLONG);
+    case TokenKind::TOKEN_LONG:specifier = (ProtoTypeSpecifierOp::kLONG);
       goto handle_proto_type;
-    case TokenKind::TOKEN_FLOAT:specifier = (ProtoTypeSpecifier::kFLOAT);
+    case TokenKind::TOKEN_FLOAT:specifier = (ProtoTypeSpecifierOp::kFLOAT);
       goto handle_proto_type;
-    case TokenKind::TOKEN_DOUBLE:specifier = (ProtoTypeSpecifier::kDOUBLE);
+    case TokenKind::TOKEN_DOUBLE:specifier = (ProtoTypeSpecifierOp::kDOUBLE);
       goto handle_proto_type;
-    case TokenKind::TOKEN_SIGNED:specifier = (ProtoTypeSpecifier::kSIGNED);
+    case TokenKind::TOKEN_SIGNED:specifier = (ProtoTypeSpecifierOp::kSIGNED);
       goto handle_proto_type;
-    case TokenKind::TOKEN_UNSIGNED:specifier = (ProtoTypeSpecifier::kUNSIGNED);
+    case TokenKind::TOKEN_UNSIGNED:specifier = (ProtoTypeSpecifierOp::kUNSIGNED);
       goto handle_proto_type;
     case TokenKind::TOKEN_STRUCT:
     case TokenKind::TOKEN_UNION:return make_ast<TypeSpecifierAST>(parseStructOrUnionSpecifier());
@@ -809,7 +809,7 @@ nt<TypeSpecifierAST> Parser::parseTypeSpecifier() {
     default:throw parseError("expected type specifier");
   }
   handle_proto_type:
-  auto ast = make_ast<TypeSpecifierAST>(Terminal<ProtoTypeSpecifier>(specifier, lex.peek()));
+  auto ast = make_ast<TypeSpecifierAST>(Terminal<ProtoTypeSpecifierOp>(specifier, lex.peek()));
   lex.consumeToken();
   return std::move(ast);
 
