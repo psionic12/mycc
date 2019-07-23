@@ -1,4 +1,6 @@
 #include <sema/types.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <sema/ast.h>
 bool Type::compatible(Type *type) const {
   return this == type;
 }
@@ -22,6 +24,9 @@ bool IntegerType::compatible(Type *type) const {
   return dynamic_cast<IntegerType *>(type) || dynamic_cast<FloatingType *>(type);
 }
 IntegerType::IntegerType(unsigned int mSizeInBits) : mSizeInBits(mSizeInBits) {}
+llvm::IntegerType *IntegerType::getLLVMType(llvm::Module &module) const {
+  return llvm::IntegerType::get(module.getContext(), mSizeInBits);
+}
 bool FloatingType::compatible(Type *type) const {
   return dynamic_cast<IntegerType *>(type) || dynamic_cast<FloatingType *>(type);
 }
@@ -29,14 +34,32 @@ const FloatingType FloatingType::sFloatType(32);
 const FloatingType FloatingType::sDoubleType(64);
 const FloatingType FloatingType::sLongDoubleType(128);
 FloatingType::FloatingType(unsigned int mSizeInBits) : mSizeInBits(mSizeInBits) {}
-FunctionType::FunctionType(Type *returnType,
-                           std::vector<ObjectType *> &&parameters)
-    : mReturnType(returnType), mParameters(parameters) {}
+llvm::Type *FloatingType::getLLVMType(llvm::Module &module) const {
+  if (mSizeInBits <= 32) {
+    return llvm::Type::getFloatTy(module.getContext());
+  } else if (mSizeInBits <= 64) {
+    return llvm::Type::getDoubleTy(module.getContext());
+  } else {
+    return llvm::Type::getFP128Ty(module.getContext());
+  }
+}
+unsigned int FloatingType::getSizeInBits() const {
+  return mSizeInBits;
+}
+FunctionType::FunctionType(Type *returnType, std::vector<ObjectType *> &&parameters, bool varArg)
+    : mReturnType(returnType), mParameters(parameters), mVarArg(varArg) {}
 Type *FunctionType::getReturnType() const {
   return mReturnType;
 }
 const std::vector<ObjectType *> &FunctionType::getParameters() const {
   return mParameters;
+}
+llvm::Type *FunctionType::getLLVMType(llvm::Module &module) const {
+  std::vector<llvm::Type *> args;
+  for (auto &paramter : mParameters) {
+    args.push_back(paramter->getLLVMType(module));
+  }
+  return llvm::FunctionType::get(mReturnType->getLLVMType(module), args, mVarArg);
 }
 ArrayType::ArrayType(const ObjectType *elementType)
     : PointerType(elementType) {}
@@ -48,40 +71,110 @@ bool ArrayType::complete() const {
 void ArrayType::setSize(unsigned int size) {
   mSize = size;
 }
+llvm::ArrayType *ArrayType::getLLVMType(llvm::Module &module) const {
+  return llvm::ArrayType::get(mReferencedType->getLLVMType(module), mSize);
+}
 PointerType::PointerType(const Type *referencedType)
     : mReferencedType(referencedType) {}
 const Type *PointerType::getReferencedType() const {
   return mReferencedType;
 }
-const std::set<TypeQualifier> &PointerType::qualifersToReferencedType() const {
+const std::set<TypeQualifier> &PointerType::qualifiersToReferencedType() const {
   return mQualifersToReferencedType;
+}
+llvm::Type *PointerType::getLLVMType(llvm::Module &module) const {
+  return llvm::PointerType::get(mReferencedType->getLLVMType(module), 0);
+}
+unsigned int PointerType::getSizeInBits() const {
+  //TODO 32 or 64?
+  return 64;
 }
 const VoidType VoidType::sVoidType;
 bool VoidType::complete() const {
   return false;
 }
-const std::string &CompoundType::getTag() const {
-  return mTag;
+llvm::Type *VoidType::getLLVMType(llvm::Module &module) const {
+  return llvm::Type::getVoidTy(module.getContext());
 }
-std::pair<const Type *, std::set<TypeQualifier>> CompoundType::getMember(const std::string &name) const {
-  for (const auto &member : mMembers) {
-    if (name == member.first) {
-      return member.second;
+unsigned int VoidType::getSizeInBits() const {
+  return 0;
+}
+CompoundType::CompoundType()
+    : mSizeInBits(0), mComplete(false), symbolTable(ScopeKind::FILE, nullptr)/*TODO does scope kind matters?*/ {}
+bool CompoundType::complete() const {
+  return mComplete;
+}
+unsigned int CompoundType::getSizeInBits() const {
+  return mSizeInBits;
+}
+
+StructType::StructType(const std::string &tag, llvm::Module &module)
+    : mLLVMType(llvm::StructType::create(module.getContext(), tag)) {}
+llvm::StructType *StructType::getLLVMType(llvm::Module &module) const {
+  return mLLVMType;
+}
+void StructType::setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
+                         llvm::Module &module) {
+  std::vector<llvm::Type *> fields;
+  auto end = symbols.size() > 1 ? symbols.end() - 1 : symbols.end();
+  for (auto it = symbols.begin(); it != end; it++) {
+    const std::string *string = it->first;
+    auto symbol = std::move(it->second);
+    if (!symbol->getType()->complete()) {
+      throw SemaException(std::string("member ") + (string ? *string : "") + " is incomplete", symbol->mInvolvedTokens);
+    }
+    fields.push_back(symbol->getType()->getLLVMType(module));
+  }
+  //TODO the sandard says "a structure with more than one named member",
+  // which I don't fully understand, I'll come back later
+  if (symbols.size() > 1) {
+    auto symbol = std::move(symbols.back().second);
+    if (!symbol->getType()->complete()) {
+      if (!dynamic_cast<ArrayType *>(symbol->getType())) {
+        throw SemaException("only flexible array member can be the last member which is incomplete",
+                            symbol->mInvolvedTokens);
+      } else {
+        mComplete = false;
+      }
+    } else {
+      mComplete = true;
+    }
+    fields.push_back(symbol->getType()->getLLVMType(module));
+  }
+  mLLVMType->setBody(fields);
+}
+llvm::StructType *UnionType::getLLVMType(llvm::Module &module) const {
+  llvm::StructType *structTy = module.getTypeByName(mTag);
+//  if (!structTy) {
+//    structTy = llvm::StructType::create(module.getContext(), mTag);
+//    if (complete()) {
+//      std::vector<llvm::Type *> fields;
+//      fields.push_back(llvm::IntegerType::get(module.getContext(), getSizeInBits()));
+//      structTy->setBody(fields, /*isPacked=*/false);
+//    }
+//  }
+  return structTy;
+}
+unsigned int UnionType::getSizeInBits() const {
+  //TODO remember the result
+  unsigned size = 0;
+  for (auto &field : mFields) {
+    if (size < field.second.getType()->getSizeInBits()) {
+      size = field.second.getType()->getSizeInBits();
     }
   }
-  throw TypeException();
+  return size;
 }
-CompoundType::CompoundType(std::string tag) : mTag(std::move(tag)), mMembers{},
-                                              symbolTable(ScopeKind::FILE, nullptr)/*TODO does scope kind matters?*/ {}
-bool CompoundType::complete() const {
-  return mMembers.empty();
+unsigned int EnumerationType::getSizeInBits() const {
+  return IntegerType::sIntType.getSizeInBits();
 }
-void CompoundType::addMember(std::pair<std::string, std::pair<const Type *, std::set<TypeQualifier>>> member) {
-  mMembers.emplace_back(std::move(member));
+llvm::IntegerType *EnumerationType::getLLVMType(llvm::Module &module) const {
+  return llvm::IntegerType::get(module.getContext(), getSizeInBits());
 }
+
 QualifiedType::QualifiedType(ObjectType *type, std::set<TypeQualifier> qualifiers)
     : mType(type), mQualifiers(std::move(qualifiers)) {}
-Type *QualifiedType::getType() const {
+ObjectType *QualifiedType::getType() const {
   return mType;
 }
 const std::set<TypeQualifier> &QualifiedType::getQualifiers() const {

@@ -21,6 +21,14 @@ void TranslationUnitAST::print(int indent) {
   AST::print(indent);
   external_declarations.print(++indent);
 }
+llvm::Value *TranslationUnitAST::codegen() {
+  sObjectTable = &mObjectTable;
+  sTagTable = &mTagTable;
+  for (const auto &ds : external_declarations) {
+    ds->codegen();
+  }
+  return nullptr;
+}
 ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def)
     : AST(AST::Kind::EXTERNAL_DECLARATION), def(std::move(def)) {
   const DeclarationSpecifiersAST *ds;
@@ -43,6 +51,13 @@ ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def)
 void ExternalDeclarationAST::print(int indent) {
   AST::print(indent);
   def->print(++indent);
+}
+llvm::Value *ExternalDeclarationAST::codegen() {
+  if (def->getKind() == AST::Kind::FUNCTION_DEFINITION) {
+    return static_cast<FunctionDefinitionAST *>(def.get())->codegen();
+  } else {
+    return static_cast<DeclarationAST *>(def.get())->codegen();
+  }
 }
 FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declaration_spcifiers,
                                              nt<DeclaratorAST> declarator,
@@ -68,6 +83,17 @@ void FunctionDefinitionAST::print(int indent) {
   declarations.print(indent);
   compound_statement->print(indent);
 }
+llvm::Value *FunctionDefinitionAST::codegen() {
+  sLabelTable = &mLabelTable;
+  for (const auto &specifier : declaration_spcifiers->storage_specifiers) {
+    if (specifier.type != StorageSpecifier::kEXTERN && specifier.type != StorageSpecifier::kSTATIC) {
+      throw SemaException("declaration specifiers shall be either extern or static", specifier.token);
+    }
+  }
+  sLabelTable = nullptr;
+  //TODO not finished
+  return nullptr;
+}
 CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
                                            nts<StatementAST> statements,
                                            SymbolTable &objectTable,
@@ -80,6 +106,10 @@ void CompoundStatementAST::print(int indent) {
   ++indent;
   declarations.print(indent);
   statements.print(indent);
+}
+llvm::Value *CompoundStatementAST::codegen() {
+  SymbolScope s1(sObjectTable, &mObjectTable);
+  SymbolScope s2(sTagTable, &mTagTable);
 }
 DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                                InitDeclarators init_declarators,
@@ -110,6 +140,32 @@ void DeclarationAST::print(int indent) {
     if (ds.second) ds.second->print(indent);
   }
 }
+llvm::Value *DeclarationAST::codegen() {
+  declaration_specifiers->codegen();
+  for (auto &ast : init_declarators) {
+    //TODO add to symbol table
+    ast.first->codegen();
+    ast.second->codegen();
+  }
+  bool hasDeclarator = !init_declarators.empty();
+  bool hasTag = false;
+  bool hasEnumMembers = false;
+  // TODO make this more readable
+  for (auto &type_specifier : declaration_specifiers->type_specifiers->type_specifiers) {
+    if (type_specifier->getProduction() == 9) {
+      hasTag = static_cast<StructOrUnionSpecifierAST *> (type_specifier->specifier.get())->id != nullptr;
+    } else if (type_specifier->getProduction() == 10) {
+      auto enum_list = static_cast<EnumSpecifierAST *> (type_specifier->specifier.get())->enum_list.get();
+      hasEnumMembers = enum_list && !enum_list->enumerators.empty();
+    }
+  }
+
+  if (!hasDeclarator && !hasTag && !hasEnumMembers) {
+    throw SemaException("A declaration shall declare at least a declarator, a tag, or the members of an enumeration",
+                        *mLeftMost);
+  }
+  //TODO 6.7.3
+}
 DeclarationSpecifiersAST::DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
                                                    nt<TypeSpecifiersAST> type_specifiers,
                                                    nts<TypeQualifierAST> type_qualifiers)
@@ -126,6 +182,96 @@ void DeclarationSpecifiersAST::print(int indent) {
 }
 bool DeclarationSpecifiersAST::empty() {
   return storage_specifiers.empty() && type_qualifiers.empty() && type_specifiers->empty();
+}
+llvm::Value *DeclarationSpecifiersAST::codegen() {
+  if (storage_specifiers.size() > 1) {
+    throw SemaException(
+        "At most, one storage-class specifier may be given in the declaration specifiers in a declaration",
+        storage_specifiers.back().token);
+  }
+  //TODO The declaration of an identifier for a function that has block scope shall have no explicit storage-class specifier other than extern.
+  //TODO If an aggregate or union object is declared with a storage-class specifier other than typedef, the properties resulting from the storage-class specifier, except with respect to linkage, also apply to the members of the object, and so on recursively for any aggregate or union member objects.
+  //TODO At least one type specifier shall be given in the declaration specifiers in each declaration,  and in the specifier-qualifier list in each struct declaration and type name.
+  switch (type_specifiers->combination_kind) {
+    case CombinationKind::kUnknown:type_specifiers->type = nullptr;
+      break;
+    case CombinationKind::kVoid:type_specifiers->type = &VoidType::sVoidType;
+      break;
+    case CombinationKind::kUnsignedChar:
+    case CombinationKind::kChar:type_specifiers->type = &IntegerType::sUnsignedCharType;
+      break;
+    case CombinationKind::kSignedChar:type_specifiers->type = &IntegerType::sCharType;
+      break;
+    case CombinationKind::kShort:
+    case CombinationKind::kShortInt:
+    case CombinationKind::kSignedShort:
+    case CombinationKind::kSignedShortInt:type_specifiers->type = &IntegerType::sShortIntType;
+      break;
+    case CombinationKind::kUnsignedShort:
+    case CombinationKind::kUnsignedShortInt:type_specifiers->type = &IntegerType::sUnsignedShortIntType;
+      break;
+    case CombinationKind::kInt:
+    case CombinationKind::kSigned:
+    case CombinationKind::kSignedInt:type_specifiers->type = &IntegerType::sIntType;
+      break;
+    case CombinationKind::kUnsigned:
+    case CombinationKind::kUnsignedInt:type_specifiers->type = &IntegerType::sUnsignedIntType;
+      break;
+    case CombinationKind::kLong:
+    case CombinationKind::kSignedLong:
+    case CombinationKind::kSignedLongInt:type_specifiers->type = &IntegerType::sLongIntType;
+      break;
+    case CombinationKind::kUnsignedLong:
+    case CombinationKind::kUnsignedLongInt:type_specifiers->type = &IntegerType::sUnsignedLongIntType;
+      break;
+    case CombinationKind::kLongLong:
+    case CombinationKind::kSignedLongLong:
+    case CombinationKind::kLongLongInt:
+    case CombinationKind::kSignedLongLongInt:type_specifiers->type = &IntegerType::sLongLongIntType;
+      break;
+    case CombinationKind::kUnsignedLongLong:
+    case CombinationKind::kUnsignedLongLongInt:type_specifiers->type = &IntegerType::sUnsignedLongLongIntType;
+      break;
+    case CombinationKind::kFloat:type_specifiers->type = &FloatingType::sFloatType;
+      break;
+    case CombinationKind::kDouble:type_specifiers->type = &FloatingType::sDoubleType;
+      break;
+    case CombinationKind::kLongDouble:type_specifiers->type = &FloatingType::sLongDoubleType;
+      break;
+    case CombinationKind::kStruct: {
+      auto *structAST =
+          static_cast<StructOrUnionSpecifierAST *>(type_specifiers->type_specifiers.back()->specifier.get());
+      ISymbol *symbol;
+
+      if (structAST->bStruct == StructOrUnion::kSTRUCT) {
+        if (structAST->id) {
+          const auto &token = structAST->id->token;
+          symbol = sTagTable->insert(token,
+                                     std::make_unique<TagSymbol>(std::make_unique<StructType>(sModule)));
+        } else {
+          symbol = sTagTable->insert(std::make_unique<TagSymbol>(std::make_unique<StructType>(sModule)));
+        }
+        type_specifiers->type = static_cast<TagSymbol *>(symbol)->getTagType();
+
+        for (const auto &declaration :structAST->declarations) {
+          declaration->codegen();
+          const ObjectType *type = declaration->specifier_qualifier->type;
+
+        }
+      } else {
+
+        //TODO A struct-declaration that does not declare an anonymous structure or anonymous union shall contain a struct-declarator-list.
+      }
+
+      break;
+    }
+    case CombinationKind::kUnion:type = nullptr;
+      break;
+    case CombinationKind::kEnum:type = nullptr;
+      break;
+    case CombinationKind::kTypeName:type = nullptr;
+      break;
+  }
 }
 DeclaratorAST::DeclaratorAST(nt<PointerAST> pointer,
                              nt<DirectDeclaratorAST> direct_declarator)
@@ -174,12 +320,15 @@ void TypeSpecifierAST::print(int indent) {
 StructOrUnionSpecifierAST::StructOrUnionSpecifierAST(StructOrUnion type,
                                                      nt<IdentifierAST> id,
                                                      nts<StructDeclarationAST> declarations)
-    : AST(AST::Kind::STRUCT_OR_UNION_SPECIFIER), type(type), id(std::move(id)), declarations(std::move(declarations)) {}
+    : AST(AST::Kind::STRUCT_OR_UNION_SPECIFIER),
+      bStruct(type),
+      id(std::move(id)),
+      declarations(std::move(declarations)) {}
 void StructOrUnionSpecifierAST::print(int indent) {
   AST::print(indent);
   ++indent;
   AST::printIndent(indent);
-  type == StructOrUnion::kSTRUCT ? std::cout << "STRUCT" << std::endl : std::cout << "UNION" << std::endl;
+  bStruct == StructOrUnion::kSTRUCT ? std::cout << "STRUCT" << std::endl : std::cout << "UNION" << std::endl;
   if (id != nullptr) id->print(indent);
   declarations.print(indent);
 }
@@ -271,6 +420,23 @@ ParameterListAST *DirectDeclaratorAST::getParameterList() {
     }
   }
   return nullptr;
+}
+llvm::Value *DirectDeclaratorAST::codegen() {
+  for (auto it = ast->term2s.rbegin(); it != ast->term2s.rend(); ++it) {
+    switch (it->first) {
+      case DirectDeclaratorAST::Term2::CONST_EXPR:
+        // 6.7.6.2 Array declarators
+        if (it->second
+            && !dynamic_cast<const IntegerType *>(static_cast<ConstantExpressionAST *>(it->second.get())->mType)) {
+          throw SemaException("the expression shall have an integer type", it->second->involvedTokens());
+        }
+        //TODO The element type shall not be an incomplete or function type.
+        //TODO variable length array type
+        break;
+      case DirectDeclaratorAST::Term2::PARA_LIST:break;
+      case DirectDeclaratorAST::Term2::ID :break;
+    }
+  }
 }
 ParameterTypeListAST::ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple)
     : AST(AST::Kind::PARAMETER_TYPE_LIST, hasMultiple ? 1 : 0), parameter_list(std::move(parameter_list)) {}
@@ -379,6 +545,48 @@ void UnaryExpressionAST::print(int indent) {
       break;
   }
 }
+llvm::Value *UnaryExpressionAST::codegen() {
+  switch (ast->getProduction()) {
+    case 0: {
+      auto *postfix = ast->postfix_expression.get();
+      analyzePostfixExpression(postfix);
+      ast->mType = postfix->mType;
+      ast->mQualifiers = postfix->mQualifiers;
+      ast->mLvalue = postfix->mLvalue;
+      break;
+    }
+    case 1:
+    case 2: {
+      //6.5.3.1 Prefix increment and decrement operators
+      auto *unary = ast->unary_expression.get();
+      analyzeUnaryExpression(unary);
+      if (!dynamic_cast<const IntegerType *>(unary->mType) &&
+          !dynamic_cast<const FloatingType *>(unary->mType) &&
+          !dynamic_cast<const PointerType *>(unary->mType)) {
+        throw SemaException(
+            "The operand of the prefix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
+            unary->involvedTokens());
+      }
+      if (unary->mQualifiers.find(TypeQualifier::kCONST) == unary->mQualifiers.end()
+          || !unary->mLvalue) {
+        throw SemaException("The operand shall be a modifiable lvalue", unary->involvedTokens());
+      }
+      ast->mType = unary->mType;
+      ast->mLvalue = unary->mLvalue;
+      ast->mQualifiers = unary->mQualifiers;
+      break;
+    }
+    case 3: {
+      //6.5.3.2 Address and indirection operators
+      auto op = ast->op->type;
+      auto *cast_exp = ast->cast_expression.get();
+      analyzeCastExpression(cast_exp);
+      switch (op) {
+        case UnaryOp::AMP:break;
+      }
+    }
+  }
+}
 
 TypeNameAST::TypeNameAST(nt<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator)
     : AST(AST::Kind::TYPE_NAME), specifiers(std::move(specifier)), declarator(std::move(declarator)) {}
@@ -418,6 +626,137 @@ void PostfixExpressionAST::print(int indent) {
     right->print(indent);
   }
 }
+llvm::Value *PostfixExpressionAST::codegen() {
+  switch (ast->getProduction()) {
+    case 0: {
+      auto *primary = static_cast<PrimaryExpressionAST *>(ast->left.get());
+      analyzePrimaryExpression(primary);
+      ast->mType = primary->mType;
+      ast->mQualifiers = primary->mQualifiers;
+      ast->mLvalue = primary->mLvalue;
+      break;
+    }
+    case 1: {
+      // 6.5.2.1 Array subscripting
+      auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
+      analyzePostfixExpression(postfix);
+      auto *exp = static_cast<ExpressionAST *>(ast->right.get());
+      analyzeExpression(exp);
+      const auto *tPointer = dynamic_cast<const PointerType *>(postfix->mType);
+      if (!tPointer) {
+        throw SemaException("array left side should be pointer to complete object type",
+                            postfix->involvedTokens());
+      }
+      const auto *tObject = dynamic_cast<const ObjectType *>(tPointer->getReferencedType());
+      if (!tObject || !tObject->complete()) {
+        throw SemaException("array left side should be pointer to complete object type",
+                            postfix->involvedTokens());
+      }
+
+      if (!(dynamic_cast<const IntegerType *>(exp->mType))) {
+        throw SemaException("array right side should be an integer type",
+                            postfix->involvedTokens());
+      }
+      ast->mType = tPointer->getReferencedType();
+      ast->mQualifiers = tPointer->qualifiersToReferencedType();
+      ast->mLvalue = true;
+      break;
+    }
+    case 2: {
+      //6.5.2.2 Function calls
+      auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
+      analyzePostfixExpression(postfix);
+      auto *p = dynamic_cast<const PointerType *>(postfix->mType);
+      auto *tFunction = dynamic_cast<const FunctionType *>(p->getReferencedType());
+      if (!tFunction) {
+        throw SemaException("left side must be a function type", postfix->involvedTokens());
+      }
+      auto *returnType = tFunction->getReturnType();
+      if (dynamic_cast<const ArrayType *>(returnType)) {
+        throw SemaException("return type cannot be array type", postfix->involvedTokens());
+      }
+      if (dynamic_cast<const FunctionType *>(returnType)) {
+        throw SemaException("return type cannot be function type", postfix->involvedTokens());
+      }
+      auto *arguments = static_cast<ArgumentExpressionList *>(ast->right.get());
+      if (tFunction->getParameters().size() != arguments->mArgumentList.size()) {
+        throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
+      }
+      auto para = tFunction->getParameters().begin();
+      auto arg = arguments->mArgumentList.begin();
+      while (para != tFunction->getParameters().end()) {
+        analyzeAssignmentExpression(arg->get());
+        auto *argType = dynamic_cast<const ObjectType *>((*arg)->mType);
+        if (!argType) {
+          throw SemaException("arguments must be object type", postfix->involvedTokens());
+        }
+        if (!argType->complete()) {
+          throw SemaException("arguments must be completed type", postfix->involvedTokens());
+        }
+        if (!argType->compatible(*para)) {
+          throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
+        }
+      }
+      ast->mType = tFunction->getReturnType();
+      ast->mLvalue = false;
+      break;
+    }
+    case 3:
+    case 4: {
+      //6.5.2.3 Structure and union members
+      auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
+      analyzePostfixExpression(postfix);
+      const CompoundType *tCompoundType;
+      if (ast->getProduction() == 3) {
+        if (!dynamic_cast<const StructType *>(postfix->mType) && !dynamic_cast<const UnionType *>(postfix->mType)) {
+          throw SemaException("left side must be a struct type or union type", postfix->involvedTokens());
+        } else {
+          tCompoundType = dynamic_cast<const CompoundType *>(postfix->mType);
+        }
+      } else {
+        if (const auto *p = dynamic_cast<const PointerType *>(postfix->mType)) {
+          if (!dynamic_cast<const StructType *>(p->getReferencedType())
+              && !dynamic_cast<const UnionType *>(p->getReferencedType())) {
+            throw SemaException("left side must be a pointer to a struct type or union type",
+                                postfix->involvedTokens());
+          } else {
+            tCompoundType = dynamic_cast<const CompoundType *>(p->getReferencedType());
+          }
+        } else {
+          throw SemaException("left side must be a pointer type", postfix->involvedTokens());
+        }
+      }
+      auto *id = static_cast<IdentifierAST *>(ast->right.get());
+      const std::string &memberName = id->token.getValue();
+      // TODO check if not a member
+      ast->mLvalue = postfix->mLvalue;
+      ast->mQualifiers.insert(postfix->mQualifiers.begin(), postfix->mQualifiers.end());
+      ast->mLvalue = postfix->mLvalue;
+      break;
+    }
+    case 5:
+    case 6: {
+      // 6.5.2.4 Postfix increment and decrement operators
+      auto *postfix = static_cast<PostfixExpressionAST *>(ast->left.get());
+      analyzePostfixExpression(postfix);
+      if (!dynamic_cast<const IntegerType *>(postfix->mType) &&
+          !dynamic_cast<const FloatingType *>(postfix->mType) &&
+          !dynamic_cast<const PointerType *>(postfix->mType)) {
+        throw SemaException(
+            "The operand of the postfix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
+            postfix->involvedTokens());
+      }
+      if (postfix->mQualifiers.find(TypeQualifier::kCONST) == postfix->mQualifiers.end()
+          || !postfix->mLvalue) {
+        throw SemaException("The operand shall be a modifiable lvalue", postfix->involvedTokens());
+      }
+      ast->mType = postfix->mType;
+      ast->mLvalue = postfix->mLvalue;
+      ast->mQualifiers = postfix->mQualifiers;
+      break;
+    }
+  }
+}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<IdentifierAST> id)
     : AST(AST::Kind::PRIMARY_EXPRESSION, 0), ast(std::move(id)) {}
 PrimaryExpressionAST::PrimaryExpressionAST(nt<IntegerConstantAST> interger_constant)
@@ -433,6 +772,134 @@ PrimaryExpressionAST::PrimaryExpressionAST(nt<ExpressionAST> exp)
 void PrimaryExpressionAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
+}
+llvm::Value *PrimaryExpressionAST::codegen() {
+  switch (ast->getProduction()) {
+    case 0: { // identifier
+      auto *identifierAST = static_cast<IdentifierAST *>(ast->ast.get());
+      auto *symbol = mObjectTable->lookup(identifierAST->token);
+      SymbolKind kind = symbol->getKind();
+      if (kind == SymbolKind::OBJECT) {
+        ast->mType = static_cast<ObjectSymbol *>(symbol)->getType();
+        ast->mQualifiers = static_cast<ObjectSymbol *>(symbol)->getQualifiers();
+        ast->mLvalue = true;
+      } else if (kind == SymbolKind::ENUMERATION_CONSTANT) {
+        ast->mType = static_cast<EnumConstSymbol *>(symbol)->getType();
+      } else {
+        throw SemaException("identifier as a primary expression must be object or function or enumeration const",
+                            identifierAST->token);
+      }
+      break;
+    }
+    case 1: {
+      auto *integerConstAST = static_cast<IntegerConstantAST *>(ast->ast.get());
+      bool isBase10 = integerConstAST->mToken.getValue()[0] != 0;
+      unsigned long long int n = integerConstAST->value;
+
+      unsigned int intSize = IntegerType::sIntType.getSizeInBits();
+      unsigned int longSize = IntegerType::sLongIntType.getSizeInBits();
+      unsigned int longLongSize = IntegerType::sLongLongIntType.getSizeInBits();
+
+      switch (integerConstAST->suffix) {
+        case IntegerConstantAST::Suffix::None:
+          if (isBase10) {
+            if (!(n >> (intSize - 1))) {
+              ast->mType = &IntegerType::sIntType;
+            } else if (!(n >> (longSize - 1))) {
+              ast->mType = &IntegerType::sLongIntType;
+            } else {
+              ast->mType = &IntegerType::sLongLongIntType;
+            }
+          } else {
+            if (!(n >> (intSize - 1))) {
+              ast->mType = &IntegerType::sIntType;
+            } else if (!(n >> (intSize))) {
+              ast->mType = &IntegerType::sUnsignedIntType;
+            } else if (!(n >> (longSize - 1))) {
+              ast->mType = &IntegerType::sLongIntType;
+            } else if (!(n >> (longSize))) {
+              ast->mType = &IntegerType::sUnsignedLongIntType;
+            } else {
+              ast->mType =
+                  !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType : &IntegerType::sUnsignedLongLongIntType;
+            }
+          }
+          break;
+        case IntegerConstantAST::Suffix::U:
+          if (!(n >> (intSize - 1))) {
+            ast->mType = &IntegerType::sUnsignedIntType;
+          } else if (!(n >> (longSize - 1))) {
+            ast->mType = &IntegerType::sUnsignedLongIntType;
+          } else {
+            ast->mType = &IntegerType::sUnsignedLongLongIntType;
+          }
+          break;
+        case IntegerConstantAST::Suffix::L:
+          if (isBase10) {
+            if (!(n >> (longSize - 1))) {
+              ast->mType = &IntegerType::sLongIntType;
+            } else {
+              ast->mType = &IntegerType::sLongLongIntType;
+            }
+          } else {
+            if (!(n >> (longSize - 1))) {
+              ast->mType = &IntegerType::sLongIntType;
+            } else if (!(n >> (longSize))) {
+              ast->mType = &IntegerType::sUnsignedLongIntType;
+            } else {
+              ast->mType =
+                  !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType : &IntegerType::sUnsignedLongLongIntType;
+            }
+          }
+          break;
+        case IntegerConstantAST::Suffix::UL:
+          if (!(n >> (longSize - 1))) {
+            ast->mType = &IntegerType::sUnsignedLongIntType;
+          } else {
+            ast->mType = &IntegerType::sUnsignedLongLongIntType;
+          }
+          break;
+        case IntegerConstantAST::Suffix::LL:
+          if (isBase10) {
+            ast->mType = &IntegerType::sLongLongIntType;
+          } else {
+            ast->mType =
+                !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType : &IntegerType::sUnsignedLongLongIntType;
+          }
+          break;
+        case IntegerConstantAST::Suffix::ULL:ast->mType = &IntegerType::sUnsignedLongLongIntType;
+          break;
+      }
+    }
+    case 2: {
+      auto *floatingConstAST = static_cast<FloatingConstantAST *>(ast->ast.get());
+      switch (floatingConstAST->mSuffix) {
+        case FloatingConstantAST::Suffix::None:ast->mType = &FloatingType::sDoubleType;
+          break;
+        case FloatingConstantAST::Suffix::F: ast->mType = &FloatingType::sFloatType;
+          break;
+        case FloatingConstantAST::Suffix::L: ast->mType = &FloatingType::sLongDoubleType;
+          break;
+      }
+      break;
+    }
+    case 3:ast->mType = &IntegerType::sCharType;
+    case 4: {
+      auto *stringAST = static_cast<StringAST *>(ast->ast.get());
+      ast->mType = stringAST->mType.get();
+      ast->mQualifiers.emplace(TypeQualifier::kCONST);
+      ast->mLvalue = true;
+      break;
+    }
+    case 5: {
+      auto *exp = static_cast<ExpressionAST *>(ast->ast.get());
+      ast->mType = exp->mType;
+      ast->mQualifiers = exp->mQualifiers;
+      ast->mLvalue = exp->mLvalue;
+      break;
+    }
+    default:break;
+  }
 }
 AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression)
     : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0), conditional_expression(std::move(conditional_expression)) {}
@@ -487,6 +954,9 @@ ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declar
 void ParameterListAST::print(int indent) {
   AST::print(indent);
   parameter_declaration.print(++indent);
+}
+llvm::Value *ParameterListAST::codegen() {
+  SymbolScope s(sObjectTable, &mObjectTable);
 }
 ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                                                  nt<DeclaratorAST> declarator)
@@ -656,6 +1126,8 @@ void IdentifierAST::print(int indent) {
 StringAST::StringAST(const Token &token) : AST(AST::Kind::STRING), mToken(token) {
   mType = std::make_unique<ArrayType>(&IntegerType::sCharType, mToken.getValue().size());
 }
+llvm::LLVMContext AST::sContext;
+llvm::Module AST::sModule("top", sContext);
 AST::AST(AST::Kind kind, int id) : kind(kind), productionId(id) {}
 const char *AST::toString() {
   switch (kind) {

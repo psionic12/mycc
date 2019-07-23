@@ -9,7 +9,10 @@
 #include <tokens/token.h>
 #include <iostream>
 #include <tokens/combination_kind.h>
+#include <llvm/IR/Module.h>
 #include "types.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Value.h"
 class SymbolTable;
 class SemaException : public std::exception {
  public:
@@ -86,6 +89,7 @@ class AST {
   const int getProduction() const {
     return productionId;
   }
+  virtual llvm::Value *codegen();
   virtual const char *toString();
   virtual void print(int indent = 0);
   void printIndent(int indent);
@@ -97,6 +101,12 @@ class AST {
   const Kind kind;
   //the id of which production
   const int productionId;
+ protected:
+  static llvm::LLVMContext sContext;
+  static llvm::Module sModule;
+  SymbolTable *sObjectTable;
+  SymbolTable *sTagTable;
+  SymbolTable *sLabelTable;
 };
 template<typename T>
 class Terminal {
@@ -282,6 +292,7 @@ class ParameterListAST : public AST {
   const nts<ParameterDeclarationAST> parameter_declaration;
   SymbolTable &mObjectTable;
   void print(int indent) override;
+  llvm::Value *codegen() override;
 };
 class EnumerationConstantAST : public AST {
  public:
@@ -345,6 +356,7 @@ class PrimaryExpressionAST : public AST, public IExpression {
   PrimaryExpressionAST(nt<ExpressionAST>);
   const nt<AST> ast;
   void print(int indent) override;
+  llvm::Value *codegen() override;
 };
 class ArgumentExpressionList : public AST, public IExpression {
  public:
@@ -370,6 +382,7 @@ class PostfixExpressionAST : public AST, public IExpression {
   void print(int indent) override;
   nt<AST> left;
   nt<AST> right;
+  llvm::Value *codegen() override;
 };
 class TypeNameAST : public AST {
  public:
@@ -395,6 +408,7 @@ class UnaryExpressionAST : public AST, public IExpression {
   const nt<CastExpressionAST> cast_expression;
   const nt<TypeNameAST> type_name;
   void print(int indent) override;
+  llvm::Value *codegen() override;
 };
 class CastExpressionAST : public AST {
  public:
@@ -449,6 +463,7 @@ class DirectDeclaratorAST : public AST {
   const std::vector<std::pair<Term2, nt<AST>>> term2s;
   void print(int indent) override;
   ParameterListAST *getParameterList();
+  llvm::Value *codegen() override;
 };
 class PointerAST : public AST {
  public:
@@ -498,10 +513,11 @@ class EnumSpecifierAST : public AST {
 class StructOrUnionSpecifierAST : public AST {
  public:
   StructOrUnionSpecifierAST(StructOrUnion type, nt<IdentifierAST> id, nts<StructDeclarationAST> declarations);
-  const StructOrUnion type;
+  const StructOrUnion bStruct;
   const nt<IdentifierAST> id;
   const nts<StructDeclarationAST> declarations;
   void print(int indent) override;
+  const ObjectType* type;
 };
 class ProtoTypeSpecifierAST : public AST, public Terminal<ProtoTypeSpecifierOp> {
  public:
@@ -533,6 +549,7 @@ class SpecifierQualifierAST : public AST {
   nt<TypeSpecifiersAST> types;
   nts<TypeQualifierAST> qualifiers;
   void print(int indent) override;
+  const ObjectType *type;
 };
 class StorageClassSpecifierAST : public AST {
  public:
@@ -557,6 +574,7 @@ class DeclarationSpecifiersAST : public AST {
   const nts<TypeQualifierAST> type_qualifiers;
   bool empty();
   void print(int indent) override;
+  llvm::Value *codegen() override;
 };
 class DeclarationAST : public AST {
  public:
@@ -566,6 +584,7 @@ class DeclarationAST : public AST {
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
   const InitDeclarators init_declarators;
   void print(int indent) override;
+  llvm::Value *codegen() override;
 };
 class CompoundStatementAST : public AST {
  public:
@@ -578,6 +597,7 @@ class CompoundStatementAST : public AST {
   SymbolTable &mObjectTable;
   SymbolTable &mTagTable;
   void print(int indent) override;
+  llvm::Value *codegen() override;
 };
 class FunctionDefinitionAST : public AST {
  public:
@@ -592,6 +612,7 @@ class FunctionDefinitionAST : public AST {
   const nt<CompoundStatementAST> compound_statement;
   SymbolTable &mLabelTable;
   void print(int indent) override;
+  llvm::Value *codegen() override;
 
 };
 class ExternalDeclarationAST : public AST {
@@ -599,6 +620,7 @@ class ExternalDeclarationAST : public AST {
   explicit ExternalDeclarationAST(nt<AST> def);
   const nt<AST> def;
   void print(int indent) override;
+  llvm::Value *codegen() override;
 };
 class TranslationUnitAST : public AST {
  public:
@@ -609,5 +631,6 @@ class TranslationUnitAST : public AST {
   SymbolTable &mObjectTable;
   SymbolTable &mTagTable;
   void print(int indent) override;
+  llvm::Value *codegen() override;
 };
 #endif //MYCCPILER_AST_H

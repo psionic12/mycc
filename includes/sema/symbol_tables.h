@@ -57,6 +57,7 @@ enum class ScopeKind {
 
 class ISymbol {
  public:
+  ISymbol(std::pair<const Token &, const Token &> involvedTokens) : mInvolvedTokens(std::move(involvedTokens)) {}
   friend class SymbolTable;
   virtual SymbolKind getKind() const = 0;
   virtual bool operator==(SymbolKind kind) const {
@@ -65,6 +66,7 @@ class ISymbol {
   virtual bool operator!=(SymbolKind kind) const {
     return !operator==(kind);
   };
+  std::pair<const Token &, const Token &> mInvolvedTokens;
  private:
   Linkage linkage = Linkage::kNone;
 };
@@ -78,8 +80,10 @@ inline bool operator!=(SymbolKind kind, const ISymbol *symbol) {
 
 class ObjectSymbol : public ISymbol {
  public:
-  ObjectSymbol(ObjectType *type, std::set<TypeQualifier> qualifiers)
-      : mObjectType(type), mQualifiers(std::move(qualifiers)) {}
+  ObjectSymbol(std::pair<const Token &, const Token &> involvedTokens,
+                 ObjectType *type,
+                 std::set<TypeQualifier> qualifiers)
+      : ISymbol(involvedTokens), mObjectType(type), mQualifiers(std::move(qualifiers)) {}
   SymbolKind getKind() const override {
     return SymbolKind::OBJECT;
   }
@@ -107,7 +111,9 @@ class ObjectSymbol : public ISymbol {
 
 class TagSymbol : public ISymbol {
  public:
-  TagSymbol(std::unique_ptr<CompoundType> &&compoundType) : mCompoundType(std::move(compoundType)) {}
+  TagSymbol(std::pair<const Token &, const Token &> involvedTokens,
+              std::unique_ptr<CompoundType> &&compoundType)
+      : ISymbol(involvedTokens), mCompoundType(std::move(compoundType)) {}
   SymbolKind getKind() const override {
     return SymbolKind::TAG;
   }
@@ -130,9 +136,10 @@ class TypedefSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::TYPEDEF;
   }
-  TypedefSymbol(Type *mType) : mType(mType) {}
+  TypedefSymbol(std::pair<const Token &, const Token &> involvedTokens, Type *mType)
+      : ISymbol(involvedTokens), mType(mType) {}
   // used in parser, just indicate the identifier is a typedef, the represent type will set in sema phrase
-  TypedefSymbol() : mType(nullptr) {}
+  TypedefSymbol(std::pair<const Token &, const Token &> involvedTokens) : ISymbol(involvedTokens), mType(nullptr) {}
   Type *getMType() const {
     return mType;
   }
@@ -145,6 +152,7 @@ class TypedefSymbol : public ISymbol {
 
 class LabelSymbol : public ISymbol {
  public:
+  LabelSymbol(const std::pair<const Token &, const Token &> &involvedTokens) : ISymbol(involvedTokens) {}
   SymbolKind getKind() const override {
     return SymbolKind::LABEL;
   }
@@ -155,7 +163,8 @@ class EnumConstSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::ENUMERATION_CONSTANT;
   }
-  EnumConstSymbol(EnumerationType *mEnumType) : mEnumType(mEnumType) {}
+  EnumConstSymbol(std::pair<const Token &, const Token &> involvedTokens,
+                    EnumerationType *mEnumType) : ISymbol(involvedTokens), mEnumType(mEnumType) {}
   EnumerationType *getType() const {
     return mEnumType;
   }
@@ -163,18 +172,17 @@ class EnumConstSymbol : public ISymbol {
   EnumerationType *mEnumType;
 };
 
-class SymbolTable : std::map<std::string, std::unique_ptr<ISymbol>> {
+class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
  public:
   SymbolTable(ScopeKind kind, SymbolTable *father)
       : scope_kind(kind), father(father) {}
   ISymbol *lookup(const Token &token);
-  ISymbol * insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
-  ISymbol * insert(std::string name, std::unique_ptr<ISymbol> &&symbol);
+  ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
+  ISymbol *insert(std::unique_ptr<ISymbol> &&symbol);
   // TODO move this to parser
   bool isTypedef(const Token &token);
   void setFather(SymbolTable *father);
   SymbolTable *getFather() const;
-  std::string getAnonymousName();
  private:
   ScopeKind scope_kind;
   SymbolTable *father;
@@ -192,8 +200,8 @@ class SymbolScope {
  public:
   SymbolScope(SymbolTable *&outter, SymbolTable *inner) : outter(outter), outter_valule(outter) {
     outter = inner;
-    if(!inner->getFather())
-    inner->setFather(outter);
+    if (!inner->getFather())
+      inner->setFather(outter);
   }
   ~SymbolScope() {
     outter = outter_valule;
