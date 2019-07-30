@@ -7,30 +7,9 @@
 #include <tokens/token.h>
 #include <set>
 #include <memory>
+#include <llvm/IR/Value.h>
 #include "operator.h"
-class Type;
-
-class ObjectType;
-
-class IntegerType;
-
-class FloatingType;
-
-class VoidType;
-
-class FunctionType;
-
-class PointerType;
-
-class ArrayType;
-
-class CompoundType;
-
-class StructType;
-
-class UnionType;
-
-class EnumerationType;
+#include "qualifiedType.h"
 
 enum class Linkage {
   kExternal,
@@ -66,6 +45,8 @@ class ISymbol {
   virtual bool operator!=(SymbolKind kind) const {
     return !operator==(kind);
   };
+  void setLinkage(Linkage linkage);
+  Linkage getLinkage() const;
   std::pair<const Token &, const Token &> mInvolvedTokens;
  private:
   Linkage linkage = Linkage::kNone;
@@ -80,22 +61,23 @@ inline bool operator!=(SymbolKind kind, const ISymbol *symbol) {
 
 class ObjectSymbol : public ISymbol {
  public:
-  ObjectSymbol(std::pair<const Token &, const Token &> involvedTokens,
-                 ObjectType *type,
-                 std::set<TypeQualifier> qualifiers)
-      : ISymbol(involvedTokens), mObjectType(type), mQualifiers(std::move(qualifiers)) {}
+  ObjectSymbol(QualifiedType qualifiedType,
+               std::pair<const Token &, const Token &> involvedTokens)
+      : ISymbol(involvedTokens), mQulifiedType(qualifiedType) {
+  }
   SymbolKind getKind() const override {
     return SymbolKind::OBJECT;
   }
-  ObjectType *getType() const {
-    return mObjectType;
+  const ObjectType *getType() const {
+    return mQulifiedType.getType();
   }
   const std::set<TypeQualifier> &getQualifiers() const {
-    return mQualifiers;
+    return mQulifiedType.getQualifiers();
   }
+  friend class SymbolTable;
  private:
-  ObjectType *mObjectType;
-  std::set<TypeQualifier> mQualifiers;
+  QualifiedType mQulifiedType;
+  llvm::Value *mValue;
 };
 
 //class FunctionSymbol : public ISymbol {
@@ -111,8 +93,8 @@ class ObjectSymbol : public ISymbol {
 
 class TagSymbol : public ISymbol {
  public:
-  TagSymbol(std::pair<const Token &, const Token &> involvedTokens,
-              std::unique_ptr<CompoundType> &&compoundType)
+  TagSymbol(std::unique_ptr<CompoundType> &&compoundType,
+            std::pair<const Token &, const Token &> involvedTokens)
       : ISymbol(involvedTokens), mCompoundType(std::move(compoundType)) {}
   SymbolKind getKind() const override {
     return SymbolKind::TAG;
@@ -136,7 +118,7 @@ class TypedefSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::TYPEDEF;
   }
-  TypedefSymbol(std::pair<const Token &, const Token &> involvedTokens, Type *mType)
+  TypedefSymbol(Type *mType, std::pair<const Token &, const Token &> involvedTokens)
       : ISymbol(involvedTokens), mType(mType) {}
   // used in parser, just indicate the identifier is a typedef, the represent type will set in sema phrase
   TypedefSymbol(std::pair<const Token &, const Token &> involvedTokens) : ISymbol(involvedTokens), mType(nullptr) {}
@@ -163,8 +145,9 @@ class EnumConstSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::ENUMERATION_CONSTANT;
   }
-  EnumConstSymbol(std::pair<const Token &, const Token &> involvedTokens,
-                    EnumerationType *mEnumType) : ISymbol(involvedTokens), mEnumType(mEnumType) {}
+  EnumConstSymbol(EnumerationType *mEnumType,
+                  std::pair<const Token &, const Token &> involvedTokens)
+      : ISymbol(involvedTokens), mEnumType(mEnumType) {}
   EnumerationType *getType() const {
     return mEnumType;
   }
@@ -174,8 +157,8 @@ class EnumConstSymbol : public ISymbol {
 
 class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
  public:
-  SymbolTable(ScopeKind kind, SymbolTable *father)
-      : scope_kind(kind), father(father) {}
+  SymbolTable(ScopeKind kind, SymbolTable *father, llvm::Module& module, std::string name)
+      : scope_kind(kind), father(father), mModule(module), mName(std::move(name)) {}
   ISymbol *lookup(const Token &token);
   ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
   ISymbol *insert(std::unique_ptr<ISymbol> &&symbol);
@@ -183,11 +166,22 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
   bool isTypedef(const Token &token);
   void setFather(SymbolTable *father);
   SymbolTable *getFather() const;
+  ScopeKind getScopeKind() const;
  private:
+  void setValue(const Token &token, ISymbol *symbol);
   ScopeKind scope_kind;
   SymbolTable *father;
   int anonymousId = 0;
+  llvm::Module& mModule;
+  std::string mName;
+  
 };
+void ISymbol::setLinkage(Linkage linkage) {
+  ISymbol::linkage = linkage;
+}
+Linkage ISymbol::getLinkage() const {
+  return linkage;
+}
 
 class SymbolTables {
  public:

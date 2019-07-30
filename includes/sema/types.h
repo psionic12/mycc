@@ -21,16 +21,6 @@ class Type {
   virtual llvm::Type *getLLVMType(llvm::Module &module) const = 0;
 };
 
-class QualifiedType {
- private:
-  ObjectType *mType;
-  std::set<TypeQualifier> mQualifiers;
- public:
-  ObjectType *getType() const;
-  const std::set<TypeQualifier> &getQualifiers() const;
-  QualifiedType(ObjectType *type, std::set<TypeQualifier> qualifiers);
-};
-
 class ObjectType : public Type {
  public:
   virtual unsigned int getSizeInBits() const = 0;
@@ -115,8 +105,7 @@ class ArrayType : public PointerType {
   void setSize(unsigned int size);
   llvm::ArrayType *getLLVMType(llvm::Module &module) const override;
  private:
-  //TODO is int enough?
-  unsigned int mSize = 0;
+  int64_t mSize = 0; // same with llvm
 };
 
 // Types stored in symbol table
@@ -136,6 +125,7 @@ class CompoundType : public ObjectType {
 class StructType : public CompoundType {
  public:
   StructType(const std::string &tag, llvm::Module &module);
+  StructType(llvm::Module &module);
   llvm::StructType *getLLVMType(llvm::Module &module) const override;
   void setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
                  llvm::Module &module) override;
@@ -147,7 +137,6 @@ class StructType : public CompoundType {
 class UnionType : public CompoundType {
  public:
   llvm::StructType *getLLVMType(llvm::Module &module) const override;
-  unsigned int getSizeInBits() const override;
 };
 
 //TODO

@@ -1,6 +1,7 @@
 #include <sema/types.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <sema/ast.h>
+#include "qualifiedType.h"
 bool Type::compatible(Type *type) const {
   return this == type;
 }
@@ -110,6 +111,8 @@ unsigned int CompoundType::getSizeInBits() const {
 
 StructType::StructType(const std::string &tag, llvm::Module &module)
     : mLLVMType(llvm::StructType::create(module.getContext(), tag)) {}
+
+StructType::StructType(llvm::Module &module) : mLLVMType(llvm::StructType::create(module.getContext())) {}
 llvm::StructType *StructType::getLLVMType(llvm::Module &module) const {
   return mLLVMType;
 }
@@ -125,7 +128,7 @@ void StructType::setBody(std::vector<std::pair<const std::string *, std::unique_
     }
     fields.push_back(symbol->getType()->getLLVMType(module));
   }
-  //TODO the sandard says "a structure with more than one named member",
+  //TODO the standard says "a structure with more than one named member",
   // which I don't fully understand, I'll come back later
   if (symbols.size() > 1) {
     auto symbol = std::move(symbols.back().second);
@@ -144,26 +147,7 @@ void StructType::setBody(std::vector<std::pair<const std::string *, std::unique_
   mLLVMType->setBody(fields);
 }
 llvm::StructType *UnionType::getLLVMType(llvm::Module &module) const {
-  llvm::StructType *structTy = module.getTypeByName(mTag);
-//  if (!structTy) {
-//    structTy = llvm::StructType::create(module.getContext(), mTag);
-//    if (complete()) {
-//      std::vector<llvm::Type *> fields;
-//      fields.push_back(llvm::IntegerType::get(module.getContext(), getSizeInBits()));
-//      structTy->setBody(fields, /*isPacked=*/false);
-//    }
-//  }
-  return structTy;
-}
-unsigned int UnionType::getSizeInBits() const {
-  //TODO remember the result
-  unsigned size = 0;
-  for (auto &field : mFields) {
-    if (size < field.second.getType()->getSizeInBits()) {
-      size = field.second.getType()->getSizeInBits();
-    }
-  }
-  return size;
+  return nullptr;
 }
 unsigned int EnumerationType::getSizeInBits() const {
   return IntegerType::sIntType.getSizeInBits();
@@ -172,11 +156,3 @@ llvm::IntegerType *EnumerationType::getLLVMType(llvm::Module &module) const {
   return llvm::IntegerType::get(module.getContext(), getSizeInBits());
 }
 
-QualifiedType::QualifiedType(ObjectType *type, std::set<TypeQualifier> qualifiers)
-    : mType(type), mQualifiers(std::move(qualifiers)) {}
-ObjectType *QualifiedType::getType() const {
-  return mType;
-}
-const std::set<TypeQualifier> &QualifiedType::getQualifiers() const {
-  return mQualifiers;
-}

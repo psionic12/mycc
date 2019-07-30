@@ -57,7 +57,7 @@ enum class ProtoTypeSpecifierOp {
 };
 
 enum class StorageSpecifier {
-  kAUTO, kREGISTER, kSTATIC, kEXTERN, kTYPEDEF,
+  kNone, kAUTO, kREGISTER, kSTATIC, kEXTERN, kTYPEDEF,
 };
 
 enum class StructOrUnion {
@@ -69,7 +69,5 @@ enum class TypeQualifier {
   kCONST,
   kVOLATILE,
 };
-
-
 
 #endif //MYCCPILER_OPERATOR_H
