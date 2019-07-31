@@ -648,7 +648,7 @@ class CompoundStatementAST : public AST {
   SymbolTable &mObjectTable;
   SymbolTable &mTagTable;
   void print(int indent) override;
-  llvm::Value *codegen() override;
+  llvm::Value *codegen();
 };
 class FunctionDefinitionAST : public AST {
  public:

@@ -110,6 +110,7 @@ void CompoundStatementAST::print(int indent) {
 llvm::Value *CompoundStatementAST::codegen() {
   SymbolScope s1(sObjectTable, &mObjectTable);
   SymbolScope s2(sTagTable, &mTagTable);
+  //TODO create basic block and assign it to symbol table;
 }
 DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                                InitDeclarators init_declarators,

@@ -48,24 +48,27 @@ unsigned int FloatingType::getSizeInBits() const {
   return mSizeInBits;
 }
 FunctionType::FunctionType(Type *returnType, std::vector<ObjectType *> &&parameters, bool varArg)
-    : mReturnType(returnType), mParameters(parameters), mVarArg(varArg) {}
+    : mReturnType(returnType), mParameters(parameters), mVarArg(varArg), mPointerType(this) {}
 Type *FunctionType::getReturnType() const {
   return mReturnType;
 }
 const std::vector<ObjectType *> &FunctionType::getParameters() const {
   return mParameters;
 }
-llvm::Type *FunctionType::getLLVMType(llvm::Module &module) const {
+llvm::FunctionType *FunctionType::getLLVMType(llvm::Module &module) const {
   std::vector<llvm::Type *> args;
   for (auto &paramter : mParameters) {
     args.push_back(paramter->getLLVMType(module));
   }
   return llvm::FunctionType::get(mReturnType->getLLVMType(module), args, mVarArg);
 }
+FunctionType::operator const PointerType *() const {
+  return &mPointerType;
+}
 ArrayType::ArrayType(const ObjectType *elementType)
-    : PointerType(elementType) {}
+    : mElementType(elementType), mPointerType(this) {}
 ArrayType::ArrayType(const ObjectType *elementType, unsigned int size)
-    : mSize(size), PointerType(elementType) {}
+    : mSize(size), mElementType(elementType), mPointerType(this) {}
 bool ArrayType::complete() const {
   return mSize > 0;
 }
@@ -73,7 +76,10 @@ void ArrayType::setSize(unsigned int size) {
   mSize = size;
 }
 llvm::ArrayType *ArrayType::getLLVMType(llvm::Module &module) const {
-  return llvm::ArrayType::get(mReferencedType->getLLVMType(module), mSize);
+  return llvm::ArrayType::get(mElementType->getLLVMType(module), mSize);
+}
+ArrayType::operator const PointerType *() const {
+  return &mPointerType;
 }
 PointerType::PointerType(const Type *referencedType)
     : mReferencedType(referencedType) {}
@@ -83,7 +89,7 @@ const Type *PointerType::getReferencedType() const {
 const std::set<TypeQualifier> &PointerType::qualifiersToReferencedType() const {
   return mQualifersToReferencedType;
 }
-llvm::Type *PointerType::getLLVMType(llvm::Module &module) const {
+llvm::PointerType *PointerType::getLLVMType(llvm::Module &module) const {
   return llvm::PointerType::get(mReferencedType->getLLVMType(module), 0);
 }
 unsigned int PointerType::getSizeInBits() const {

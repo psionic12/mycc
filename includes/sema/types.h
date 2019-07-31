@@ -70,42 +70,47 @@ class VoidType : public ObjectType {
   unsigned int getSizeInBits() const override;
 };
 
-// Types stored in symbol table
-class FunctionType : public Type {
- public:
-  FunctionType(Type *returnType, std::vector<ObjectType *> &&parameters, bool varArg);
-  Type *getReturnType() const;
-  const std::vector<ObjectType *> &getParameters() const;
-  llvm::Type *getLLVMType(llvm::Module &module) const override;
- private:
-  bool mVarArg;
-  Type *mReturnType;
-  std::vector<ObjectType *> mParameters;
-};
-
 // Types created dynamically
 class PointerType : public ObjectType {
  public:
   PointerType(const Type *referencedType);
   const std::set<TypeQualifier> &qualifiersToReferencedType() const;
   const Type *getReferencedType() const;
-  llvm::Type *getLLVMType(llvm::Module &module) const override;
+  llvm::PointerType *getLLVMType(llvm::Module &module) const override;
   unsigned int getSizeInBits() const override;
  protected:
   const Type *mReferencedType;
   std::set<TypeQualifier> mQualifersToReferencedType;
 };
 
+// Types stored in symbol table
+class FunctionType : public Type {
+ public:
+  FunctionType(Type *returnType, std::vector<ObjectType *> &&parameters, bool varArg);
+  Type *getReturnType() const;
+  const std::vector<ObjectType *> &getParameters() const;
+  llvm::FunctionType * getLLVMType(llvm::Module &module) const override;
+  explicit operator const PointerType*() const;
+ private:
+  bool mVarArg;
+  Type *mReturnType;
+  std::vector<ObjectType *> mParameters;
+  PointerType mPointerType;
+};
+
 // Types create dynamically
-class ArrayType : public PointerType {
+class ArrayType : public ObjectType {
  public:
   ArrayType(const ObjectType *elementType);
   ArrayType(const ObjectType *elementType, unsigned int size);
   bool complete() const override;
   void setSize(unsigned int size);
   llvm::ArrayType *getLLVMType(llvm::Module &module) const override;
+  explicit operator const PointerType*() const;
  private:
   int64_t mSize = 0; // same with llvm
+  const ObjectType *mElementType;
+  PointerType mPointerType;
 };
 
 // Types stored in symbol table

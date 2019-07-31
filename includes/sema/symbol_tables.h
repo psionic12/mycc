@@ -19,8 +19,8 @@ enum class Linkage {
 
 enum class SymbolKind {
   OBJECT,
-//  FUNCTION,
-      TAG,
+  FUNCTION,
+  TAG,
   MEMBER,
   TYPEDEF,
   LABEL,
@@ -48,8 +48,12 @@ class ISymbol {
   void setLinkage(Linkage linkage);
   Linkage getLinkage() const;
   std::pair<const Token &, const Token &> mInvolvedTokens;
+  friend class FileTable;
+  friend class BlockTable;
+  friend class ProtoTable;
  private:
   Linkage linkage = Linkage::kNone;
+  llvm::Value *mValue;
 };
 
 inline bool operator==(SymbolKind kind, const ISymbol *symbol) {
@@ -74,22 +78,23 @@ class ObjectSymbol : public ISymbol {
   const std::set<TypeQualifier> &getQualifiers() const {
     return mQulifiedType.getQualifiers();
   }
-  friend class SymbolTable;
  private:
   QualifiedType mQulifiedType;
-  llvm::Value *mValue;
 };
 
-//class FunctionSymbol : public ISymbol {
-// public:
-//  FunctionSymbol(std::unique_ptr<FunctionType> &&type)
-//      : mFunctionType(std::move(type)) {}
-//  SymbolKind getKind() const override {
-//    return SymbolKind::FUNCTION;
-//  }
-// private:
-//  std::unique_ptr<FunctionType> mFunctionType;
-//};
+class FunctionSymbol : public ISymbol {
+ public:
+  FunctionSymbol(FunctionType *type, std::pair<const Token &, const Token &> involvedTokens)
+      : mFunctionType(type), ISymbol(involvedTokens) {}
+  SymbolKind getKind() const override {
+    return SymbolKind::FUNCTION;
+  }
+  const FunctionType *getType() const {
+    return mFunctionType;
+  }
+ private:
+  FunctionType *mFunctionType;
+};
 
 class TagSymbol : public ISymbol {
  public:
@@ -157,8 +162,8 @@ class EnumConstSymbol : public ISymbol {
 
 class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
  public:
-  SymbolTable(ScopeKind kind, SymbolTable *father, llvm::Module& module, std::string name)
-      : scope_kind(kind), father(father), mModule(module), mName(std::move(name)) {}
+  SymbolTable(ScopeKind kind, llvm::Module &module, std::string name)
+      : scope_kind(kind), mModule(module), mName(std::move(name)) {}
   ISymbol *lookup(const Token &token);
   ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
   ISymbol *insert(std::unique_ptr<ISymbol> &&symbol);
@@ -167,14 +172,37 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
   void setFather(SymbolTable *father);
   SymbolTable *getFather() const;
   ScopeKind getScopeKind() const;
- private:
-  void setValue(const Token &token, ISymbol *symbol);
+ protected:
+  virtual void setValue(const Token &token, ISymbol *symbol);
   ScopeKind scope_kind;
   SymbolTable *father;
   int anonymousId = 0;
-  llvm::Module& mModule;
+  llvm::Module &mModule;
   std::string mName;
-  
+
+};
+
+class FileTable : public SymbolTable {
+ public:
+  FileTable(llvm::Module &module);
+ private:
+  void setValue(const Token &token, ISymbol *symbol) override;
+};
+
+class BlockTable : public SymbolTable {
+ public:
+  BlockTable(llvm::Module &module, bool function, std::string name, llvm::BasicBlock *basicBlock);
+ private:
+  void setValue(const Token &token, ISymbol *symbol) override;
+  llvm::BasicBlock *mBasicBlock;
+};
+
+class ProtoTable : public SymbolTable {
+ public:
+  ProtoTable(llvm::Module &module, std::string name, llvm::BasicBlock *basicBlock);
+ private:
+  void setValue(const Token &token, ISymbol *symbol) override;
+  llvm::BasicBlock *mBasicBlock;
 };
 void ISymbol::setLinkage(Linkage linkage) {
   ISymbol::linkage = linkage;
