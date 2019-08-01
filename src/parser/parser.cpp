@@ -103,6 +103,8 @@ Parser::parseTranslationUnit() {
     declarations.push_back(parseExternalDeclaration());
   }
   auto *tagTable = symbolTables.createTable(ScopeKind::FILE, nullptr);
+  //remove all typedef symbol's which is used only in parser
+  symbolTables.clear();
   return make_ast<TranslationUnitAST>(std::move(declarations), *table, *tagTable);
 }
 
@@ -129,7 +131,7 @@ nt<ExternalDeclarationAST> Parser::parseExternalDeclaration() {
     // has <declaration> or next token is a '{', this is a function definition
     if (!declarations.empty() || lex.peek() == TokenKind::TOKEN_LBRACE) {
       auto declarator = std::move(init_declarators.back().first);
-      auto *labelTable = symbolTables.createTable(ScopeKind::FUNCTION, nullptr);
+      auto *labelTable = symbolTables.createTable(ScopeKind::TAG, nullptr);
       auto function_definition = make_ast<FunctionDefinitionAST>(std::move(specifiers),
                                                                  std::move(declarator),
                                                                  std::move(declarations),
@@ -609,11 +611,11 @@ nt<PointerAST> Parser::parsePointer() {
 ///       | {<direct-abstract-declarator>}? [ {<constant-expression>}? ]
 ///       | {<direct-abstract-declarator>}? ( {<parameter-type-list>}? )
 
+
 nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
   mStartToken = &lex.peek();
-  nt<AST> term1;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
-    term1 = parseIdentifier();
+    return make_ast<SimpleDirectDeclaratorAST>(parseIdentifier());
   } else if (lex.peek() == TokenKind::TOKEN_LPAREN
       && (lex.peek(1) == TokenKind::TOKEN_LPAREN
           || lex.peek(1) == TokenKind::TOKEN_STAR
@@ -621,15 +623,13 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
           || (lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
               && !table->isTypedef(lex.peek(1))))) {
     lex.consumeToken();
-    term1 = parseDeclarator();
+    auto declarator = parseDeclarator();
     accept(TokenKind::TOKEN_RPAREN);
+    return make_ast<ParenthesedDirectDeclaratorAST>(std::move(declarator));
   } else {
-    term1 = nullptr;
-  }
-
-  std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s;
-  while (lex.peek() == TokenKind::TOKEN_LBRACKET || lex.peek() == TokenKind::TOKEN_LPAREN) {
+    auto direct_declarator = parseDirectDeclarator();
     if (expect(TokenKind::TOKEN_LBRACKET)) {
+      nt<ArrayDeclaratorAST> array;
       switch (lex.peek().getKind()) {
         case TokenKind::TOKEN_BANG:
         case TokenKind::TOKEN_AMP:
@@ -646,14 +646,17 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
         case TokenKind::TOKEN_INT_CONSTANT:
         case TokenKind::TOKEN_SIZEOF:
         case TokenKind::TOKEN_TILDE:
-          term2s.emplace_back(DirectDeclaratorAST::Term2::CONST_EXPR,
-                              parseConstantExpression());
+          array = make_ast<ArrayDeclaratorAST>(std::move(direct_declarator),
+                                               parseConstantExpression());
           break;
-        default:term2s.emplace_back(DirectDeclaratorAST::Term2::CONST_EXPR, nullptr);
+        default:array = make_ast<ArrayDeclaratorAST>(std::move(direct_declarator), nullptr);
+          break;
       }
       accept(TokenKind::TOKEN_RBRACKET);
+      return array;
     } else {
       accept(TokenKind::TOKEN_LPAREN);
+      nt<FunctionDeclaratorAST> function;
       switch (lex.peek().getKind()) {
         case TokenKind::TOKEN_AUTO:
         case TokenKind::TOKEN_CHAR:
@@ -674,24 +677,26 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
         case TokenKind::TOKEN_UNSIGNED:
         case TokenKind::TOKEN_VOID:
         case TokenKind::TOKEN_VOLATILE:
-          term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST,
-                              parseParameterTypeList());
+          function = make_ast<FunctionDeclaratorAST>(std::move(direct_declarator),
+                                                     parseParameterTypeList());
           break;
         case TokenKind::TOKEN_IDENTIFIER:
-          if (table->isTypedef(lex.peek())) {
-            term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST, parseParameterTypeList());
-          } else {
-            do {
-              term2s.emplace_back(DirectDeclaratorAST::Term2::ID, parseIdentifier());
-            } while (expect(TokenKind::TOKEN_COMMA));
-          }
-          break;
-        default:break;
+//          if (table->isTypedef(lex.peek())) {
+//            term2s.emplace_back(DirectDeclaratorAST::Term2::PARA_LIST, parseParameterTypeList());
+//          } else {
+//            do {
+//              term2s.emplace_back(DirectDeclaratorAST::Term2::ID, parseIdentifier());
+//            } while (expect(TokenKind::TOKEN_COMMA));
+//          }
+//          break;
+          //TODO implement identifier list
+          throw ParserException("do not support identifier list function declaration yet", lex.peek());
+        default:throw ParserException("expect parameters", lex.peek());
       }
       accept(TokenKind::TOKEN_RPAREN);
+      return function;
     }
   }
-  return make_ast<DirectDeclaratorAST>(std::move(term1), std::move(term2s));
 }
 
 ///<parameter-type-list> ::= <parameter-list>

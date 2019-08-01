@@ -14,6 +14,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Value.h"
 #include "qualifiedType.h"
+#include "symbol_tables.h"
 class SymbolTable;
 class SemaException : public std::exception {
  public:
@@ -164,7 +165,7 @@ class IExpression {
   const Type *mType = nullptr;
   std::set<TypeQualifier> mQualifiers{};
   bool mLvalue = false;
-  virtual llvm::Value codegen() = 0;
+  virtual llvm::Value* codegen() = 0;
 };
 class StringAST : public AST {
  public:
@@ -454,37 +455,21 @@ class ParameterTypeListAST : public AST {
 };
 class DirectDeclaratorAST : public AST {
  public:
-  enum class Term2 {
-    CONST_EXPR,
-    PARA_LIST,
-    ID,
-  };
-  DirectDeclaratorAST(nt<AST> term1, std::vector<std::pair<Term2, nt<AST>>> term2s);
-  const nt<AST> term1;  //<identifier> or <declarator>
-  const std::vector<std::pair<Term2, nt<AST>>> term2s;
-  void print(int indent) override;
-  ParameterListAST *getParameterList();
-  Type *codegen(const std::set<StorageSpecifier> &storageSpecifiers, const QualifiedType &forwardType);
-  const Token &getIdentifier();
-};
-
-class DirectDeclaratorAST2 : public AST {
- public:
-  DirectDeclaratorAST2();
+  DirectDeclaratorAST();
   virtual const Token &getIdentifier() = 0;
-  virtual Type *codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) = 0;
+  virtual const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) = 0;
 };
 
-class SimpleDirectDeclaratorAST : public DirectDeclaratorAST2 {
+class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
  public:
   SimpleDirectDeclaratorAST(nt<IdentifierAST> identifier);
   const nt<IdentifierAST> identifier;
   void print(int indent) override;
   const Token &getIdentifier() override;
-  Type *codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
+  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
 };
 
-class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST2 {
+class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
  public:
   ParenthesedDirectDeclaratorAST(nt<DeclaratorAST> declarator);
   const nt<DeclaratorAST> declarator;
@@ -492,23 +477,23 @@ class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST2 {
   const Token &getIdentifier() override;
 };
 
-class ArrayDeclaratorAST : public DirectDeclaratorAST2 {
+class ArrayDeclaratorAST : public DirectDeclaratorAST {
  public:
-  ArrayDeclaratorAST(nt<DirectDeclaratorAST2> directDeclarator, nt<ConstantExpressionAST> constantExpression);
-  const nt<DirectDeclaratorAST2> directDeclarator;
+  ArrayDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator, nt<ConstantExpressionAST> constantExpression);
+  const nt<DirectDeclaratorAST> directDeclarator;
   const nt<ConstantExpressionAST> constantExpression;
   void print(int indent) override;
   const Token &getIdentifier() override;
 };
 
-class FunctionDeclaratorAST : public DirectDeclaratorAST2 {
+class FunctionDeclaratorAST : public DirectDeclaratorAST {
  public:
-  FunctionDeclaratorAST(nt<DirectDeclaratorAST2> directDeclarator, nt<ParameterListAST> parameterList);
-  const nt<DirectDeclaratorAST2> directDeclarator;
+  FunctionDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator, nt<ParameterListAST> parameterList);
+  const nt<DirectDeclaratorAST> directDeclarator;
   const nt<ParameterListAST> parameterList;
   void print(int indent) override;
   const Token &getIdentifier() override;
-  Type *codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
+  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
 };
 
 class PointerAST : public AST {
@@ -517,6 +502,7 @@ class PointerAST : public AST {
   const nts<TypeQualifierAST> type_qualifiers;
   const nt<PointerAST> pointer;
   void print(int indent) override;
+  const QualifiedType codegen(const QualifiedType &derivedType);
 };
 class ConstantExpressionAST : public AST, public IExpression {
  public:
@@ -613,7 +599,8 @@ class DeclaratorAST : public AST {
   const nt<PointerAST> pointer;
   const nt<DirectDeclaratorAST> direct_declarator;
   void print(int indent) override;
-  const Token &getIdentifier();
+  const Token &getIdentifier() const;
+  void codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType);
 };
 class DeclarationSpecifiersAST : public AST {
  public:
@@ -663,7 +650,7 @@ class FunctionDefinitionAST : public AST {
   const nt<CompoundStatementAST> compound_statement;
   SymbolTable &mLabelTable;
   void print(int indent) override;
-  llvm::Value *codegen() override;
+  llvm::Value *codegen();
 
 };
 class ExternalDeclarationAST : public AST {
@@ -671,7 +658,7 @@ class ExternalDeclarationAST : public AST {
   explicit ExternalDeclarationAST(nt<AST> def);
   const nt<AST> def;
   void print(int indent) override;
-  void codegen() override;
+  void codegen();
 };
 class TranslationUnitAST : public AST {
  public:
@@ -682,6 +669,6 @@ class TranslationUnitAST : public AST {
   SymbolTable &mObjectTable;
   SymbolTable &mTagTable;
   void print(int indent) override;
-  void codegen() override;
+  void codegen();
 };
 #endif //MYCCPILER_AST_H

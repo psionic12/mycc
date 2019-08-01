@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sema/symbol_tables.h>
 #include "llvm/IR/Constants.h"
+#include <llvm/IR/IRBuilder.h>
 SemaException::SemaException(std::string error, const Token &token) : error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
 }
@@ -70,10 +71,12 @@ FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declar
       declarations(std::move(declarations)),
       compound_statement(std::move(compound_statement)),
       mLabelTable(lableTable) {
-  if (auto *para_list = this->declarator->direct_declarator->getParameterList()) {
-    this->compound_statement->mObjectTable.setFather(&para_list->mObjectTable);
+  if (auto *functionDeclarator = dynamic_cast<FunctionDeclaratorAST *>(this->declarator->direct_declarator.get())) {
+    if (functionDeclarator->parameterList) {
+      auto table = functionDeclarator->parameterList->mObjectTable;
+      this->compound_statement->mObjectTable.setFather(&table);
+    }
   }
-
 }
 void FunctionDefinitionAST::print(int indent) {
   AST::print(indent);
@@ -121,13 +124,10 @@ DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifie
   for (auto &specifiers : this->declaration_specifiers->storage_specifiers) {
     if (specifiers.type == StorageSpecifier::kTYPEDEF) {
       for (const auto &pair : this->init_declarators) {
-        const AST *ast = pair.first.get();
-        while (ast->getKind() != AST::Kind::IDENTIFIER) {
-          ast = static_cast<const DeclaratorAST *>(ast)->direct_declarator->term1.get();
-        }
-        const Token &token = static_cast<const IdentifierAST *>(ast)->token;
-        table.insert(token,
-                     std::make_unique<TypedefSymbol>(std::make_pair<const Token &, const Token &>(token, token)));
+        const DeclaratorAST *ast = pair.first.get();
+        table.insert(ast->getIdentifier(),
+                     std::make_unique<TypedefSymbol>(std::make_pair<const Token &, const Token &>(ast->getIdentifier(),
+                                                                                                  ast->getIdentifier())));
       }
       break;
     }
@@ -146,7 +146,7 @@ void DeclarationAST::codegen() {
   declaration_specifiers->codegen();
   for (auto &ast : init_declarators) {
     //TODO add to symbol table
-    ast.first->codegen();
+    ast.first->codegen(Terminal<StorageSpecifier>(kTYPEDEF, Token()), <#initializer#>);
     ast.second->codegen();
   }
   bool hasDeclarator = !init_declarators.empty();
@@ -205,8 +205,11 @@ void DeclaratorAST::print(int indent) {
   if (pointer) pointer->print(indent);
   if (direct_declarator) direct_declarator->print(indent);
 }
-const Token &DeclaratorAST::getIdentifier() {
-  return direct_declarator.getIdentifier();
+const Token &DeclaratorAST::getIdentifier() const {
+  return direct_declarator->getIdentifier();
+}
+void DeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) {
+  direct_declarator->codegen(storageSpecifier, pointer->codegen(derivedType));
 }
 StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier)
     : AST(AST::Kind::STORAGE_CLASS_SPECIFIER), storage_speicifier(storage_speicifier) {}
@@ -359,6 +362,9 @@ void PointerAST::print(int indent) {
   type_qualifiers.print(indent);
   if (pointer) pointer->print(indent);
 }
+const QualifiedType PointerAST::codegen(const QualifiedType &derivedType) {
+
+}
 DirectDeclaratorAST::DirectDeclaratorAST(nt<AST> term1,
                                          std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s)
     : AST(Kind::DIRECT_DECLARATOR), term1(std::move(term1)), term2s(std::move(term2s)) {}
@@ -388,7 +394,7 @@ Type *DirectDeclaratorAST::codegen(const std::set<StorageSpecifier> &storageSpec
   const Type *elementType = forwardType.getType();
 
   if (term1->getKind() == AST::Kind::DECLARATOR) {
-    static_cast<DeclaratorAST *>(term1.get())->codegen();
+    static_cast<DeclaratorAST *>(term1.get())->codegen(Terminal<StorageSpecifier>(kTYPEDEF, Token()), <#initializer#>);
   }
 
   const Token &id = getIdentifier();
@@ -1435,7 +1441,7 @@ const ObjectType *TypeSpecifiersAST::codegen() {
   }
   return type;
 }
-DirectDeclaratorAST2::DirectDeclaratorAST2() : AST(Kind::DIRECT_DECLARATOR) {}
+DirectDeclaratorAST::DirectDeclaratorAST() : AST(Kind::DIRECT_DECLARATOR) {}
 SimpleDirectDeclaratorAST::SimpleDirectDeclaratorAST(nt<IdentifierAST> identifier)
     : identifier(std::move(identifier)) {}
 void SimpleDirectDeclaratorAST::print(int indent) {
@@ -1446,14 +1452,15 @@ void SimpleDirectDeclaratorAST::print(int indent) {
 const Token &SimpleDirectDeclaratorAST::getIdentifier() {
   return identifier->token;
 }
-Type *SimpleDirectDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                         const QualifiedType &derivedType) {
+const QualifiedType SimpleDirectDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
+                                                       const QualifiedType &derivedType) {
   Linkage linkage = Linkage::kNone;
   ISymbol *priorDeclartion = sObjectTable->lookup(identifier->token);
 
   switch (storageSpecifier.type) {
     case StorageSpecifier::kTYPEDEF: {
-      return nullptr;
+
+      return derivedType;
     }
     case StorageSpecifier::kREGISTER:break;
     case StorageSpecifier::kAUTO:break;
@@ -1480,7 +1487,7 @@ Type *SimpleDirectDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpeci
 
         if (priorDeclartion->getLinkage() != Linkage::kNone) {
           // since there's a prior declaration, do nothing
-          break;
+          return derivedType;
         } else {
           linkage = Linkage::kExternal;
           break;
@@ -1492,11 +1499,52 @@ Type *SimpleDirectDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpeci
       }
     }
   }
+  llvm::Value *value = nullptr;
+  if (const auto *objectType = dynamic_cast<const ObjectType *>(derivedType.getType())) {
+    switch (sObjectTable->getScopeKind()) {
+      case ScopeKind::FILE: {
+        sModule.getOrInsertGlobal(identifier->token.getValue(), objectType->getLLVMType(sModule));
+        llvm::GlobalVariable *gVar = sModule.getNamedGlobal(identifier->token.getValue());
+        if (linkage != Linkage::kNone) {
+          gVar->setLinkage(linkage == Linkage::kExternal ? llvm::GlobalValue::LinkageTypes::ExternalLinkage
+                                                         : llvm::GlobalVariable::LinkageTypes::InternalLinkage);
+        }
+        if (derivedType.getQualifiers().find(TypeQualifier::kCONST) != derivedType.getQualifiers().end()) {
+          gVar->setConstant(true);
+        }
+        value = gVar;
+        break;
+      }
+      case ScopeKind::BLOCK: {
+        llvm::IRBuilder<> builder(sObjectTable->getBasicBlock());
+        value = builder.CreateAlloca(objectType->getLLVMType(sModule), nullptr, identifier->token.getValue());
+        break;
+      }
+      case ScopeKind::TAG:throw std::runtime_error("WTF: how could a object type declared in a tag symbol");
+      case ScopeKind::FUNCTION_PROTOTYPE:
+        // we don't add symbol here, we add them in function declaration
+        return derivedType;
+    }
+  } else if (const auto *functionType = dynamic_cast<const FunctionType *>(derivedType.getType())) {
+    switch (sObjectTable->getScopeKind()) {
+      case ScopeKind::FILE:
+      case ScopeKind::BLOCK: {
+        llvm::Function::Create(functionType->getLLVMType(sModule),
+                               llvm::Function::ExternalLinkage,
+                               identifier->token.getValue(),
+                               &sModule);
+      }
+      case ScopeKind::TAG:
+      case ScopeKind::FUNCTION_PROTOTYPE:
+        throw std::runtime_error("WTF: how could a function type declared in a tag/proto symbol");
+    }
+  }
   auto symbol = std::make_unique<ObjectSymbol>(derivedType,
+                                               value,
                                                involvedTokens());
   symbol->setLinkage(linkage);
   sObjectTable->insert(identifier->token, std::move(symbol));
-  return nullptr;
+  return derivedType;
 }
 ParenthesedDirectDeclaratorAST::ParenthesedDirectDeclaratorAST(nt<DeclaratorAST> declarator)
     : declarator(std::move(declarator)) {}
@@ -1507,7 +1555,7 @@ void ParenthesedDirectDeclaratorAST::print(int indent) {
 const Token &ParenthesedDirectDeclaratorAST::getIdentifier() {
   return declarator->getIdentifier();
 }
-ArrayDeclaratorAST::ArrayDeclaratorAST(nt<DirectDeclaratorAST2> directDeclarator,
+ArrayDeclaratorAST::ArrayDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
                                        nt<ConstantExpressionAST> constantExpression)
     : directDeclarator(std::move(directDeclarator)), constantExpression(std::move(constantExpression)) {}
 void ArrayDeclaratorAST::print(int indent) {
@@ -1525,13 +1573,14 @@ void FunctionDeclaratorAST::print(int indent) {
   directDeclarator->print(indent);
   if (parameterList) parameterList->print(indent);
 }
-FunctionDeclaratorAST::FunctionDeclaratorAST(nt<DirectDeclaratorAST2> directDeclarator,
+FunctionDeclaratorAST::FunctionDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
                                              nt<ParameterListAST> parameterList)
     : directDeclarator(std::move(directDeclarator)), parameterList(std::move(parameterList)) {}
 const Token &FunctionDeclaratorAST::getIdentifier() {
   return directDeclarator->getIdentifier();
 }
-Type *FunctionDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) {
+const QualifiedType FunctionDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
+                                                   const QualifiedType &derivedType) {
   if (sObjectTable->getScopeKind() == ScopeKind::BLOCK && storageSpecifier.type != StorageSpecifier::kEXTERN) {
     throw SemaException(
         "The declaration of an identifier for a function that has block scope shall have no explicit storage-class specifier other than extern.\n",

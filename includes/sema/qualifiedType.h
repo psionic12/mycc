@@ -30,17 +30,18 @@ class EnumerationType;
 
 class QualifiedType {
  private:
-  const ObjectType *mType;
+  const Type *mType;
   std::set<TypeQualifier> mQualifiers;
  public:
-  const ObjectType *getType() const;
+  QualifiedType() = default;
+  const Type *getType() const;
   const std::set<TypeQualifier> &getQualifiers() const;
-  QualifiedType(const ObjectType *type, std::set<TypeQualifier> qualifiers);
+  QualifiedType(const Type *type, std::set<TypeQualifier> qualifiers);
   bool operator==(const QualifiedType &qualifiedType);
 };
-QualifiedType::QualifiedType(const ObjectType *type, std::set<TypeQualifier> qualifiers)
+QualifiedType::QualifiedType(const Type *type, std::set<TypeQualifier> qualifiers)
     : mType(type), mQualifiers(move(qualifiers)) {}
-const ObjectType *QualifiedType::getType() const {
+const Type *QualifiedType::getType() const {
   return mType;
 }
 const std::set<TypeQualifier> &QualifiedType::getQualifiers() const {

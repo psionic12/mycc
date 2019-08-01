@@ -8,6 +8,7 @@
 #include <set>
 #include <memory>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Function.h>
 #include "operator.h"
 #include "qualifiedType.h"
 
@@ -29,7 +30,9 @@ enum class SymbolKind {
 
 enum class ScopeKind {
   FILE,
-  FUNCTION,
+  // standard defined a function scope, but the only purpose of it is used for tags, so I change it name to TAG
+  // and other none tag symbols are save in other three tables
+      TAG,
   BLOCK,
   FUNCTION_PROTOTYPE,
 };
@@ -45,15 +48,12 @@ class ISymbol {
   virtual bool operator!=(SymbolKind kind) const {
     return !operator==(kind);
   };
+  virtual llvm::Value *getValue() = 0;
   void setLinkage(Linkage linkage);
   Linkage getLinkage() const;
   std::pair<const Token &, const Token &> mInvolvedTokens;
-  friend class FileTable;
-  friend class BlockTable;
-  friend class ProtoTable;
  private:
   Linkage linkage = Linkage::kNone;
-  llvm::Value *mValue;
 };
 
 inline bool operator==(SymbolKind kind, const ISymbol *symbol) {
@@ -66,34 +66,43 @@ inline bool operator!=(SymbolKind kind, const ISymbol *symbol) {
 class ObjectSymbol : public ISymbol {
  public:
   ObjectSymbol(QualifiedType qualifiedType,
+               llvm::Value *value,
                std::pair<const Token &, const Token &> involvedTokens)
-      : ISymbol(involvedTokens), mQulifiedType(qualifiedType) {
+      : ISymbol(involvedTokens), mQualifiedType(qualifiedType), mValue(value) {
   }
   SymbolKind getKind() const override {
     return SymbolKind::OBJECT;
   }
-  const ObjectType *getType() const {
-    return mQulifiedType.getType();
+  const Type *getType() const {
+    return mQualifiedType.getType();
   }
   const std::set<TypeQualifier> &getQualifiers() const {
-    return mQulifiedType.getQualifiers();
+    return mQualifiedType.getQualifiers();
+  }
+  llvm::Value *getValue() override {
+    return mValue;
   }
  private:
-  QualifiedType mQulifiedType;
+  QualifiedType mQualifiedType;
+  llvm::Value *mValue;
 };
 
 class FunctionSymbol : public ISymbol {
  public:
-  FunctionSymbol(FunctionType *type, std::pair<const Token &, const Token &> involvedTokens)
-      : mFunctionType(type), ISymbol(involvedTokens) {}
+  FunctionSymbol(FunctionType *type, llvm::Function *value, std::pair<const Token &, const Token &> involvedTokens)
+      : mFunctionType(type), mFunction(value), ISymbol(involvedTokens) {}
   SymbolKind getKind() const override {
     return SymbolKind::FUNCTION;
   }
   const FunctionType *getType() const {
     return mFunctionType;
   }
+  llvm::Function *getValue() override {
+    return mFunction;
+  }
  private:
   FunctionType *mFunctionType;
+  llvm::Function *mFunction;
 };
 
 class TagSymbol : public ISymbol {
@@ -123,18 +132,18 @@ class TypedefSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::TYPEDEF;
   }
-  TypedefSymbol(Type *mType, std::pair<const Token &, const Token &> involvedTokens)
-      : ISymbol(involvedTokens), mType(mType) {}
+  TypedefSymbol(QualifiedType qualifiedType, std::pair<const Token &, const Token &> involvedTokens)
+      : ISymbol(involvedTokens), mQualifiedType(qualifiedType) {}
   // used in parser, just indicate the identifier is a typedef, the represent type will set in sema phrase
-  TypedefSymbol(std::pair<const Token &, const Token &> involvedTokens) : ISymbol(involvedTokens), mType(nullptr) {}
-  Type *getMType() const {
-    return mType;
+  TypedefSymbol(std::pair<const Token &, const Token &> involvedTokens) : ISymbol(involvedTokens) {}
+  QualifiedType getType() const {
+    return mQualifiedType;
   }
-  void setMType(Type *mType) {
-    TypedefSymbol::mType = mType;
+  void setType(QualifiedType qualifiedType) {
+    mQualifiedType = qualifiedType;
   }
  private:
-  Type *mType;
+  QualifiedType mQualifiedType;
 };
 
 class LabelSymbol : public ISymbol {
@@ -162,8 +171,8 @@ class EnumConstSymbol : public ISymbol {
 
 class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
  public:
-  SymbolTable(ScopeKind kind, llvm::Module &module, std::string name)
-      : scope_kind(kind), mModule(module), mName(std::move(name)) {}
+  SymbolTable(ScopeKind kind, llvm::BasicBlock *basicBlock = nullptr)
+      : mScopeKind(kind), mBasicBlock(basicBlock) {}
   ISymbol *lookup(const Token &token);
   ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
   ISymbol *insert(std::unique_ptr<ISymbol> &&symbol);
@@ -172,36 +181,13 @@ class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
   void setFather(SymbolTable *father);
   SymbolTable *getFather() const;
   ScopeKind getScopeKind() const;
+  llvm::BasicBlock *getBasicBlock() {
+    return mBasicBlock;
+  }
  protected:
-  virtual void setValue(const Token &token, ISymbol *symbol);
-  ScopeKind scope_kind;
-  SymbolTable *father;
-  int anonymousId = 0;
-  llvm::Module &mModule;
-  std::string mName;
-
-};
-
-class FileTable : public SymbolTable {
- public:
-  FileTable(llvm::Module &module);
- private:
-  void setValue(const Token &token, ISymbol *symbol) override;
-};
-
-class BlockTable : public SymbolTable {
- public:
-  BlockTable(llvm::Module &module, bool function, std::string name, llvm::BasicBlock *basicBlock);
- private:
-  void setValue(const Token &token, ISymbol *symbol) override;
-  llvm::BasicBlock *mBasicBlock;
-};
-
-class ProtoTable : public SymbolTable {
- public:
-  ProtoTable(llvm::Module &module, std::string name, llvm::BasicBlock *basicBlock);
- private:
-  void setValue(const Token &token, ISymbol *symbol) override;
+  ScopeKind mScopeKind;
+  SymbolTable *mFather;
+  int mAnonymousId = 0;
   llvm::BasicBlock *mBasicBlock;
 };
 void ISymbol::setLinkage(Linkage linkage) {
@@ -214,6 +200,11 @@ Linkage ISymbol::getLinkage() const {
 class SymbolTables {
  public:
   SymbolTable *createTable(ScopeKind kind, SymbolTable *father);
+  void clear() {
+    for (auto &table: tables) {
+      table.clear();
+    }
+  }
  private:
   std::list<SymbolTable> tables;
 };

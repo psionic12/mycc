@@ -7,10 +7,7 @@
 #include <llvm/IR/Module.h>
 #include <tokens/token.h>
 #include "operator.h"
-#include "symbol_tables.h"
 #include "llvm/IR/Type.h"
-
-class TypeException {};
 
 class Type {
  private:
@@ -118,10 +115,11 @@ class CompoundType : public ObjectType {
  public:
   CompoundType();
   bool complete() const override;
-  SymbolTable symbolTable;
   unsigned int getSizeInBits() const override;
-  virtual void setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
-                         llvm::Module &module) = 0;
+  std::map<std::string, const ObjectType*> mMember;
+//  virtual void setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
+//                         llvm::Module &module) = 0;
+  virtual void setBody(std::map<std::string, const ObjectType*> member) = 0;
  protected:
   bool mComplete;
   unsigned mSizeInBits;
@@ -132,8 +130,8 @@ class StructType : public CompoundType {
   StructType(const std::string &tag, llvm::Module &module);
   StructType(llvm::Module &module);
   llvm::StructType *getLLVMType(llvm::Module &module) const override;
-  void setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
-                 llvm::Module &module) override;
+//  void setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
+//                 llvm::Module &module) override;
  private:
   llvm::StructType *mLLVMType;
 };
