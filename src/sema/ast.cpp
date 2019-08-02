@@ -95,6 +95,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
   }
   sLabelTable = nullptr;
   //TODO not finished
+  //TODO After adjustment, the parameters in a parameter type list in a function declarator that is part of a definition of that function shall not have incomplete type.
   return nullptr;
 }
 CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
@@ -145,9 +146,8 @@ void DeclarationAST::print(int indent) {
 void DeclarationAST::codegen() {
   declaration_specifiers->codegen();
   for (auto &ast : init_declarators) {
-    //TODO add to symbol table
-    ast.first->codegen(Terminal<StorageSpecifier>(kTYPEDEF, Token()), <#initializer#>);
-    ast.second->codegen();
+    //TODO   ast.first->codegen();
+//  TODO  ast.second->codegen();
   }
   bool hasDeclarator = !init_declarators.empty();
   bool hasTag = false;
@@ -210,6 +210,9 @@ const Token &DeclaratorAST::getIdentifier() const {
 }
 void DeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) {
   direct_declarator->codegen(storageSpecifier, pointer->codegen(derivedType));
+}
+bool DeclaratorAST::isAbstract() const {
+  return direct_declarator->isAbstract();
 }
 StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier)
     : AST(AST::Kind::STORAGE_CLASS_SPECIFIER), storage_speicifier(storage_speicifier) {}
@@ -283,14 +286,27 @@ CompoundType *StructOrUnionSpecifierAST::codegen() {
       symbol = sTagTable->insert(std::make_unique<TagSymbol>(std::make_unique<StructType>(sModule),
                                                              involvedTokens()));
     }
-    tagType = static_cast<TagSymbol *>(symbol)->getTagType();
-    std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols;
-    for (const auto &declaration :declarations) {
-      auto v = declaration->codegen();
-      symbols.insert(symbols.end(), v.begin(), v.end());
+  } else {
+    if (id) {
+      const auto &token = id->token;
+      symbol = sTagTable->insert(token,
+                                 std::make_unique<TagSymbol>(std::make_unique<UnionType>(token.getValue(),
+                                                                                          sModule),
+                                                             involvedTokens()));
+    } else {
+      symbol = sTagTable->insert(std::make_unique<TagSymbol>(std::make_unique<UnionType>(sModule),
+                                                             involvedTokens()));
     }
-    tagType->setBody(std::move(symbols), sModule);
   }
+  tagType = static_cast<TagSymbol *>(symbol)->getTagType();
+  std::map<std::string, const QualifiedType> members;
+  for (const auto &declaration :declarations) {
+    auto d = declaration->codegen();
+    for (const std::string &name : d.second) {
+      members.emplace(name, d.first);
+    }
+  }
+  tagType->setBody(std::move(members));
   return tagType;
 }
 EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier,
@@ -317,9 +333,8 @@ void StructDeclarationAST::print(int indent) {
   specifier_qualifier->print(indent);
   struct_declarator_list->print(indent);
 }
-std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> StructDeclarationAST::codegen() {
-  std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols;
-  QualifiedType qualifiedType = specifier_qualifier->codegen();
+std::pair<const QualifiedType, std::vector<std::string>> StructDeclarationAST::codegen() {
+
 }
 StructDeclaratorListAST::StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators) : AST(
     AST::Kind::STRUCT_DECLARATOR_LIST), struct_declarators(std::move(struct_declarators)) {}
@@ -363,77 +378,16 @@ void PointerAST::print(int indent) {
   if (pointer) pointer->print(indent);
 }
 const QualifiedType PointerAST::codegen(const QualifiedType &derivedType) {
-
-}
-DirectDeclaratorAST::DirectDeclaratorAST(nt<AST> term1,
-                                         std::vector<std::pair<DirectDeclaratorAST::Term2, nt<AST>>> term2s)
-    : AST(Kind::DIRECT_DECLARATOR), term1(std::move(term1)), term2s(std::move(term2s)) {}
-void DirectDeclaratorAST::print(int indent) {
-  AST::print(indent);
-  ++indent;
-  term1->print(indent);
-  for (const auto &term : term2s) {
-    if (term.second) {
-      term.second->print(indent);
-    } else {
-      AST::printIndent(indent);
-      std::cout << static_cast<int>(term.first) << std::endl;
-    }
+  std::set<TypeQualifier> qualifiers;
+  for (auto &qualifier : type_qualifiers) {
+    qualifiers.insert(qualifier->codegen());
   }
-}
-ParameterListAST *DirectDeclaratorAST::getParameterList() {
-  for (const auto &term : term2s) {
-    if (term.first == Term2::PARA_LIST) {
-      return static_cast<ParameterListAST *>(term.second.get());
-    }
-  }
-  return nullptr;
-}
-Type *DirectDeclaratorAST::codegen(const std::set<StorageSpecifier> &storageSpecifiers,
-                                   const QualifiedType &forwardType) {
-  const Type *elementType = forwardType.getType();
-
-  if (term1->getKind() == AST::Kind::DECLARATOR) {
-    static_cast<DeclaratorAST *>(term1.get())->codegen(Terminal<StorageSpecifier>(kTYPEDEF, Token()), <#initializer#>);
-  }
-
-  const Token &id = getIdentifier();
-
-  for (auto it = term2s.rbegin(); it != term2s.rend(); ++it) {
-    switch (it->first) {
-      case DirectDeclaratorAST::Term2::CONST_EXPR: {
-        // 6.7.6.2 Array declarators
-        int64_t size = 0;
-        if (it->second) {
-          auto *constAST = static_cast<ConstantExpressionAST *>(it->second.get());
-          auto value = constAST->codegen();
-          if (!dynamic_cast<const IntegerType *>(value.getType())) {
-            throw SemaException("the expression shall have an integer type", constAST->involvedTokens());
-          } else {
-            auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(value.getLLVMValue());
-            if (!constInt) throw SemaException("not a llvm::ConstantInt, weird", constAST->involvedTokens());
-            size = constInt->getSExtValue();
-          }
-        }
-        // The element type shall not be an incomplete or function type.
-        if (!elementType->complete() /*no way to pass function type here*/) {
-          throw SemaException("The element type shall not be an incomplete or function type.", involvedTokens());
-        }
-        // Do not support variable length array
-        elementType = std::make_unique<ArrayType>(elementType, size);
-        break;
-      }
-      case DirectDeclaratorAST::Term2::PARA_LIST:break;
-      case DirectDeclaratorAST::Term2::ID :break;
-    }
-  }
-}
-const Token &DirectDeclaratorAST::getIdentifier() {
-  if (term1->getKind() == AST::Kind::IDENTIFIER) {
-    return static_cast<IdentifierAST *>(term1.get())->token;
+  if (pointer) {
+    mPointerType = std::make_unique<PointerType>(pointer->codegen(derivedType));
   } else {
-    return static_cast<DeclaratorAST *>(term1.get())->getIdentifier();
+    mPointerType = std::make_unique<PointerType>(derivedType);
   }
+  return QualifiedType(mPointerType.get(), std::move(qualifiers));
 }
 ParameterTypeListAST::ParameterTypeListAST(nt<ParameterListAST>
                                            parameter_list, bool
@@ -562,7 +516,7 @@ void UnaryExpressionAST::print(int indent) {
       break;
   }
 }
-llvm::Value *UnaryExpressionAST::codegen() {
+IExpression::Value UnaryExpressionAST::codegen() {
   switch (getProduction()) {
     case 0: {
       auto *postfix = postfix_expression.get();
@@ -655,7 +609,7 @@ void PostfixExpressionAST::print(int indent) {
     right->print(indent);
   }
 }
-llvm::Value *PostfixExpressionAST::codegen() {
+IExpression::Value PostfixExpressionAST::codegen() {
   switch (getProduction()) {
     case 0: {
       auto *primary = static_cast<PrimaryExpressionAST *>(left.get());
@@ -808,7 +762,7 @@ void PrimaryExpressionAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
 }
-llvm::Value *PrimaryExpressionAST::codegen() {
+IExpression::Value PrimaryExpressionAST::codegen() {
   switch (getProduction()) {
     case 0: { // identifier
       auto *identifierAST = static_cast<IdentifierAST *>(ast.get());
@@ -1000,9 +954,14 @@ void ParameterListAST::print(int indent) {
   AST::print(indent);
   parameter_declaration.print(++indent);
 }
-llvm::Value *ParameterListAST::codegen() {
+std::vector<QualifiedType> ParameterListAST::codegen() {
   SymbolScope s(sObjectTable, &mObjectTable);
   //TODO an identifier declared to be a function parameter do not have linkage
+  //TODO A declaration of a parameter as ''array of type'' shall be adjusted to ''qualified pointer to type'',
+  // where the type qualifiers (if any) are those specified within the [ and ] of the array type derivation.
+  //TODO A declaration of a parameter as ''function returning type'' shall be adjusted to ''pointer to function returning type''
+  //TODO The special case of an unnamed parameter of type void as the only item in the list specifies that the function has no parameters
+
 }
 ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST>
                                                  declaration_specifiers,
@@ -1194,6 +1153,9 @@ TypeQualifierAST::TypeQualifierAST(Terminal<TypeQualifier>
 void TypeQualifierAST::print(int indent) {
   AST::print(indent);
   op.print(++indent);
+}
+TypeQualifier TypeQualifierAST::codegen() {
+  return op.type;
 }
 TypedefNameAST::TypedefNameAST(nt<IdentifierAST>
                                identifier)
@@ -1464,17 +1426,27 @@ const QualifiedType SimpleDirectDeclaratorAST::codegen(Terminal<StorageSpecifier
     }
     case StorageSpecifier::kREGISTER:break;
     case StorageSpecifier::kAUTO:break;
-    case StorageSpecifier::kNone: {
-      if (sObjectTable->getScopeKind() == ScopeKind::FILE) {
-        linkage = Linkage::kExternal;
-      }
-      break;
-    }
     case StorageSpecifier::kSTATIC: {
       if (sObjectTable->getScopeKind() == ScopeKind::FILE) {
         linkage = Linkage::kInternal;
       }
+      if (sObjectTable->getScopeKind() == ScopeKind::BLOCK
+          && dynamic_cast<const FunctionType *>(derivedType.getType())) {
+        throw SemaException(
+            "The declaration of an identifier for a function that has block scope shall have no explicit storage-class specifier other than extern.\n",
+            involvedTokens());
+      }
       break;
+    }
+    case StorageSpecifier::kNone: {
+      if (sObjectTable->getScopeKind() == ScopeKind::FILE) {
+        linkage = Linkage::kExternal;
+        break;
+      } else if (dynamic_cast<const FunctionType *>(derivedType.getType())) {
+        // will fall into extern case
+      } else {
+        break;
+      }
     }
     case StorageSpecifier::kEXTERN: {
       if (priorDeclartion) {
@@ -1546,6 +1518,9 @@ const QualifiedType SimpleDirectDeclaratorAST::codegen(Terminal<StorageSpecifier
   sObjectTable->insert(identifier->token, std::move(symbol));
   return derivedType;
 }
+bool SimpleDirectDeclaratorAST::isAbstract() const {
+  return identifier == nullptr;
+}
 ParenthesedDirectDeclaratorAST::ParenthesedDirectDeclaratorAST(nt<DeclaratorAST> declarator)
     : declarator(std::move(declarator)) {}
 void ParenthesedDirectDeclaratorAST::print(int indent) {
@@ -1554,6 +1529,9 @@ void ParenthesedDirectDeclaratorAST::print(int indent) {
 }
 const Token &ParenthesedDirectDeclaratorAST::getIdentifier() {
   return declarator->getIdentifier();
+}
+bool ParenthesedDirectDeclaratorAST::isAbstract() const {
+  return declarator->isAbstract();
 }
 ArrayDeclaratorAST::ArrayDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
                                        nt<ConstantExpressionAST> constantExpression)
@@ -1566,6 +1544,31 @@ void ArrayDeclaratorAST::print(int indent) {
 }
 const Token &ArrayDeclaratorAST::getIdentifier() {
   return directDeclarator->getIdentifier();
+}
+const QualifiedType ArrayDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
+                                                const QualifiedType &derivedType) {
+  // 6.7.6.2 Array declarators
+  // BNF wrote by Brian W. Kernighan and Dennis M. Ritchie,Prentice Hall, 1988 do not support variable length array
+  int64_t size = 0;
+  if (constantExpression) {
+    auto value = constantExpression->codegen();
+    if (!dynamic_cast<const IntegerType *>(value.type)) {
+      throw SemaException("the expression shall have an integer type", constantExpression->involvedTokens());
+    } else {
+      auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(value.value);
+      if (!constInt) throw std::runtime_error("WTF: not a llvm::ConstantInt, weird");
+      size = constInt->getSExtValue();
+      if (size <= 0) {
+        throw SemaException("array size should great than 0", constantExpression->involvedTokens());
+      }
+    }
+  }
+  // The element type shall not be an incomplete or function type.
+  if (!derivedType.getType()->complete() || dynamic_cast<const FunctionType *>(derivedType.getType())) {
+    throw SemaException("The element type shall not be an incomplete or function type.", involvedTokens());
+  }
+  mArrayType = std::make_unique<ArrayType>(derivedType, size);
+  return directDeclarator->codegen(storageSpecifier, QualifiedType(mArrayType.get(), std::set<TypeQualifier>{}));
 }
 void FunctionDeclaratorAST::print(int indent) {
   AST::print(indent);
@@ -1581,10 +1584,11 @@ const Token &FunctionDeclaratorAST::getIdentifier() {
 }
 const QualifiedType FunctionDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
                                                    const QualifiedType &derivedType) {
-  if (sObjectTable->getScopeKind() == ScopeKind::BLOCK && storageSpecifier.type != StorageSpecifier::kEXTERN) {
-    throw SemaException(
-        "The declaration of an identifier for a function that has block scope shall have no explicit storage-class specifier other than extern.\n",
-        involvedTokens());
+  if (dynamic_cast<const FunctionType *>(derivedType.getType())
+      || dynamic_cast<const ArrayType *>(derivedType.getType())) {
+    throw SemaException(std::string("function ") + getIdentifier().getValue() + "cannot be array type or function type",
+                        involvedTokens());
   }
-  //TODO If the declaration of an identifier for a function has no storage-class specifier, its linkage is determined exactly as if it were declared with the storage-class specifier extern
+  mFunctionType = std::make_unique<FunctionType>(derivedType, parameterList->codegen());
+  QualifiedType qualifiedType(mFunctionType.get(), {});
 }

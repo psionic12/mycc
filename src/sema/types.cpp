@@ -47,27 +47,25 @@ llvm::Type *FloatingType::getLLVMType(llvm::Module &module) const {
 unsigned int FloatingType::getSizeInBits() const {
   return mSizeInBits;
 }
-FunctionType::FunctionType(Type *returnType, std::vector<ObjectType *> &&parameters, bool varArg)
-    : mReturnType(returnType), mParameters(parameters), mVarArg(varArg), mPointerType(this) {}
-Type *FunctionType::getReturnType() const {
+FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg)
+    : mReturnType(std::move(returnType)), mParameters(parameters), mVarArg(varArg), mPointerType(this) {}
+QualifiedType FunctionType::getReturnType() const {
   return mReturnType;
 }
-const std::vector<ObjectType *> &FunctionType::getParameters() const {
+const std::vector<QualifiedType> &FunctionType::getParameters() const {
   return mParameters;
 }
 llvm::FunctionType *FunctionType::getLLVMType(llvm::Module &module) const {
   std::vector<llvm::Type *> args;
   for (auto &paramter : mParameters) {
-    args.push_back(paramter->getLLVMType(module));
+    args.push_back(paramter.getType()->getLLVMType(module));
   }
-  return llvm::FunctionType::get(mReturnType->getLLVMType(module), args, mVarArg);
+  return llvm::FunctionType::get(mReturnType.getType()->getLLVMType(module), args, mVarArg);
 }
 FunctionType::operator const PointerType *() const {
   return &mPointerType;
 }
-ArrayType::ArrayType(const ObjectType *elementType)
-    : mElementType(elementType), mPointerType(this) {}
-ArrayType::ArrayType(const ObjectType *elementType, unsigned int size)
+ArrayType::ArrayType(const QualifiedType elementType, unsigned int size)
     : mSize(size), mElementType(elementType), mPointerType(this) {}
 bool ArrayType::complete() const {
   return mSize > 0;
@@ -76,7 +74,7 @@ void ArrayType::setSize(unsigned int size) {
   mSize = size;
 }
 llvm::ArrayType *ArrayType::getLLVMType(llvm::Module &module) const {
-  return llvm::ArrayType::get(mElementType->getLLVMType(module), mSize);
+  return llvm::ArrayType::get(mElementType.getType()->getLLVMType(module), mSize);
 }
 ArrayType::operator const PointerType *() const {
   return &mPointerType;

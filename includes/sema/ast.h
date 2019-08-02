@@ -162,10 +162,15 @@ class CompoundStatementAST;
 class StatementAST;
 class IExpression {
  public:
+  class Value {
+   public:
+    const Type *type;
+    llvm::Value *const value;
+  };
   const Type *mType = nullptr;
   std::set<TypeQualifier> mQualifiers{};
   bool mLvalue = false;
-  virtual llvm::Value* codegen() = 0;
+  virtual Value codegen() = 0;
 };
 class StringAST : public AST {
  public:
@@ -190,6 +195,7 @@ class TypeQualifierAST : public AST {
   TypeQualifierAST(Terminal<TypeQualifier> op);
   const Terminal<TypeQualifier> op;
   void print(int indent) override;
+  TypeQualifier codegen();
 };
 class JumpStatementAST : public AST {
  public:
@@ -294,7 +300,7 @@ class ParameterListAST : public AST {
   const nts<ParameterDeclarationAST> parameter_declaration;
   SymbolTable &mObjectTable;
   void print(int indent) override;
-  llvm::Value *codegen();
+  std::vector<QualifiedType> codegen();
 };
 class EnumerationConstantAST : public AST {
  public:
@@ -358,7 +364,7 @@ class PrimaryExpressionAST : public AST, public IExpression {
   PrimaryExpressionAST(nt<ExpressionAST>);
   const nt<AST> ast;
   void print(int indent) override;
-  llvm::Value *codegen() override;
+  Value codegen() override;
 };
 class ArgumentExpressionList : public AST, public IExpression {
  public:
@@ -384,7 +390,7 @@ class PostfixExpressionAST : public AST, public IExpression {
   void print(int indent) override;
   nt<AST> left;
   nt<AST> right;
-  llvm::Value *codegen() override;
+  Value codegen() override;
 };
 class TypeNameAST : public AST {
  public:
@@ -410,7 +416,7 @@ class UnaryExpressionAST : public AST, public IExpression {
   const nt<CastExpressionAST> cast_expression;
   const nt<TypeNameAST> type_name;
   void print(int indent) override;
-  llvm::Value *codegen() override;
+  Value codegen() override;
 };
 class CastExpressionAST : public AST {
  public:
@@ -457,7 +463,9 @@ class DirectDeclaratorAST : public AST {
  public:
   DirectDeclaratorAST();
   virtual const Token &getIdentifier() = 0;
-  virtual const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) = 0;
+  virtual const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
+                                      const QualifiedType &derivedType) = 0;
+  virtual bool isAbstract() const = 0;
 };
 
 class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
@@ -466,7 +474,9 @@ class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
   const nt<IdentifierAST> identifier;
   void print(int indent) override;
   const Token &getIdentifier() override;
-  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
+  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
+                              const QualifiedType &derivedType) override;
+  bool isAbstract() const override;
 };
 
 class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
@@ -475,6 +485,7 @@ class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
   const nt<DeclaratorAST> declarator;
   void print(int indent) override;
   const Token &getIdentifier() override;
+  bool isAbstract() const override;
 };
 
 class ArrayDeclaratorAST : public DirectDeclaratorAST {
@@ -484,6 +495,9 @@ class ArrayDeclaratorAST : public DirectDeclaratorAST {
   const nt<ConstantExpressionAST> constantExpression;
   void print(int indent) override;
   const Token &getIdentifier() override;
+  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
+ private:
+  std::unique_ptr<ArrayType> mArrayType;
 };
 
 class FunctionDeclaratorAST : public DirectDeclaratorAST {
@@ -494,6 +508,8 @@ class FunctionDeclaratorAST : public DirectDeclaratorAST {
   void print(int indent) override;
   const Token &getIdentifier() override;
   const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
+ private:
+  std::unique_ptr<FunctionType> mFunctionType;
 };
 
 class PointerAST : public AST {
@@ -503,6 +519,8 @@ class PointerAST : public AST {
   const nt<PointerAST> pointer;
   void print(int indent) override;
   const QualifiedType codegen(const QualifiedType &derivedType);
+ private:
+  std::unique_ptr<PointerType> mPointerType;
 };
 class ConstantExpressionAST : public AST, public IExpression {
  public:
@@ -532,7 +550,7 @@ class StructDeclarationAST : public AST {
   const nt<SpecifierQualifierAST> specifier_qualifier;
   const nt<StructDeclaratorListAST> struct_declarator_list;
   void print(int indent) override;
-  std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> codegen();
+  std::pair<const QualifiedType, std::vector<std::string>> codegen();
 };
 class EnumSpecifierAST : public AST {
  public:
@@ -600,6 +618,7 @@ class DeclaratorAST : public AST {
   const nt<DirectDeclaratorAST> direct_declarator;
   void print(int indent) override;
   const Token &getIdentifier() const;
+  bool isAbstract() const;
   void codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType);
 };
 class DeclarationSpecifiersAST : public AST {

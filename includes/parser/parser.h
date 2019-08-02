@@ -41,6 +41,11 @@ class Parser {
     static_cast<AST *>(ptr.get())->mRightMost = &lex.peek(-1);
     return ptr;
   }
+  enum class DeclaratorKind {
+    kUnknown,
+    kNormal, // normal declarator and direct-declarator
+    kAbstract,
+  };
  public:
   nt<ExternalDeclarationAST> parseExternalDeclaration();
 //  nt<FunctionDefinitionAST> parseFunctionDefinition();
@@ -52,10 +57,10 @@ class Parser {
   nt<SpecifierQualifierAST> parseSpecifierQualifiers();
   nt<StructDeclaratorListAST> parseStructDeclaratorList();
   nt<StructDeclaratorAST> parseStructDeclarator();
-  nt<DeclaratorAST> parseDeclarator();
+  nt<DeclaratorAST> parseDeclarator(DeclaratorKind kind);
   nt<PointerAST> parsePointer();
   nt<TypeQualifierAST> parseTypeQualifier();
-  nt<DirectDeclaratorAST> parseDirectDeclarator();
+  nt<DirectDeclaratorAST> parseDirectDeclarator(DeclaratorKind kind);
   nt<ConstantExpressionAST> parseConstantExpression();
   nt<ConditionalExpressionAST> parseConditionalExpression();
   nt<LogicalOrExpressionAST> parseLogicalOrExpression(int calling_prec = 0);

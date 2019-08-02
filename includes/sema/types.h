@@ -8,6 +8,7 @@
 #include <tokens/token.h>
 #include "operator.h"
 #include "llvm/IR/Type.h"
+#include "qualifiedType.h"
 
 class Type {
  private:
@@ -23,7 +24,6 @@ class ObjectType : public Type {
   virtual unsigned int getSizeInBits() const = 0;
 };
 
-// Types saved as public static members
 class IntegerType : public ObjectType {
  public:
   IntegerType(unsigned int mSizeInBits);
@@ -44,7 +44,6 @@ class IntegerType : public ObjectType {
   unsigned int mSizeInBits;
 };
 
-// Types saved as public static members
 class FloatingType : public ObjectType {
  public:
   FloatingType(unsigned int mSizeInBits);
@@ -58,7 +57,6 @@ class FloatingType : public ObjectType {
   unsigned int mSizeInBits;
 };
 
-// Types saved as public static members
 class VoidType : public ObjectType {
  public:
   static const VoidType sVoidType;
@@ -67,7 +65,6 @@ class VoidType : public ObjectType {
   unsigned int getSizeInBits() const override;
 };
 
-// Types created dynamically
 class PointerType : public ObjectType {
  public:
   PointerType(const Type *referencedType);
@@ -80,46 +77,42 @@ class PointerType : public ObjectType {
   std::set<TypeQualifier> mQualifersToReferencedType;
 };
 
-// Types stored in symbol table
 class FunctionType : public Type {
  public:
-  FunctionType(Type *returnType, std::vector<ObjectType *> &&parameters, bool varArg);
-  Type *getReturnType() const;
-  const std::vector<ObjectType *> &getParameters() const;
-  llvm::FunctionType * getLLVMType(llvm::Module &module) const override;
-  explicit operator const PointerType*() const;
+  FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg);
+  QualifiedType getReturnType() const;
+  const std::vector<QualifiedType> &getParameters() const;
+  llvm::FunctionType *getLLVMType(llvm::Module &module) const override;
+  explicit operator const PointerType *() const;
  private:
   bool mVarArg;
-  Type *mReturnType;
-  std::vector<ObjectType *> mParameters;
+  QualifiedType mReturnType;
+  std::vector<QualifiedType> mParameters;
   PointerType mPointerType;
 };
 
-// Types create dynamically
 class ArrayType : public ObjectType {
  public:
-  ArrayType(const ObjectType *elementType);
-  ArrayType(const ObjectType *elementType, unsigned int size);
+  ArrayType(const QualifiedType elementType, unsigned int size);
   bool complete() const override;
   void setSize(unsigned int size);
   llvm::ArrayType *getLLVMType(llvm::Module &module) const override;
-  explicit operator const PointerType*() const;
+  explicit operator const PointerType *() const;
  private:
   int64_t mSize = 0; // same with llvm
-  const ObjectType *mElementType;
+  const QualifiedType mElementType;
   PointerType mPointerType;
 };
 
-// Types stored in symbol table
 class CompoundType : public ObjectType {
  public:
   CompoundType();
   bool complete() const override;
   unsigned int getSizeInBits() const override;
-  std::map<std::string, const ObjectType*> mMember;
+  std::map<std::string, const ObjectType *> mMember;
 //  virtual void setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
 //                         llvm::Module &module) = 0;
-  virtual void setBody(std::map<std::string, const ObjectType*> member) = 0;
+  virtual void setBody(std::map<std::string, const QualifiedType> members) = 0;
  protected:
   bool mComplete;
   unsigned mSizeInBits;
@@ -130,8 +123,6 @@ class StructType : public CompoundType {
   StructType(const std::string &tag, llvm::Module &module);
   StructType(llvm::Module &module);
   llvm::StructType *getLLVMType(llvm::Module &module) const override;
-//  void setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
-//                 llvm::Module &module) override;
  private:
   llvm::StructType *mLLVMType;
 };

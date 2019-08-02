@@ -11,7 +11,7 @@ int main() {
     auto parser = Parser(testFile, tables);
     auto tr = parser.parseTranslationUnit();
     tr->print(0);
-    tr->codegen();
+//    tr->codegen();
   } catch (const SemaException &e) {
     std::cerr << e.what() << std::endl;
   } catch (const ParserException &e) {

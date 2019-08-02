@@ -292,8 +292,7 @@ nt<EnumSpecifierAST> Parser::parseEnumSpecifier() {
   accept(TokenKind::TOKEN_ENUM);
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     if (table->isTypedef(lex.peek())) {
-      throw ParserException(std::string("cannot combine type \"") + lex.peek().getValue() + "\" with enum",
-                            lex.peek());
+      throw parseError(std::string("cannot combine type \"") + lex.peek().getValue() + "\" with enum");
     }
     auto id = parseIdentifier();
     if (expect(TokenKind::TOKEN_LBRACE)) {
@@ -548,7 +547,7 @@ InitDeclarators Parser::parseInitDeclarators() {
       case TokenKind::TOKEN_IDENTIFIER:
       case TokenKind::TOKEN_LPAREN:
       case TokenKind::TOKEN_STAR: {
-        auto decl = parseDeclarator();
+        auto decl = parseDeclarator(DeclaratorKind::kNormal);
         if (expect(TokenKind::TOKEN_EQ)) {
           init_declarators.emplace_back(std::move(decl), parseInitializer());
         } else {
@@ -566,7 +565,7 @@ InitDeclarators Parser::parseInitDeclarators() {
 ///<abstract-declarator> ::= <pointer>
 ///                        | <pointer>    <direct-abstract-declarator>
 ///                        |              <direct-abstract-declarator>
-nt<DeclaratorAST> Parser::parseDeclarator() {
+nt<DeclaratorAST> Parser::parseDeclarator(DeclaratorKind kind) {
   mStartToken = &lex.peek();
   nt<PointerAST> pointer = nullptr;
   if (lex.peek() == TokenKind::TOKEN_STAR) {
@@ -574,7 +573,7 @@ nt<DeclaratorAST> Parser::parseDeclarator() {
   }
   nt<DirectDeclaratorAST> dd = nullptr;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER || lex.peek() == TokenKind::TOKEN_LPAREN) {
-    dd = parseDirectDeclarator();
+    dd = parseDirectDeclarator(kind);
   }
   return make_ast<DeclaratorAST>(std::move(pointer), std::move(dd));
 }
@@ -612,10 +611,14 @@ nt<PointerAST> Parser::parsePointer() {
 ///       | {<direct-abstract-declarator>}? ( {<parameter-type-list>}? )
 
 
-nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
+nt<DirectDeclaratorAST> Parser::parseDirectDeclarator(DeclaratorKind kind) {
   mStartToken = &lex.peek();
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
-    return make_ast<SimpleDirectDeclaratorAST>(parseIdentifier());
+    if (kind == DeclaratorKind::kAbstract) {
+      throw parseError("abstract declarator cannot have identifier");
+    } else {
+      return make_ast<SimpleDirectDeclaratorAST>(parseIdentifier());
+    }
   } else if (lex.peek() == TokenKind::TOKEN_LPAREN
       && (lex.peek(1) == TokenKind::TOKEN_LPAREN
           || lex.peek(1) == TokenKind::TOKEN_STAR
@@ -623,11 +626,11 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
           || (lex.peek(1) == TokenKind::TOKEN_IDENTIFIER
               && !table->isTypedef(lex.peek(1))))) {
     lex.consumeToken();
-    auto declarator = parseDeclarator();
+    auto declarator = parseDeclarator(kind);
     accept(TokenKind::TOKEN_RPAREN);
     return make_ast<ParenthesedDirectDeclaratorAST>(std::move(declarator));
   } else {
-    auto direct_declarator = parseDirectDeclarator();
+    auto direct_declarator = parseDirectDeclarator(kind);
     if (expect(TokenKind::TOKEN_LBRACKET)) {
       nt<ArrayDeclaratorAST> array;
       switch (lex.peek().getKind()) {
@@ -654,8 +657,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
       }
       accept(TokenKind::TOKEN_RBRACKET);
       return array;
-    } else {
-      accept(TokenKind::TOKEN_LPAREN);
+    } else if (expect(TokenKind::TOKEN_LPAREN)) {
       nt<FunctionDeclaratorAST> function;
       switch (lex.peek().getKind()) {
         case TokenKind::TOKEN_AUTO:
@@ -690,11 +692,17 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
 //          }
 //          break;
           //TODO implement identifier list
-          throw ParserException("do not support identifier list function declaration yet", lex.peek());
-        default:throw ParserException("expect parameters", lex.peek());
+          throw parseError("do not support identifier list function declaration yet");
+        default:throw parseError("expect parameters");
       }
       accept(TokenKind::TOKEN_RPAREN);
       return function;
+    } else {
+      if (kind == DeclaratorKind::kNormal) {
+        throw parseError("expect identifier in declarator");
+      } else {
+        return make_ast<SimpleDirectDeclaratorAST>(nullptr);
+      }
     }
   }
 }
@@ -741,7 +749,7 @@ nt<ParameterDeclarationAST> Parser::parseParameterDeclaration() {
     case TokenKind::TOKEN_LPAREN:
     case TokenKind::TOKEN_STAR:
     case TokenKind::TOKEN_IDENTIFIER:
-    case TokenKind::TOKEN_LBRACKET:declarator = parseDeclarator();
+    case TokenKind::TOKEN_LBRACKET:declarator = parseDeclarator(DeclaratorKind::kUnknown);
       break;
     default:declarator = nullptr;
   }
@@ -838,8 +846,7 @@ nt<StructOrUnionSpecifierAST> Parser::parseStructOrUnionSpecifier() {
   nt<IdentifierAST> id = nullptr;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     if (table->isTypedef(lex.peek())) {
-      throw ParserException(std::string("cannot combine type \"") + lex.peek().getValue() + "\" with struct or union",
-                            lex.peek());
+      throw parseError(std::string("cannot combine type \"") + lex.peek().getValue() + "\" with struct or union");
     }
     id = parseIdentifier();
   }
@@ -906,7 +913,7 @@ nt<StructDeclaratorAST> Parser::parseStructDeclarator() {
   if (expect(TokenKind::TOKEN_COLON)) {
     return make_ast<StructDeclaratorAST>(parseConstantExpression());
   } else {
-    auto declarator = parseDeclarator();
+    auto declarator = parseDeclarator(DeclaratorKind::kNormal);
     if (expect(TokenKind::TOKEN_COLON)) {
       return make_ast<StructDeclaratorAST>(std::move(declarator), parseConstantExpression());
     } else {
@@ -1254,7 +1261,9 @@ nt<TypeNameAST> Parser::parseTypeName() {
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_LPAREN:
     case TokenKind::TOKEN_STAR:
-    case TokenKind::TOKEN_LBRACKET:return make_ast<TypeNameAST>(std::move(qualifiers), parseDeclarator());
+    case TokenKind::TOKEN_LBRACKET:
+      return make_ast<TypeNameAST>(std::move(qualifiers),
+                                   parseDeclarator(DeclaratorKind::kAbstract));
     default:return make_ast<TypeNameAST>(std::move(qualifiers), nullptr);
   }
 }
