@@ -3,7 +3,7 @@
 #include <llvm/IR/IRBuilder.h>
 ISymbol *SymbolTable::lookup(const Token &token) {
   try {
-    return at(token.getValue()).get();
+    return at(token.getValue());
   } catch (const std::out_of_range &) {
     if (mFather) {
       return mFather->lookup(token);
@@ -15,16 +15,16 @@ ISymbol *SymbolTable::lookup(const Token &token) {
 bool SymbolTable::isTypedef(const Token &token) {
   return lookup(token) != nullptr && *lookup(token) == SymbolKind::TYPEDEF;
 }
-ISymbol *SymbolTable::insert(const Token &token, std::unique_ptr<ISymbol> &&symbol) {
+ISymbol *SymbolTable::insert(const Token &token, ISymbol *symbol) {
   try {
     at(token.getValue());
     throw SemaException(std::string("symbol \"") + token.getValue() + "\" already defined", token);
   } catch (const std::out_of_range &) {
-    return emplace(token.getValue(), std::move(symbol)).first->second.get();
+    return emplace(token.getValue(), symbol).first->second;
   }
 }
-ISymbol *SymbolTable::insert(std::unique_ptr<ISymbol> &&symbol) {
-  return emplace(std::string("$") + std::to_string(mAnonymousId++), std::move(symbol)).first->second.get();
+ISymbol *SymbolTable::insert(ISymbol *symbol) {
+  return emplace(std::string("$") + std::to_string(mAnonymousId++), symbol).first->second;
 }
 void SymbolTable::setFather(SymbolTable *father) {
   SymbolTable::mFather = father;

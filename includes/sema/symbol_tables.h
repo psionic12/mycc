@@ -169,13 +169,13 @@ class EnumConstSymbol : public ISymbol {
   EnumerationType *mEnumType;
 };
 
-class SymbolTable : public std::map<std::string, std::unique_ptr<ISymbol>> {
+class SymbolTable : public std::map<std::string, ISymbol *> {
  public:
   SymbolTable(ScopeKind kind, llvm::BasicBlock *basicBlock = nullptr)
       : mScopeKind(kind), mBasicBlock(basicBlock) {}
   ISymbol *lookup(const Token &token);
-  ISymbol *insert(const Token &token, std::unique_ptr<ISymbol> &&symbol);
-  ISymbol *insert(std::unique_ptr<ISymbol> &&symbol);
+  ISymbol *insert(const Token &token, ISymbol *symbol);
+  ISymbol *insert(ISymbol *symbol);
   // TODO move this to parser
   bool isTypedef(const Token &token);
   void setFather(SymbolTable *father);

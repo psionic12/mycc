@@ -464,7 +464,8 @@ class DirectDeclaratorAST : public AST {
   DirectDeclaratorAST();
   virtual const Token &getIdentifier() = 0;
   virtual const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                      const QualifiedType &derivedType) = 0;
+                                        const QualifiedType &derivedType,
+                                        bool isStruct) = 0;
   virtual bool isAbstract() const = 0;
 };
 
@@ -475,8 +476,11 @@ class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
   void print(int indent) override;
   const Token &getIdentifier() override;
   const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
-                              const QualifiedType &derivedType) override;
+                                const QualifiedType &derivedType,
+                                bool isStruct) override;
   bool isAbstract() const override;
+ private:
+  std::unique_ptr<ISymbol> mSymbol;
 };
 
 class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
@@ -486,6 +490,9 @@ class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
   void print(int indent) override;
   const Token &getIdentifier() override;
   bool isAbstract() const override;
+  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
+                              const QualifiedType &derivedType,
+                              bool isStruct) override;
 };
 
 class ArrayDeclaratorAST : public DirectDeclaratorAST {
@@ -495,7 +502,9 @@ class ArrayDeclaratorAST : public DirectDeclaratorAST {
   const nt<ConstantExpressionAST> constantExpression;
   void print(int indent) override;
   const Token &getIdentifier() override;
-  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
+  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
+                                const QualifiedType &derivedType,
+                                bool isStruct) override;
  private:
   std::unique_ptr<ArrayType> mArrayType;
 };
@@ -507,7 +516,9 @@ class FunctionDeclaratorAST : public DirectDeclaratorAST {
   const nt<ParameterListAST> parameterList;
   void print(int indent) override;
   const Token &getIdentifier() override;
-  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) override;
+  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
+                                const QualifiedType &derivedType,
+                                bool isStruct) override;
  private:
   std::unique_ptr<FunctionType> mFunctionType;
 };
@@ -570,6 +581,8 @@ class StructOrUnionSpecifierAST : public AST {
   void print(int indent) override;
   const ObjectType *type;
   CompoundType *codegen();
+ private:
+  std::unique_ptr<ISymbol> mSymbol;
 };
 class ProtoTypeSpecifierAST : public AST, public Terminal<ProtoTypeSpecifierOp> {
  public:
@@ -619,7 +632,7 @@ class DeclaratorAST : public AST {
   void print(int indent) override;
   const Token &getIdentifier() const;
   bool isAbstract() const;
-  void codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType);
+  void codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType, bool isStruct);
 };
 class DeclarationSpecifiersAST : public AST {
  public:

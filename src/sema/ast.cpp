@@ -208,8 +208,10 @@ void DeclaratorAST::print(int indent) {
 const Token &DeclaratorAST::getIdentifier() const {
   return direct_declarator->getIdentifier();
 }
-void DeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType) {
-  direct_declarator->codegen(storageSpecifier, pointer->codegen(derivedType));
+void DeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
+                            const QualifiedType &derivedType,
+                            bool isStruct) {
+  direct_declarator->codegen(storageSpecifier, pointer->codegen(derivedType), false);
 }
 bool DeclaratorAST::isAbstract() const {
   return direct_declarator->isAbstract();
@@ -278,24 +280,20 @@ CompoundType *StructOrUnionSpecifierAST::codegen() {
   if (bStruct == StructOrUnion::kSTRUCT) {
     if (id) {
       const auto &token = id->token;
-      symbol = sTagTable->insert(token,
-                                 std::make_unique<TagSymbol>(std::make_unique<StructType>(token.getValue(),
-                                                                                          sModule),
-                                                             involvedTokens()));
+      mSymbol = std::make_unique<TagSymbol>(std::make_unique<StructType>(token.getValue(), sModule, involvedTokens()));
+      sTagTable->insert(token, mSymbol.get());
     } else {
-      symbol = sTagTable->insert(std::make_unique<TagSymbol>(std::make_unique<StructType>(sModule),
-                                                             involvedTokens()));
+      mSymbol = std::make_unique<TagSymbol>(std::make_unique<StructType>(sModule), involvedTokens());
+      sTagTable->insert(mSymbol.get());
     }
   } else {
     if (id) {
       const auto &token = id->token;
-      symbol = sTagTable->insert(token,
-                                 std::make_unique<TagSymbol>(std::make_unique<UnionType>(token.getValue(),
-                                                                                          sModule),
-                                                             involvedTokens()));
+      mSymbol = std::make_unique<TagSymbol>(std::make_unique<UnionType>(token.getValue(), sModule), involvedTokens());
+      sTagTable->insert(token, mSymbol.get());
     } else {
-      symbol = sTagTable->insert(std::make_unique<TagSymbol>(std::make_unique<UnionType>(sModule),
-                                                             involvedTokens()));
+      mSymbol = std::make_unique<TagSymbol>(std::make_unique<UnionType>(sModule), involvedTokens());
+      symbol = sTagTable->insert(mSymbol.get());
     }
   }
   tagType = static_cast<TagSymbol *>(symbol)->getTagType();
@@ -1415,7 +1413,8 @@ const Token &SimpleDirectDeclaratorAST::getIdentifier() {
   return identifier->token;
 }
 const QualifiedType SimpleDirectDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                                       const QualifiedType &derivedType) {
+                                                       const QualifiedType &derivedType,
+                                                       bool isStruct) {
   Linkage linkage = Linkage::kNone;
   ISymbol *priorDeclartion = sObjectTable->lookup(identifier->token);
 
@@ -1511,11 +1510,15 @@ const QualifiedType SimpleDirectDeclaratorAST::codegen(Terminal<StorageSpecifier
         throw std::runtime_error("WTF: how could a function type declared in a tag/proto symbol");
     }
   }
-  auto symbol = std::make_unique<ObjectSymbol>(derivedType,
-                                               value,
-                                               involvedTokens());
-  symbol->setLinkage(linkage);
-  sObjectTable->insert(identifier->token, std::move(symbol));
+  mSymbol = std::make_unique<ObjectSymbol>(derivedType,
+                                           value,
+                                           involvedTokens());
+  mSymbol->setLinkage(linkage);
+  if (isStruct) {
+
+  } else {
+    sObjectTable->insert(identifier->token, mSymbol.get());
+  }
   return derivedType;
 }
 bool SimpleDirectDeclaratorAST::isAbstract() const {
@@ -1533,6 +1536,11 @@ const Token &ParenthesedDirectDeclaratorAST::getIdentifier() {
 bool ParenthesedDirectDeclaratorAST::isAbstract() const {
   return declarator->isAbstract();
 }
+const QualifiedType ParenthesedDirectDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
+                                                            const QualifiedType &derivedType,
+                                                            bool isStruct) {
+  return declarator->codegen(storageSpecifier, derivedType, isStruct);
+}
 ArrayDeclaratorAST::ArrayDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
                                        nt<ConstantExpressionAST> constantExpression)
     : directDeclarator(std::move(directDeclarator)), constantExpression(std::move(constantExpression)) {}
@@ -1546,7 +1554,8 @@ const Token &ArrayDeclaratorAST::getIdentifier() {
   return directDeclarator->getIdentifier();
 }
 const QualifiedType ArrayDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                                const QualifiedType &derivedType) {
+                                                const QualifiedType &derivedType,
+                                                bool isStruct) {
   // 6.7.6.2 Array declarators
   // BNF wrote by Brian W. Kernighan and Dennis M. Ritchie,Prentice Hall, 1988 do not support variable length array
   int64_t size = 0;
@@ -1568,7 +1577,9 @@ const QualifiedType ArrayDeclaratorAST::codegen(Terminal<StorageSpecifier> stora
     throw SemaException("The element type shall not be an incomplete or function type.", involvedTokens());
   }
   mArrayType = std::make_unique<ArrayType>(derivedType, size);
-  return directDeclarator->codegen(storageSpecifier, QualifiedType(mArrayType.get(), std::set<TypeQualifier>{}));
+  return directDeclarator->codegen(storageSpecifier,
+                                   QualifiedType(mArrayType.get(), std::set<TypeQualifier>{}),
+                                   isStruct);
 }
 void FunctionDeclaratorAST::print(int indent) {
   AST::print(indent);
@@ -1583,7 +1594,8 @@ const Token &FunctionDeclaratorAST::getIdentifier() {
   return directDeclarator->getIdentifier();
 }
 const QualifiedType FunctionDeclaratorAST::codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                                   const QualifiedType &derivedType) {
+                                                   const QualifiedType &derivedType,
+                                                   bool isStruct) {
   if (dynamic_cast<const FunctionType *>(derivedType.getType())
       || dynamic_cast<const ArrayType *>(derivedType.getType())) {
     throw SemaException(std::string("function ") + getIdentifier().getValue() + "cannot be array type or function type",
@@ -1591,4 +1603,5 @@ const QualifiedType FunctionDeclaratorAST::codegen(Terminal<StorageSpecifier> st
   }
   mFunctionType = std::make_unique<FunctionType>(derivedType, parameterList->codegen());
   QualifiedType qualifiedType(mFunctionType.get(), {});
+  return directDeclarator->codegen(storageSpecifier, qualifiedType, isStruct);
 }
