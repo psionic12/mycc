@@ -2,7 +2,7 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <sema/ast.h>
 #include <sema/qualifiedType.h>
-bool Type::compatible(Type *type) const {
+bool Type::compatible(const Type *type) const {
   return this == type;
 }
 bool Type::complete() const {
@@ -21,15 +21,15 @@ const IntegerType IntegerType::sUnsignedShortIntType(16);
 const IntegerType IntegerType::sUnsignedIntType(32);
 const IntegerType IntegerType::sUnsignedLongIntType(64);
 const IntegerType IntegerType::sUnsignedLongLongIntType(64);
-bool IntegerType::compatible(Type *type) const {
-  return dynamic_cast<IntegerType *>(type) || dynamic_cast<FloatingType *>(type);
+bool IntegerType::compatible(const Type *type) const {
+  return dynamic_cast<const IntegerType *>(type) || dynamic_cast<const FloatingType *>(type);
 }
 IntegerType::IntegerType(unsigned int mSizeInBits) : mSizeInBits(mSizeInBits) {}
 llvm::IntegerType *IntegerType::getLLVMType(llvm::Module &module) const {
   return llvm::IntegerType::get(module.getContext(), mSizeInBits);
 }
-bool FloatingType::compatible(Type *type) const {
-  return dynamic_cast<IntegerType *>(type) || dynamic_cast<FloatingType *>(type);
+bool FloatingType::compatible(const Type *type) const {
+  return dynamic_cast<const IntegerType *>(type) || dynamic_cast<const FloatingType *>(type);
 }
 const FloatingType FloatingType::sFloatType(32);
 const FloatingType FloatingType::sDoubleType(64);
@@ -105,7 +105,7 @@ unsigned int VoidType::getSizeInBits() const {
   return 0;
 }
 CompoundType::CompoundType()
-    : mSizeInBits(0), mComplete(false) {}
+    : mSizeInBits(0), mComplete(false), mTable(ScopeKind::TAG) {}
 bool CompoundType::complete() const {
   return mComplete;
 }
@@ -120,43 +120,47 @@ StructType::StructType(llvm::Module &module) : mLLVMType(llvm::StructType::creat
 llvm::StructType *StructType::getLLVMType(llvm::Module &module) const {
   return mLLVMType;
 }
-//void StructType::setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
-//                         llvm::Module &module) {
-//  std::vector<llvm::Type *> fields;
-//  auto end = symbols.size() > 1 ? symbols.end() - 1 : symbols.end();
-//  for (auto it = symbols.begin(); it != end; it++) {
-//    const std::string *string = it->first;
-//    auto symbol = std::move(it->second);
-//    if (!symbol->getType()->complete()) {
-//      throw SemaException(std::string("member ") + (string ? *string : "") + " is incomplete", symbol->mInvolvedTokens);
-//    }
-//    fields.push_back(symbol->getType()->getLLVMType(module));
-//  }
-//  //TODO the standard says "a structure with more than one named member",
-//  // which I don't fully understand, I'll come back later
-//  if (symbols.size() > 1) {
-//    auto symbol = std::move(symbols.back().second);
-//    if (!symbol->getType()->complete()) {
-//      if (!dynamic_cast<ArrayType *>(symbol->getType())) {
-//        throw SemaException("only flexible array member can be the last member which is incomplete",
-//                            symbol->mInvolvedTokens);
-//      } else {
-//        mComplete = false;
-//      }
-//    } else {
-//      mComplete = true;
-//    }
-//    fields.push_back(symbol->getType()->getLLVMType(module));
-//  }
-//  mLLVMType->setBody(fields);
-//}
+void StructType::setBody(SymbolTable &&table, llvm::Module &module) {
+  mTable = std::move(table);
+  std::vector<llvm::Type *> fields;
+  for (const auto &pair : mTable) {
+    if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
+      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getType())) {
+        fields.push_back(obj->getType()->getLLVMType(module));
+        mSizeInBits += type->getSizeInBits();
+      }
+    }
+  }
+  mLLVMType->setBody(fields);
+}
+UnionType::UnionType(const std::string &tag, llvm::Module &module)
+    : mLLVMType(llvm::StructType::create(module.getContext(), tag)) {}
+
+UnionType::UnionType(llvm::Module &module) : mLLVMType(llvm::StructType::create(module.getContext())) {}
 llvm::StructType *UnionType::getLLVMType(llvm::Module &module) const {
-  return nullptr;
+  return mLLVMType;
+}
+void UnionType::setBody(SymbolTable &&table, llvm::Module &module) {
+  mTable = std::move(table);
+  std::vector<llvm::Type *> fields;
+  for (const auto &pair : mTable) {
+    if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
+      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getType())) {
+        fields.push_back(obj->getType()->getLLVMType(module));
+        auto size = type->getSizeInBits();
+        mSizeInBits = mSizeInBits > size ? size : mSizeInBits;
+      }
+    }
+  }
+  mLLVMType->setBody(fields);
 }
 unsigned int EnumerationType::getSizeInBits() const {
   return IntegerType::sIntType.getSizeInBits();
 }
 llvm::IntegerType *EnumerationType::getLLVMType(llvm::Module &module) const {
   return llvm::IntegerType::get(module.getContext(), getSizeInBits());
+}
+void EnumerationType::setBody(SymbolTable &&table, llvm::Module &module) {
+  mTable = std::move(table);
 }
 

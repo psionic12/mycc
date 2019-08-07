@@ -9,12 +9,13 @@
 #include "operator.h"
 #include "llvm/IR/Type.h"
 #include "qualifiedType.h"
+#include "symbol_tables.h"
 
 class Type {
  private:
  public:
   virtual ~Type() = default;
-  virtual bool compatible(Type *type) const;
+  virtual bool compatible(const Type *type) const;
   virtual bool complete() const;
   virtual llvm::Type *getLLVMType(llvm::Module &module) const = 0;
 };
@@ -28,7 +29,7 @@ class IntegerType : public ObjectType {
  public:
   IntegerType(unsigned int mSizeInBits);
   unsigned int getSizeInBits() const;
-  bool compatible(Type *type) const override;
+  bool compatible(const Type *type) const override;
   static const IntegerType sCharType;
   static const IntegerType sShortIntType;
   static const IntegerType sIntType;
@@ -47,7 +48,7 @@ class IntegerType : public ObjectType {
 class FloatingType : public ObjectType {
  public:
   FloatingType(unsigned int mSizeInBits);
-  bool compatible(Type *type) const override;
+  bool compatible(const Type *type) const override;
   static const FloatingType sFloatType;
   static const FloatingType sDoubleType;
   static const FloatingType sLongDoubleType;
@@ -93,7 +94,7 @@ class FunctionType : public Type {
 
 class ArrayType : public ObjectType {
  public:
-  ArrayType(const QualifiedType elementType, unsigned int size);
+  ArrayType(QualifiedType elementType, unsigned int size);
   bool complete() const override;
   void setSize(unsigned int size);
   llvm::ArrayType *getLLVMType(llvm::Module &module) const override;
@@ -109,10 +110,8 @@ class CompoundType : public ObjectType {
   CompoundType();
   bool complete() const override;
   unsigned int getSizeInBits() const override;
-  std::map<std::string, const ObjectType *> mMember;
-//  virtual void setBody(std::vector<std::pair<const std::string *, std::unique_ptr<ObjectSymbol>>> symbols,
-//                         llvm::Module &module) = 0;
-  virtual void setBody(std::map<std::string, const QualifiedType> members) = 0;
+  SymbolTable mTable;
+  virtual void setBody(SymbolTable &&table, llvm::Module &module) = 0;
  protected:
   bool mComplete;
   unsigned mSizeInBits;
@@ -123,6 +122,7 @@ class StructType : public CompoundType {
   StructType(const std::string &tag, llvm::Module &module);
   StructType(llvm::Module &module);
   llvm::StructType *getLLVMType(llvm::Module &module) const override;
+  void setBody(SymbolTable &&table, llvm::Module &module) override;
  private:
   llvm::StructType *mLLVMType;
 };
@@ -130,12 +130,18 @@ class StructType : public CompoundType {
 //TODO
 class UnionType : public CompoundType {
  public:
+  UnionType(const std::string &tag, llvm::Module &module);
+  UnionType(llvm::Module &module);
   llvm::StructType *getLLVMType(llvm::Module &module) const override;
+  void setBody(SymbolTable &&table, llvm::Module &module) override;
+ private:
+  llvm::StructType *mLLVMType;
 };
 
 //TODO
 class EnumerationType : public CompoundType {
  public:
+  void setBody(SymbolTable &&table, llvm::Module &module) override;
   unsigned int getSizeInBits() const override;
   llvm::IntegerType *getLLVMType(llvm::Module &module) const override;
 };

@@ -37,7 +37,8 @@ class QualifiedType {
   const Type *getType() const;
   const std::set<TypeQualifier> &getQualifiers() const;
   QualifiedType(const Type *type, std::set<TypeQualifier> qualifiers);
-  bool operator==(const QualifiedType &qualifiedType);
+  bool operator==(const QualifiedType &qualifiedType) const;
+  bool operator!=(const QualifiedType &qualifiedType) const;
 };
 QualifiedType::QualifiedType(const Type *type, std::set<TypeQualifier> qualifiers)
     : mType(type), mQualifiers(move(qualifiers)) {}
@@ -47,7 +48,10 @@ const Type *QualifiedType::getType() const {
 const std::set<TypeQualifier> &QualifiedType::getQualifiers() const {
   return mQualifiers;
 }
-bool QualifiedType::operator==(const QualifiedType &qualifiedType) {
+bool QualifiedType::operator==(const QualifiedType &qualifiedType) const {
   return mType == qualifiedType.mType && mQualifiers == qualifiedType.mQualifiers;
+}
+bool QualifiedType::operator!=(const QualifiedType &qualifiedType) const {
+  return !operator==(qualifiedType);
 }
 #endif //MYCCPILER_QUALIFIEDTYPE_H

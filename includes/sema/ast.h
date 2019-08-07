@@ -167,8 +167,7 @@ class IExpression {
     const Type *type;
     llvm::Value *const value;
   };
-  const Type *mType = nullptr;
-  std::set<TypeQualifier> mQualifiers{};
+  QualifiedType qualifiedType;
   bool mLvalue = false;
   virtual Value codegen() = 0;
 };
@@ -279,20 +278,24 @@ class EnumeratorAST : public AST {
   const nt<IdentifierAST> id;
   const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
+  EnumConstSymbol * codegen(int index);
+ private:
+  std::unique_ptr<EnumConstSymbol> mSymbol;
 };
 class EnumeratorListAST : public AST {
  public:
   EnumeratorListAST(nts<EnumeratorAST> enumerator);
   const nts<EnumeratorAST> enumerators;
   void print(int indent) override;
-
+  std::vector<EnumConstSymbol *> codegen();
 };
 class ParameterDeclarationAST : public AST {
  public:
   ParameterDeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers, nt<DeclaratorAST> declarator);
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
-  const nt<DeclaratorAST> declarator;
+  nt<DeclaratorAST> declarator;
   void print(int indent) override;
+  ISymbol * codegen();
 };
 class ParameterListAST : public AST {
  public:
@@ -462,10 +465,8 @@ class ParameterTypeListAST : public AST {
 class DirectDeclaratorAST : public AST {
  public:
   DirectDeclaratorAST();
-  virtual const Token &getIdentifier() = 0;
-  virtual const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                        const QualifiedType &derivedType,
-                                        bool isStruct) = 0;
+  virtual const Token *getIdentifier() = 0;
+  virtual ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) = 0;
   virtual bool isAbstract() const = 0;
 };
 
@@ -474,10 +475,8 @@ class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
   SimpleDirectDeclaratorAST(nt<IdentifierAST> identifier);
   const nt<IdentifierAST> identifier;
   void print(int indent) override;
-  const Token &getIdentifier() override;
-  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                const QualifiedType &derivedType,
-                                bool isStruct) override;
+  const Token *getIdentifier() override;
+  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
   bool isAbstract() const override;
  private:
   std::unique_ptr<ISymbol> mSymbol;
@@ -488,11 +487,9 @@ class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
   ParenthesedDirectDeclaratorAST(nt<DeclaratorAST> declarator);
   const nt<DeclaratorAST> declarator;
   void print(int indent) override;
-  const Token &getIdentifier() override;
+  const Token *getIdentifier() override;
   bool isAbstract() const override;
-  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
-                              const QualifiedType &derivedType,
-                              bool isStruct) override;
+  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
 };
 
 class ArrayDeclaratorAST : public DirectDeclaratorAST {
@@ -501,10 +498,8 @@ class ArrayDeclaratorAST : public DirectDeclaratorAST {
   const nt<DirectDeclaratorAST> directDeclarator;
   const nt<ConstantExpressionAST> constantExpression;
   void print(int indent) override;
-  const Token &getIdentifier() override;
-  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                const QualifiedType &derivedType,
-                                bool isStruct) override;
+  const Token *getIdentifier() override;
+  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
  private:
   std::unique_ptr<ArrayType> mArrayType;
 };
@@ -515,10 +510,8 @@ class FunctionDeclaratorAST : public DirectDeclaratorAST {
   const nt<DirectDeclaratorAST> directDeclarator;
   const nt<ParameterListAST> parameterList;
   void print(int indent) override;
-  const Token &getIdentifier() override;
-  const QualifiedType codegen(Terminal<StorageSpecifier> storageSpecifier,
-                                const QualifiedType &derivedType,
-                                bool isStruct) override;
+  const Token *getIdentifier() override;
+  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
  private:
   std::unique_ptr<FunctionType> mFunctionType;
 };
@@ -547,6 +540,7 @@ class StructDeclaratorAST : public AST {
   const nt<DeclaratorAST> declarator;
   const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
+  const ISymbol *codegen(const QualifiedType &derivedType);
 };
 class StructDeclaratorListAST : public AST {
  public:
@@ -561,7 +555,7 @@ class StructDeclarationAST : public AST {
   const nt<SpecifierQualifierAST> specifier_qualifier;
   const nt<StructDeclaratorListAST> struct_declarator_list;
   void print(int indent) override;
-  std::pair<const QualifiedType, std::vector<std::string>> codegen();
+  std::vector<ISymbol *> codegen();
 };
 class EnumSpecifierAST : public AST {
  public:
@@ -571,6 +565,9 @@ class EnumSpecifierAST : public AST {
   const nt<IdentifierAST> id;
   const nt<EnumeratorListAST> enum_list;
   void print(int indent) override;
+  EnumerationType *codegen();
+ private:
+  std::unique_ptr<TagSymbol> mSymbol;
 };
 class StructOrUnionSpecifierAST : public AST {
  public:
@@ -582,7 +579,7 @@ class StructOrUnionSpecifierAST : public AST {
   const ObjectType *type;
   CompoundType *codegen();
  private:
-  std::unique_ptr<ISymbol> mSymbol;
+  std::unique_ptr<TagSymbol> mSymbol;
 };
 class ProtoTypeSpecifierAST : public AST, public Terminal<ProtoTypeSpecifierOp> {
  public:
@@ -630,9 +627,9 @@ class DeclaratorAST : public AST {
   const nt<PointerAST> pointer;
   const nt<DirectDeclaratorAST> direct_declarator;
   void print(int indent) override;
-  const Token &getIdentifier() const;
+  const Token *getIdentifier() const;
   bool isAbstract() const;
-  void codegen(Terminal<StorageSpecifier> storageSpecifier, const QualifiedType &derivedType, bool isStruct);
+  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType);
 };
 class DeclarationSpecifiersAST : public AST {
  public:
@@ -644,7 +641,7 @@ class DeclarationSpecifiersAST : public AST {
   const nts<TypeQualifierAST> type_qualifiers;
   bool empty();
   void print(int indent) override;
-  void codegen();
+  std::pair<const Terminal<StorageSpecifier> &, const QualifiedType> codegen();
 };
 class DeclarationAST : public AST {
  public:

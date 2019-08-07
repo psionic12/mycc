@@ -131,7 +131,7 @@ nt<ExternalDeclarationAST> Parser::parseExternalDeclaration() {
     // has <declaration> or next token is a '{', this is a function definition
     if (!declarations.empty() || lex.peek() == TokenKind::TOKEN_LBRACE) {
       auto declarator = std::move(init_declarators.back().first);
-      auto *labelTable = symbolTables.createTable(ScopeKind::TAG, nullptr);
+      auto *labelTable = symbolTables.createTable(ScopeKind::LABEL, nullptr);
       auto function_definition = make_ast<FunctionDefinitionAST>(std::move(specifiers),
                                                                  std::move(declarator),
                                                                  std::move(declarations),
