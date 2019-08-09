@@ -423,24 +423,76 @@ class ArgumentExpressionList : public AST, public IExpression {
 };
 class PostfixExpressionAST : public AST, public IExpression {
  public:
-  enum class identifierOperator {
-    DOT = 3,
-    ARROW = 4,
-  };
-  enum class Xcrement {
-    PLUSPLUS = 5,
-    MINMIN = 6,
-  };
-  PostfixExpressionAST(nt<PrimaryExpressionAST> primary);
-  PostfixExpressionAST(nt<PostfixExpressionAST> left, nt<ExpressionAST> right);
-  PostfixExpressionAST(nt<PostfixExpressionAST> left, nt<ArgumentExpressionList> right);
-  PostfixExpressionAST(nt<PostfixExpressionAST> left, identifierOperator io, nt<IdentifierAST> right);
-  PostfixExpressionAST(nt<PostfixExpressionAST> left, Xcrement x);
-  void print(int indent) override;
-  nt<AST> left;
-  nt<AST> right;
+  PostfixExpressionAST() : AST(Kind::POSTFIX_EXPRESSION) {}
   Value codegen() override;
 };
+
+class SimplePostfixExpressionAST : public PostfixExpressionAST {
+ public:
+  SimplePostfixExpressionAST(nt<PrimaryExpressionAST> primary) : primary_expression(std::move(primary)) {}
+  nt<PrimaryExpressionAST> primary_expression;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class ArrayPostfixExpressionAST : public PostfixExpressionAST {
+ public:
+  ArrayPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<ExpressionAST> expression)
+      : postfix_expression(std::move(postfix_expression)), expression(std::move(expression)) {}
+  nt<PostfixExpressionAST> postfix_expression;
+  nt<ExpressionAST> expression;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class FunctionPostfixExpressionAST : public PostfixExpressionAST {
+ public:
+  FunctionPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<ArgumentExpressionList> arguments)
+      : postfix_expression(std::move(postfix_expression)), argument_expression_list(std::move(arguments)) {}
+  nt<PostfixExpressionAST> postfix_expression;
+  nt<ArgumentExpressionList> argument_expression_list;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class MemberPostfixExpressionAST : public PostfixExpressionAST {
+ public:
+  MemberPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<IdentifierAST> identifier)
+      : postfix_expression(std::move(postfix_expression)), identifier(std::move(identifier)) {}
+  nt<PostfixExpressionAST> postfix_expression;
+  nt<IdentifierAST> identifier;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class PointerMemberPostfixExpressionAST : public PostfixExpressionAST {
+ public:
+  PointerMemberPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<IdentifierAST> identifier)
+      : postfix_expression(std::move(postfix_expression)), identifier(std::move(identifier)) {}
+  nt<PostfixExpressionAST> postfix_expression;
+  nt<IdentifierAST> identifier;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class IncrementPostfixExpression : public PostfixExpressionAST {
+ public:
+  IncrementPostfixExpression(nt<PostfixExpressionAST> postfix_expression) :
+      postfix_expression(std::move(postfix_expression)) {}
+  nt<PostfixExpressionAST> postfix_expression;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class DecrementPostfixExpression : public PostfixExpressionAST {
+ public:
+  DecrementPostfixExpression(nt<PostfixExpressionAST> postfix_expression) :
+      postfix_expression(std::move(postfix_expression)) {}
+  nt<PostfixExpressionAST> postfix_expression;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
 class TypeNameAST : public AST {
  public:
   TypeNameAST(nt<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator);

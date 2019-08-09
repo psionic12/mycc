@@ -599,46 +599,6 @@ void TypeNameAST::print(int indent) {
   specifiers->print(indent);
   if (declarator) declarator->print(indent);
 }
-PostfixExpressionAST::PostfixExpressionAST(nt<PrimaryExpressionAST>
-                                           primary)
-    : AST(AST::Kind::POSTFIX_EXPRESSION, 0),
-      left(std::move(primary)),
-      right(nullptr) {}
-PostfixExpressionAST::PostfixExpressionAST(nt<PostfixExpressionAST>
-                                           left, nt<ExpressionAST>
-                                           right)
-    : AST(AST::Kind::POSTFIX_EXPRESSION, 1),
-      left(std::move(left)),
-      right(std::move(right)) {}
-PostfixExpressionAST::PostfixExpressionAST(nt<PostfixExpressionAST>
-                                           left, nt<ArgumentExpressionList>
-                                           right)
-    : AST(AST::Kind::POSTFIX_EXPRESSION, 2),
-      left(std::move(left)),
-      right(std::move(right)) {}
-PostfixExpressionAST::PostfixExpressionAST(nt<PostfixExpressionAST>
-                                           left,
-                                           PostfixExpressionAST::identifierOperator
-                                           io,
-                                           nt<IdentifierAST>
-                                           right)
-    : AST(AST::Kind::POSTFIX_EXPRESSION, static_cast<int>(io)),
-      left(std::move(left)),
-      right(std::move(right)) {}
-PostfixExpressionAST::PostfixExpressionAST(nt<PostfixExpressionAST>
-                                           left, PostfixExpressionAST::Xcrement
-                                           x)
-    : AST(AST::Kind::POSTFIX_EXPRESSION, static_cast<int>(x)),
-      left(std::move(left)),
-      right(nullptr) {}
-void PostfixExpressionAST::print(int indent) {
-  AST::print(indent);
-  ++indent;
-  left->print(indent);
-  if (right) {
-    right->print(indent);
-  }
-}
 IExpression::Value PostfixExpressionAST::codegen() {
   switch (getProduction()) {
     case 0: {
@@ -670,8 +630,7 @@ IExpression::Value PostfixExpressionAST::codegen() {
         throw SemaException("array right side should be an integer type",
                             postfix->involvedTokens());
       }
-      mType = tPointer->getReferencedType();
-      mQualifiers = tPointer->qualifiersToReferencedType();
+
       mLvalue = true;
       break;
     }
@@ -940,7 +899,7 @@ void EnumeratorAST::print(int indent) {
 EnumConstSymbol *EnumeratorAST::codegen(const EnumerationType *enumerationType, int64_t index) {
   if (constant_expression) {
     auto value = constant_expression->codegen();
-    if (!dynamic_cast<const IntegerType *>(value.type)) {
+    if (!dynamic_cast<const IntegerType *>(value.qualifiedType.getType())) {
       throw SemaException("the expression shall have an integer type", constant_expression->involvedTokens());
     } else {
       auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(value.value);
@@ -1589,7 +1548,8 @@ IExpression::Value IdentifierPrimaryExpressionAST::codegen() {
   }
   return Value(qualifiedType, lvalue, value);
 }
-IdentifierPrimaryExpressionAST::IdentifierPrimaryExpressionAST(nt<IdentifierAST> identifier) : identifier(std::move(identifier)) {}
+IdentifierPrimaryExpressionAST::IdentifierPrimaryExpressionAST(nt<IdentifierAST> identifier) : identifier(std::move(
+    identifier)) {}
 void IntegerConstantPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::printIndent(indent);
   integer_constant->print(++indent);
@@ -1678,7 +1638,8 @@ IExpression::Value IntegerConstantPrimaryExpressionAST::codegen() {
                false,
                llvm::ConstantInt::get(type->getLLVMType(sModule), type->getAPInt(n)));
 }
-IntegerConstantPrimaryExpressionAST::IntegerConstantPrimaryExpressionAST(nt<IntegerConstantAST> integer_constant) : integer_constant(std::move(
+IntegerConstantPrimaryExpressionAST::IntegerConstantPrimaryExpressionAST(nt<IntegerConstantAST> integer_constant)
+    : integer_constant(std::move(
     integer_constant)) {}
 void FloatingConstantPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::printIndent(indent);
@@ -1698,7 +1659,8 @@ IExpression::Value FloatingConstantPrimaryExpressionAST::codegen() {
                false,
                llvm::ConstantFP::get(sModule.getContext(), type->getAPFloat(floating_constant->value)));
 }
-FloatingConstantPrimaryExpressionAST::FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST> floating_constant) : floating_constant(std::move(
+FloatingConstantPrimaryExpressionAST::FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST> floating_constant)
+    : floating_constant(std::move(
     floating_constant)) {}
 void CharacterConstantPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
@@ -1731,4 +1693,84 @@ void ExpressionPrimaryExpressionAST::print(int indent) {
 IExpression::Value ExpressionPrimaryExpressionAST::codegen() {
   return expression->codegen();
 }
-ExpressionPrimaryExpressionAST::ExpressionPrimaryExpressionAST(nt<ExpressionAST> expression) : expression(std::move(expression)) {}
+ExpressionPrimaryExpressionAST::ExpressionPrimaryExpressionAST(nt<ExpressionAST> expression) : expression(std::move(
+    expression)) {}
+void SimplePostfixExpressionAST::print(int indent) {
+  AST::print(indent);
+  primary_expression->print(++indent);
+}
+IExpression::Value SimplePostfixExpressionAST::codegen() {
+  return primary_expression->codegen();
+}
+void ArrayPostfixExpressionAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  postfix_expression->print(indent);
+  expression->print(indent);
+}
+IExpression::Value ArrayPostfixExpressionAST::codegen() {
+  // 6.5.2.1 Array subscripting
+  Value lhs = postfix_expression->codegen();
+  Value rhs = expression->codegen();
+  const auto *tPointer = dynamic_cast<const PointerType *>(lhs.qualifiedType.getType());
+  if (!tPointer) {
+    throw SemaException("array left side should be pointer to complete object type",
+                        postfix_expression->involvedTokens());
+  }
+  const auto *tObject = dynamic_cast<const ObjectType *>(tPointer->getReferencedType());
+  if (!tObject || !tObject->complete()) {
+    throw SemaException("array left side should be pointer to complete object type",
+                        postfix_expression->involvedTokens());
+  }
+
+  if (!(dynamic_cast<const IntegerType *>(rhs.qualifiedType.getType()))) {
+    throw SemaException("array right side should be an integer type",
+                        postfix_expression->involvedTokens());
+  }
+
+  llvm::Value *value = nullptr;
+  if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(rhs.value)) {
+    auto index = constantInt->getSExtValue();
+    if (index < 0) {
+      //TODO Warning index is before 0
+      value = nullptr;
+    } else if (const auto *globalVariable = llvm::dyn_cast<llvm::GlobalVariable>(lhs.value)) {
+      if (globalVariable->hasInitializer()) {
+        if (const auto *constantArray = llvm::dyn_cast<llvm::ConstantArray>(globalVariable->getInitializer())) {
+          value = constantArray->getAggregateElement(index);
+        }
+      }
+    }
+
+  }
+
+  mLvalue = true;
+
+  return QualifiedType(tObject,);
+}
+void FunctionPostfixExpressionAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  postfix_expression->print(indent);
+  argument_expression_list->print(indent);
+}
+void MemberPostfixExpressionAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  postfix_expression->print(indent);
+  identifier->print(indent);
+}
+void PointerMemberPostfixExpressionAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  postfix_expression->print(indent);
+  identifier->print(indent);
+}
+void IncrementPostfixExpression::print(int indent) {
+  AST::print(indent);
+  postfix_expression->print(++indent);
+}
+void DecrementPostfixExpression::print(int indent) {
+  AST::print(indent);
+  postfix_expression->print(++indent);
+}

@@ -59,7 +59,10 @@ llvm::APFloat FloatingType::getAPFloat(long double n) const {
   //TODO implement long double
 }
 FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg)
-    : mReturnType(std::move(returnType)), mParameters(parameters), mVarArg(varArg), mPointerType(this) {}
+    : mReturnType(std::move(returnType)),
+      mParameters(parameters),
+      mVarArg(varArg),
+      mPointerType(QualifiedType(this, {}) {}
 QualifiedType FunctionType::getReturnType() const {
   return mReturnType;
 }
@@ -77,7 +80,7 @@ FunctionType::operator const PointerType *() const {
   return &mPointerType;
 }
 ArrayType::ArrayType(const QualifiedType elementType, unsigned int size)
-    : mSize(size), mElementType(elementType), mPointerType(this) {}
+    : mSize(size), mElementType(elementType), mPointerType(QualifiedType(this, {})) {}
 bool ArrayType::complete() const {
   return mSize > 0;
 }
@@ -90,20 +93,19 @@ llvm::ArrayType *ArrayType::getLLVMType(llvm::Module &module) const {
 ArrayType::operator const PointerType *() const {
   return &mPointerType;
 }
-PointerType::PointerType(const Type *referencedType)
-    : mReferencedType(referencedType) {}
 const Type *PointerType::getReferencedType() const {
-  return mReferencedType;
-}
-const std::set<TypeQualifier> &PointerType::qualifiersToReferencedType() const {
-  return mQualifersToReferencedType;
+  return mReferencedQualifiedType.getType();
 }
 llvm::PointerType *PointerType::getLLVMType(llvm::Module &module) const {
-  return llvm::PointerType::get(mReferencedType->getLLVMType(module), 0);
+  return llvm::PointerType::get(mReferencedQualifiedType.getType()->getLLVMType(module), 0);
 }
 unsigned int PointerType::getSizeInBits() const {
   //TODO 32 or 64?
   return 64;
+}
+PointerType::PointerType(QualifiedType referencedQualifiedType) : mReferencedQualifiedType(std::move(referencedQualifiedType)) {}
+const QualifiedType &PointerType::getReferencedQualifiedType() const {
+  return mReferencedQualifiedType;
 }
 const VoidType VoidType::sVoidType;
 bool VoidType::complete() const {

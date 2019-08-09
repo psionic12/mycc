@@ -71,14 +71,13 @@ class VoidType : public ObjectType {
 
 class PointerType : public ObjectType {
  public:
-  PointerType(const Type *referencedType);
-  const std::set<TypeQualifier> &qualifiersToReferencedType() const;
+  PointerType(QualifiedType referencedQualifiedType);
   const Type *getReferencedType() const;
   llvm::PointerType *getLLVMType(llvm::Module &module) const override;
   unsigned int getSizeInBits() const override;
+  const QualifiedType &getReferencedQualifiedType() const;
  protected:
-  const Type *mReferencedType;
-  std::set<TypeQualifier> mQualifersToReferencedType;
+  QualifiedType mReferencedQualifiedType;
 };
 
 class FunctionType : public Type {
