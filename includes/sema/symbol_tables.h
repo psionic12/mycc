@@ -9,6 +9,7 @@
 #include <memory>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/Constants.h>
 #include "operator.h"
 #include "qualifiedType.h"
 
@@ -167,22 +168,21 @@ class LabelSymbol : public ISymbol {
 
 class EnumConstSymbol : public ISymbol {
  public:
-  EnumConstSymbol(const Token *token, int index) : ISymbol(token), mIndex(index) {}
   SymbolKind getKind() const override {
     return SymbolKind::ENUMERATION_CONSTANT;
   }
   EnumConstSymbol(EnumerationType *mEnumType,
-                  const Token *token)
-      : ISymbol(token), mEnumType(mEnumType) {}
+                  const Token *token, llvm::ConstantInt *index)
+      : ISymbol(token), mEnumType(mEnumType), mIndex(index) {}
   EnumerationType *getType() const {
     return mEnumType;
   }
-  int getIndex() const {
-    return mIndex;
+  int64_t getIndex() const {
+    return mIndex->getSExtValue();
   }
  private:
   EnumerationType *mEnumType;
-  int mIndex;
+  llvm::ConstantInt *mIndex;
 };
 
 class SymbolTable : public std::map<std::string, ISymbol *> {

@@ -788,140 +788,6 @@ PrimaryExpressionAST::PrimaryExpressionAST(nt<StringAST>
 PrimaryExpressionAST::PrimaryExpressionAST(nt<ExpressionAST>
                                            exp)
     : AST(AST::Kind::PRIMARY_EXPRESSION, 5), ast(std::move(exp)) {}
-void PrimaryExpressionAST::print(int indent) {
-  AST::print(indent);
-  ast->print(++indent);
-}
-IExpression::Value PrimaryExpressionAST::codegen() {
-  switch (getProduction()) {
-    case 0: { // identifier
-      auto *identifierAST = static_cast<IdentifierAST *>(ast.get());
-      auto *symbol = sObjectTable->lookup(identifierAST->token);
-      SymbolKind kind = symbol->getKind();
-      if (kind == SymbolKind::OBJECT) {
-        qualifiedType = static_cast<ObjectSymbol *>(symbol)->getQualifiedType();
-        mLvalue = true;
-        return;
-      } else if (kind == SymbolKind::ENUMERATION_CONSTANT) {
-        mType = static_cast<EnumConstSymbol *>(symbol)->getType();
-      } else {
-        throw SemaException("identifier as a primary expression must be object or function or enumeration const",
-                            identifierAST->token);
-      }
-      break;
-    }
-    case 1: {
-      auto *integerConstAST = static_cast<IntegerConstantAST *>(ast.get());
-      bool isBase10 = integerConstAST->mToken.getValue()[0] != 0;
-      unsigned long long int n = integerConstAST->value;
-
-      unsigned int intSize = IntegerType::sIntType.getSizeInBits();
-      unsigned int longSize = IntegerType::sLongIntType.getSizeInBits();
-      unsigned int longLongSize = IntegerType::sLongLongIntType.getSizeInBits();
-
-      switch (integerConstAST->suffix) {
-        case IntegerConstantAST::Suffix::None:
-          if (isBase10) {
-            if (!(n >> (intSize - 1))) {
-              mType = &IntegerType::sIntType;
-            } else if (!(n >> (longSize - 1))) {
-              mType = &IntegerType::sLongIntType;
-            } else {
-              mType = &IntegerType::sLongLongIntType;
-            }
-          } else {
-            if (!(n >> (intSize - 1))) {
-              mType = &IntegerType::sIntType;
-            } else if (!(n >> (intSize))) {
-              mType = &IntegerType::sUnsignedIntType;
-            } else if (!(n >> (longSize - 1))) {
-              mType = &IntegerType::sLongIntType;
-            } else if (!(n >> (longSize))) {
-              mType = &IntegerType::sUnsignedLongIntType;
-            } else {
-              mType =
-                  !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType
-                                             : &IntegerType::sUnsignedLongLongIntType;
-            }
-          }
-          break;
-        case IntegerConstantAST::Suffix::U:
-          if (!(n >> (intSize - 1))) {
-            mType = &IntegerType::sUnsignedIntType;
-          } else if (!(n >> (longSize - 1))) {
-            mType = &IntegerType::sUnsignedLongIntType;
-          } else {
-            mType = &IntegerType::sUnsignedLongLongIntType;
-          }
-          break;
-        case IntegerConstantAST::Suffix::L:
-          if (isBase10) {
-            if (!(n >> (longSize - 1))) {
-              mType = &IntegerType::sLongIntType;
-            } else {
-              mType = &IntegerType::sLongLongIntType;
-            }
-          } else {
-            if (!(n >> (longSize - 1))) {
-              mType = &IntegerType::sLongIntType;
-            } else if (!(n >> (longSize))) {
-              mType = &IntegerType::sUnsignedLongIntType;
-            } else {
-              mType =
-                  !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType
-                                             : &IntegerType::sUnsignedLongLongIntType;
-            }
-          }
-          break;
-        case IntegerConstantAST::Suffix::UL:
-          if (!(n >> (longSize - 1))) {
-            mType = &IntegerType::sUnsignedLongIntType;
-          } else {
-            mType = &IntegerType::sUnsignedLongLongIntType;
-          }
-          break;
-        case IntegerConstantAST::Suffix::LL:
-          if (isBase10) {
-            mType = &IntegerType::sLongLongIntType;
-          } else {
-            mType =
-                !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType : &IntegerType::sUnsignedLongLongIntType;
-          }
-          break;
-        case IntegerConstantAST::Suffix::ULL:mType = &IntegerType::sUnsignedLongLongIntType;
-          break;
-      }
-    }
-    case 2: {
-      auto *floatingConstAST = static_cast<FloatingConstantAST *>(ast.get());
-      switch (floatingConstAST->mSuffix) {
-        case FloatingConstantAST::Suffix::None:mType = &FloatingType::sDoubleType;
-          break;
-        case FloatingConstantAST::Suffix::F: mType = &FloatingType::sFloatType;
-          break;
-        case FloatingConstantAST::Suffix::L: mType = &FloatingType::sLongDoubleType;
-          break;
-      }
-      break;
-    }
-    case 3:mType = &IntegerType::sCharType;
-    case 4: {
-      auto *stringAST = static_cast<StringAST *>(ast.get());
-      mType = stringAST->mType.get();
-      mQualifiers.emplace(TypeQualifier::kCONST);
-      mLvalue = true;
-      break;
-    }
-    case 5: {
-      auto *exp = static_cast<ExpressionAST *>(ast.get());
-      mType = exp->mType;
-      mQualifiers = exp->mQualifiers;
-      mLvalue = exp->mLvalue;
-      break;
-    }
-    default:break;
-  }
-}
 AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>
                                                  conditional_expression)
     : AST(AST::Kind::ASSIGNMENT_EXPRESSION, 0), conditional_expression(std::move(conditional_expression)) {}
@@ -950,15 +816,15 @@ FloatingConstantAST::FloatingConstantAST(
     : AST(AST::Kind::FLOATING_CONSTANT), mToken(token) {
   std::string::size_type sz;
   try {
-    mValue = std::stof(this->mToken.getValue(), &sz);
+    value = std::stof(this->mToken.getValue(), &sz);
     const std::string &sub = this->mToken.getValue().substr(sz);
     if (sub.empty()) {
-      mSuffix = Suffix::None;
+      suffix = Suffix::None;
     } else if (sub.size() == 1) {
       if (sub[0] == 'f' || sub[0] == 'F') {
-        mSuffix = Suffix::F;
+        suffix = Suffix::F;
       } else if (sub[0] == 'l' || sub[0] == 'L') {
-        mSuffix = Suffix::L;
+        suffix = Suffix::L;
       } else {
         throw SemaException("cannot parse integer constant", token);
       }
@@ -1049,19 +915,18 @@ void EnumeratorListAST::print(int indent) {
 }
 std::vector<EnumConstSymbol *> EnumeratorListAST::codegen() {
   std::vector<EnumConstSymbol *> members;
-  int index = 0;
+  int64_t index = 0;
   for (auto &enumerator : enumerators) {
-    auto *symbol = enumerator->codegen(index);
+    auto *symbol = enumerator->codegen(nullptr, index);
     index = symbol->getIndex();
     members.push_back(symbol);
     ++index;
   }
   return members;
 }
-EnumeratorAST::EnumeratorAST(nt<IdentifierAST>
-                             id) : AST(AST::Kind::ENUMERATOR, 0), id(std::move(id)) {}
-EnumeratorAST::EnumeratorAST(nt<IdentifierAST>
-                             id, nt<ConstantExpressionAST>
+EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id) : AST(AST::Kind::ENUMERATOR, 0), id(std::move(id)) {}
+EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id,
+                             nt<ConstantExpressionAST>
                              constant_expression)
     : AST(AST::Kind::ENUMERATOR, 1), id(std::move(id)), constant_expression(std::move(constant_expression)) {}
 void EnumeratorAST::print(int indent) {
@@ -1072,7 +937,7 @@ void EnumeratorAST::print(int indent) {
     constant_expression->print(indent);
   }
 }
-EnumConstSymbol *EnumeratorAST::codegen(int index) {
+EnumConstSymbol *EnumeratorAST::codegen(const EnumerationType *enumerationType, int64_t index) {
   if (constant_expression) {
     auto value = constant_expression->codegen();
     if (!dynamic_cast<const IntegerType *>(value.type)) {
@@ -1083,7 +948,8 @@ EnumConstSymbol *EnumeratorAST::codegen(int index) {
       index = constInt->getSExtValue();
     }
   }
-  mSymbol = std::make_unique<EnumConstSymbol>(id->token, index);
+  llvm::ConstantInt *value = llvm::ConstantInt::get(sModule.getContext(), llvm::APInt(32, index, true));
+  mSymbol = std::make_unique<EnumConstSymbol>(enumerationType, id->token, value);
   return mSymbol.get();
 }
 InitializerAST::InitializerAST(nt<AssignmentExpressionAST>
@@ -1268,6 +1134,7 @@ StringAST::StringAST(
 }
 llvm::LLVMContext AST::sContext;
 llvm::Module AST::sModule("top", sContext);
+llvm::IRBuilder<> AST::sBuilder(sContext);
 AST::AST(AST::Kind
          kind, int
          id) : kind(kind), productionId(id) {}
@@ -1700,3 +1567,168 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const
   QualifiedType qualifiedType(mFunctionType.get(), {});
   return directDeclarator->codegen(storageSpecifier, qualifiedType);
 }
+void IdentifierPrimaryExpressionAST::print(int indent) {
+  PrimaryExpressionAST::print(indent);
+  identifier->print(++indent);
+}
+IExpression::Value IdentifierPrimaryExpressionAST::codegen() {
+  auto *symbol = sObjectTable->lookup(identifier->token);
+  QualifiedType qualifiedType;
+  bool lvalue = false;
+  llvm::Value *value;
+  if (auto *obj = dynamic_cast<ObjectSymbol *>(symbol)) {
+    qualifiedType = obj->getQualifiedType();
+    lvalue = true;
+    value = obj->getValue();
+  } else if (auto *enumeration = dynamic_cast<EnumConstSymbol *>(symbol)) {
+    qualifiedType = QualifiedType(enumeration->getType(), {TypeQualifier::kCONST});
+    value = enumeration->getValue();
+  } else {
+    throw SemaException("identifier as a primary expression must be object or function or enumeration const",
+                        identifier->token);
+  }
+  return Value(qualifiedType, lvalue, value);
+}
+IdentifierPrimaryExpressionAST::IdentifierPrimaryExpressionAST(nt<IdentifierAST> identifier) : identifier(std::move(identifier)) {}
+void IntegerConstantPrimaryExpressionAST::print(int indent) {
+  PrimaryExpressionAST::printIndent(indent);
+  integer_constant->print(++indent);
+}
+IExpression::Value IntegerConstantPrimaryExpressionAST::codegen() {
+  bool isBase10 = integer_constant->mToken.getValue()[0] != 0;
+  unsigned long long int n = integer_constant->value;
+
+  unsigned int intSize = IntegerType::sIntType.getSizeInBits();
+  unsigned int longSize = IntegerType::sLongIntType.getSizeInBits();
+  unsigned int longLongSize = IntegerType::sLongLongIntType.getSizeInBits();
+  const IntegerType *type;
+  switch (integer_constant->suffix) {
+    case IntegerConstantAST::Suffix::None:
+      if (isBase10) {
+        if (!(n >> (intSize - 1))) {
+          type = &IntegerType::sIntType;
+        } else if (!(n >> (longSize - 1))) {
+          type = &IntegerType::sLongIntType;
+        } else {
+          type = &IntegerType::sLongLongIntType;
+        }
+      } else {
+        if (!(n >> (intSize - 1))) {
+          type = &IntegerType::sIntType;
+        } else if (!(n >> (intSize))) {
+          type = &IntegerType::sUnsignedIntType;
+        } else if (!(n >> (longSize - 1))) {
+          type = &IntegerType::sLongIntType;
+        } else if (!(n >> (longSize))) {
+          type = &IntegerType::sUnsignedLongIntType;
+        } else {
+          type =
+              !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType
+                                         : &IntegerType::sUnsignedLongLongIntType;
+        }
+      }
+      break;
+    case IntegerConstantAST::Suffix::U:
+      if (!(n >> (intSize - 1))) {
+        type = &IntegerType::sUnsignedIntType;
+      } else if (!(n >> (longSize - 1))) {
+        type = &IntegerType::sUnsignedLongIntType;
+      } else {
+        type = &IntegerType::sUnsignedLongLongIntType;
+      }
+      break;
+    case IntegerConstantAST::Suffix::L:
+      if (isBase10) {
+        if (!(n >> (longSize - 1))) {
+          type = &IntegerType::sLongIntType;
+        } else {
+          type = &IntegerType::sLongLongIntType;
+        }
+      } else {
+        if (!(n >> (longSize - 1))) {
+          type = &IntegerType::sLongIntType;
+        } else if (!(n >> (longSize))) {
+          type = &IntegerType::sUnsignedLongIntType;
+        } else {
+          type =
+              !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType
+                                         : &IntegerType::sUnsignedLongLongIntType;
+        }
+      }
+      break;
+    case IntegerConstantAST::Suffix::UL:
+      if (!(n >> (longSize - 1))) {
+        type = &IntegerType::sUnsignedLongIntType;
+      } else {
+        type = &IntegerType::sUnsignedLongLongIntType;
+      }
+      break;
+    case IntegerConstantAST::Suffix::LL:
+      if (isBase10) {
+        type = &IntegerType::sLongLongIntType;
+      } else {
+        type =
+            !(n >> (longLongSize - 1)) ? &IntegerType::sLongLongIntType : &IntegerType::sUnsignedLongLongIntType;
+      }
+      break;
+    case IntegerConstantAST::Suffix::ULL:type = &IntegerType::sUnsignedLongLongIntType;
+      break;
+  }
+  return Value(QualifiedType(type, {TypeQualifier::kCONST}),
+               false,
+               llvm::ConstantInt::get(type->getLLVMType(sModule), type->getAPInt(n)));
+}
+IntegerConstantPrimaryExpressionAST::IntegerConstantPrimaryExpressionAST(nt<IntegerConstantAST> integer_constant) : integer_constant(std::move(
+    integer_constant)) {}
+void FloatingConstantPrimaryExpressionAST::print(int indent) {
+  PrimaryExpressionAST::printIndent(indent);
+  floating_constant->print(++indent);
+}
+IExpression::Value FloatingConstantPrimaryExpressionAST::codegen() {
+  const FloatingType *type;
+  switch (floating_constant->suffix) {
+    case FloatingConstantAST::Suffix::None:type = &FloatingType::sDoubleType;
+      break;
+    case FloatingConstantAST::Suffix::F: type = &FloatingType::sFloatType;
+      break;
+    case FloatingConstantAST::Suffix::L: type = &FloatingType::sLongDoubleType;
+      break;
+  }
+  return Value(QualifiedType(type, {TypeQualifier::kCONST}),
+               false,
+               llvm::ConstantFP::get(sModule.getContext(), type->getAPFloat(floating_constant->value)));
+}
+FloatingConstantPrimaryExpressionAST::FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST> floating_constant) : floating_constant(std::move(
+    floating_constant)) {}
+void CharacterConstantPrimaryExpressionAST::print(int indent) {
+  PrimaryExpressionAST::print(indent);
+  character_constant->print(++indent);
+}
+IExpression::Value CharacterConstantPrimaryExpressionAST::codegen() {
+  const IntegerType *type = &IntegerType::sCharType;
+  return Value(QualifiedType(type, {TypeQualifier::kCONST}),
+               false,
+               llvm::ConstantInt::get(type->getLLVMType(sModule),
+                                      type->getAPInt(static_cast<uint64_t>(character_constant->c))));
+}
+CharacterConstantPrimaryExpressionAST::CharacterConstantPrimaryExpressionAST(nt<CharacterConstantAST> character_constant)
+    : character_constant(std::move(
+    character_constant)) {}
+void StringPrimaryExpressionAST::print(int indent) {
+  PrimaryExpressionAST::print(indent);
+  string->print(++indent);
+}
+IExpression::Value StringPrimaryExpressionAST::codegen() {
+  return Value(QualifiedType(string->mType.get(), {TypeQualifier::kCONST}),
+               true,
+               sBuilder.CreateGlobalStringPtr(string->mToken.getValue()));
+}
+StringPrimaryExpressionAST::StringPrimaryExpressionAST(nt<StringAST> string) : string(std::move(string)) {}
+void ExpressionPrimaryExpressionAST::print(int indent) {
+  PrimaryExpressionAST::print(indent);
+  expression->print(++indent);
+}
+IExpression::Value ExpressionPrimaryExpressionAST::codegen() {
+  return expression->codegen();
+}
+ExpressionPrimaryExpressionAST::ExpressionPrimaryExpressionAST(nt<ExpressionAST> expression) : expression(std::move(expression)) {}

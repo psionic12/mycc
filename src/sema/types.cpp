@@ -11,22 +11,25 @@ bool Type::complete() const {
 unsigned int IntegerType::getSizeInBits() const {
   return mSizeInBits;
 }
-const IntegerType IntegerType::sCharType(8);
-const IntegerType IntegerType::sShortIntType(16);
-const IntegerType IntegerType::sIntType(32);
-const IntegerType IntegerType::sLongIntType(64);
-const IntegerType IntegerType::sLongLongIntType(64);
-const IntegerType IntegerType::sUnsignedCharType(8);
-const IntegerType IntegerType::sUnsignedShortIntType(16);
-const IntegerType IntegerType::sUnsignedIntType(32);
-const IntegerType IntegerType::sUnsignedLongIntType(64);
-const IntegerType IntegerType::sUnsignedLongLongIntType(64);
+const IntegerType IntegerType::sCharType(8, false);
+const IntegerType IntegerType::sShortIntType(16, true);
+const IntegerType IntegerType::sIntType(32, true);
+const IntegerType IntegerType::sLongIntType(64, true);
+const IntegerType IntegerType::sLongLongIntType(64, true);
+const IntegerType IntegerType::sUnsignedCharType(8, false);
+const IntegerType IntegerType::sUnsignedShortIntType(16, false);
+const IntegerType IntegerType::sUnsignedIntType(32, false);
+const IntegerType IntegerType::sUnsignedLongIntType(64, false);
+const IntegerType IntegerType::sUnsignedLongLongIntType(64, false);
 bool IntegerType::compatible(const Type *type) const {
   return dynamic_cast<const IntegerType *>(type) || dynamic_cast<const FloatingType *>(type);
 }
-IntegerType::IntegerType(unsigned int mSizeInBits) : mSizeInBits(mSizeInBits) {}
+IntegerType::IntegerType(unsigned int mSizeInBits, bool bSigned) : mSizeInBits(mSizeInBits), mSigned(bSigned) {}
 llvm::IntegerType *IntegerType::getLLVMType(llvm::Module &module) const {
   return llvm::IntegerType::get(module.getContext(), mSizeInBits);
+}
+llvm::APInt IntegerType::getAPInt(uint64_t value) const {
+  return llvm::APInt(mSizeInBits, value, mSigned);
 }
 bool FloatingType::compatible(const Type *type) const {
   return dynamic_cast<const IntegerType *>(type) || dynamic_cast<const FloatingType *>(type);
@@ -46,6 +49,14 @@ llvm::Type *FloatingType::getLLVMType(llvm::Module &module) const {
 }
 unsigned int FloatingType::getSizeInBits() const {
   return mSizeInBits;
+}
+llvm::APFloat FloatingType::getAPFloat(long double n) const {
+  if (this == &sFloatType) {
+    return llvm::APFloat(static_cast<float>(n));
+  } else {
+    return llvm::APFloat(static_cast<double>(n));
+  }
+  //TODO implement long double
 }
 FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg)
     : mReturnType(std::move(returnType)), mParameters(parameters), mVarArg(varArg), mPointerType(this) {}
@@ -125,8 +136,8 @@ void StructType::setBody(SymbolTable &&table, llvm::Module &module) {
   std::vector<llvm::Type *> fields;
   for (const auto &pair : mTable) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
-      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getType())) {
-        fields.push_back(obj->getType()->getLLVMType(module));
+      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
+        fields.push_back(obj->getQualifiedType().getType()->getLLVMType(module));
         mSizeInBits += type->getSizeInBits();
       }
     }
@@ -145,8 +156,8 @@ void UnionType::setBody(SymbolTable &&table, llvm::Module &module) {
   std::vector<llvm::Type *> fields;
   for (const auto &pair : mTable) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
-      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getType())) {
-        fields.push_back(obj->getType()->getLLVMType(module));
+      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
+        fields.push_back(obj->getQualifiedType().getType()->getLLVMType(module));
         auto size = type->getSizeInBits();
         mSizeInBits = mSizeInBits > size ? size : mSizeInBits;
       }

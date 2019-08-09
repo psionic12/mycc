@@ -12,6 +12,7 @@
 #include <llvm/IR/Module.h>
 #include "types.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Value.h"
 #include "qualifiedType.h"
 #include "symbol_tables.h"
@@ -93,7 +94,7 @@ class AST {
   }
   virtual const char *toString();
   virtual void print(int indent = 0);
-  void printIndent(int indent);
+  virtual void printIndent(int indent);
   std::pair<const Token &, const Token &> involvedTokens();
   virtual ~AST() = default;
   const Token *mLeftMost;
@@ -105,6 +106,7 @@ class AST {
  protected:
   static llvm::LLVMContext sContext;
   static llvm::Module sModule;
+  static llvm::IRBuilder<> sBuilder;
   SymbolTable *sObjectTable;
   SymbolTable *sTagTable;
   SymbolTable *sLabelTable;
@@ -164,11 +166,12 @@ class IExpression {
  public:
   class Value {
    public:
-    const Type *type;
-    llvm::Value *const value;
+    Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
+        : qualifiedType(std::move(qualifiedType)), lvalue(lvalue), value(value) {}
+    const QualifiedType qualifiedType;
+    bool lvalue = false;
+    const llvm::Value *const value = nullptr;
   };
-  QualifiedType qualifiedType;
-  bool mLvalue = false;
   virtual Value codegen() = 0;
 };
 class StringAST : public AST {
@@ -278,7 +281,7 @@ class EnumeratorAST : public AST {
   const nt<IdentifierAST> id;
   const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
-  EnumConstSymbol * codegen(int index);
+  EnumConstSymbol *codegen(const EnumerationType *enumerationType, int64_t index);
  private:
   std::unique_ptr<EnumConstSymbol> mSymbol;
 };
@@ -295,7 +298,7 @@ class ParameterDeclarationAST : public AST {
   const nt<DeclarationSpecifiersAST> declaration_specifiers;
   nt<DeclaratorAST> declarator;
   void print(int indent) override;
-  ISymbol * codegen();
+  ISymbol *codegen();
 };
 class ParameterListAST : public AST {
  public:
@@ -319,8 +322,9 @@ class FloatingConstantAST : public AST {
     L,
   };
   const Token &mToken;
-  double mValue;
-  Suffix mSuffix;
+  //TODO use APFloat
+  long double value;
+  Suffix suffix;
   void print(int indent) override;
 };
 class CharacterConstantAST : public AST {
@@ -341,6 +345,7 @@ class IntegerConstantAST : public AST {
     ULL,
   };
   const Token &mToken;
+  //TODO use APInt
   unsigned long long value;
   Suffix suffix;
   void print(int indent) override;
@@ -359,16 +364,57 @@ class AssignmentExpressionAST : public AST, public IExpression {
 };
 class PrimaryExpressionAST : public AST, public IExpression {
  public:
-  PrimaryExpressionAST(nt<IdentifierAST>);
-  PrimaryExpressionAST(nt<IntegerConstantAST>);
-  PrimaryExpressionAST(nt<FloatingConstantAST>);
-  PrimaryExpressionAST(nt<CharacterConstantAST>);
-  PrimaryExpressionAST(nt<StringAST>);
-  PrimaryExpressionAST(nt<ExpressionAST>);
-  const nt<AST> ast;
+  PrimaryExpressionAST() : AST(Kind::PRIMARY_EXPRESSION) {}
+};
+
+class IdentifierPrimaryExpressionAST : public PrimaryExpressionAST {
+ public:
+  IdentifierPrimaryExpressionAST(nt<IdentifierAST> identifier);
+  const nt<IdentifierAST> identifier;
   void print(int indent) override;
   Value codegen() override;
 };
+
+class IntegerConstantPrimaryExpressionAST : public PrimaryExpressionAST {
+ public:
+  IntegerConstantPrimaryExpressionAST(nt<IntegerConstantAST> integer_constant);
+  nt<IntegerConstantAST> integer_constant;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class FloatingConstantPrimaryExpressionAST : public PrimaryExpressionAST {
+ public:
+  FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST> floating_constant);
+  nt<FloatingConstantAST> floating_constant;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class CharacterConstantPrimaryExpressionAST : public PrimaryExpressionAST {
+ public:
+  CharacterConstantPrimaryExpressionAST(nt<CharacterConstantAST> character_constant);
+  nt<CharacterConstantAST> character_constant;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class StringPrimaryExpressionAST : public PrimaryExpressionAST {
+ public:
+  StringPrimaryExpressionAST(nt<StringAST> string);
+  nt<StringAST> string;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
+class ExpressionPrimaryExpressionAST : public PrimaryExpressionAST {
+ public:
+  ExpressionPrimaryExpressionAST(nt<ExpressionAST> expression);
+  nt<ExpressionAST> expression;
+  void print(int indent) override;
+  Value codegen() override;
+};
+
 class ArgumentExpressionList : public AST, public IExpression {
  public:
   ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList);

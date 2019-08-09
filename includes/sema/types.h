@@ -27,7 +27,6 @@ class ObjectType : public Type {
 
 class IntegerType : public ObjectType {
  public:
-  IntegerType(unsigned int mSizeInBits);
   unsigned int getSizeInBits() const;
   bool compatible(const Type *type) const override;
   static const IntegerType sCharType;
@@ -41,20 +40,24 @@ class IntegerType : public ObjectType {
   static const IntegerType sUnsignedLongIntType;
   static const IntegerType sUnsignedLongLongIntType;
   llvm::IntegerType *getLLVMType(llvm::Module &module) const override;
+  llvm::APInt getAPInt(uint64_t value) const;
  private:
+  IntegerType(unsigned int mSizeInBits, bool bSigned);
   unsigned int mSizeInBits;
+  bool mSigned;
 };
 
 class FloatingType : public ObjectType {
  public:
-  FloatingType(unsigned int mSizeInBits);
   bool compatible(const Type *type) const override;
   static const FloatingType sFloatType;
   static const FloatingType sDoubleType;
   static const FloatingType sLongDoubleType;
   llvm::Type *getLLVMType(llvm::Module &module) const override;
   unsigned int getSizeInBits() const override;
+  llvm::APFloat getAPFloat(long double) const;
  private:
+  FloatingType(unsigned int mSizeInBits);
   unsigned int mSizeInBits;
 };
 
