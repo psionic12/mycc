@@ -170,7 +170,7 @@ class IExpression {
         : qualifiedType(std::move(qualifiedType)), lvalue(lvalue), value(value) {}
     const QualifiedType qualifiedType;
     bool lvalue = false;
-    const llvm::Value *const value = nullptr;
+    llvm::Value *value = nullptr;
   };
   virtual Value codegen() = 0;
 };
@@ -415,11 +415,12 @@ class ExpressionPrimaryExpressionAST : public PrimaryExpressionAST {
   Value codegen() override;
 };
 
-class ArgumentExpressionList : public AST, public IExpression {
+class ArgumentExpressionList : public AST{
  public:
   ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList);
   void print(int indent) override;
-  const nts<AssignmentExpressionAST> mArgumentList;
+  const nts<AssignmentExpressionAST> argumentsList;
+  std::vector<IExpression::Value> codegen();
 };
 class PostfixExpressionAST : public AST, public IExpression {
  public:
@@ -452,7 +453,7 @@ class FunctionPostfixExpressionAST : public PostfixExpressionAST {
   nt<PostfixExpressionAST> postfix_expression;
   nt<ArgumentExpressionList> argument_expression_list;
   void print(int indent) override;
-  Value codegen() override;
+  Value codegen();
 };
 
 class MemberPostfixExpressionAST : public PostfixExpressionAST {

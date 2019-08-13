@@ -62,7 +62,7 @@ FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> 
     : mReturnType(std::move(returnType)),
       mParameters(parameters),
       mVarArg(varArg),
-      mPointerType(QualifiedType(this, {}) {}
+      mPointerType(QualifiedType(this, {})) {}
 QualifiedType FunctionType::getReturnType() const {
   return mReturnType;
 }

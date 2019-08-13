@@ -651,11 +651,11 @@ IExpression::Value PostfixExpressionAST::codegen() {
         throw SemaException("return type cannot be function type", postfix->involvedTokens());
       }
       auto *arguments = static_cast<ArgumentExpressionList *>(right.get());
-      if (tFunction->getParameters().size() != arguments->mArgumentList.size()) {
+      if (tFunction->getParameters().size() != arguments->argumentsList.size()) {
         throw SemaException("arguments do not match function proto type", postfix->involvedTokens());
       }
       auto para = tFunction->getParameters().begin();
-      auto arg = arguments->mArgumentList.begin();
+      auto arg = arguments->argumentsList.begin();
       while (para != tFunction->getParameters().end()) {
         (*arg)->codegen();
         auto *argType = dynamic_cast<const ObjectType *>((*arg)->mType);
@@ -1237,13 +1237,19 @@ void IntegerConstantAST::print(int indent) {
 void ArgumentExpressionList::print(int indent) {
   AST::print(indent);
   ++indent;
-  for (const auto &argument : mArgumentList) {
+  for (const auto &argument : argumentsList) {
     argument->print(indent);
   }
 }
 ArgumentExpressionList::ArgumentExpressionList(nts<AssignmentExpressionAST>
                                                argumentList)
-    : AST(AST::Kind::ARGUMENT_EXPRESSION_LIST), mArgumentList(std::move(argumentList)) {}
+    : AST(AST::Kind::ARGUMENT_EXPRESSION_LIST), argumentsList(std::move(argumentList)) {}
+std::vector<IExpression::Value> ArgumentExpressionList::codegen() {
+  std::vector<IExpression::Value> arguments;
+  for (const auto &argument : argumentsList) {
+    argument->codegen();
+  }
+}
 TypeSpecifiersAST::TypeSpecifiersAST(CombinationKind
                                      kind, nts<TypeSpecifierAST>
                                      specifiers)
@@ -1484,7 +1490,7 @@ ISymbol *ArrayDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const Qu
   int64_t size = 0;
   if (constantExpression) {
     auto value = constantExpression->codegen();
-    if (!dynamic_cast<const IntegerType *>(value.type)) {
+    if (!dynamic_cast<const IntegerType *>(value.qualifiedType.getType())) {
       throw SemaException("the expression shall have an integer type", constantExpression->involvedTokens());
     } else {
       auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(value.value);
@@ -1729,24 +1735,31 @@ IExpression::Value ArrayPostfixExpressionAST::codegen() {
   }
 
   llvm::Value *value = nullptr;
-  if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(rhs.value)) {
-    auto index = constantInt->getSExtValue();
-    if (index < 0) {
-      //TODO Warning index is before 0
-      value = nullptr;
-    } else if (const auto *globalVariable = llvm::dyn_cast<llvm::GlobalVariable>(lhs.value)) {
-      if (globalVariable->hasInitializer()) {
-        if (const auto *constantArray = llvm::dyn_cast<llvm::ConstantArray>(globalVariable->getInitializer())) {
-          value = constantArray->getAggregateElement(index);
-        }
+  auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(rhs.value);
+  auto index = constantInt->getSExtValue();
+  if (index < 0) {
+    //TODO Warning index is before 0
+    value = nullptr;
+  } else if (const auto *globalVariable = llvm::dyn_cast<llvm::GlobalVariable>(lhs.value)) {
+    if (globalVariable->hasInitializer()) {
+      if (const auto *constantArray = llvm::dyn_cast<llvm::ConstantArray>(globalVariable->getInitializer())) {
+        value = constantArray->getAggregateElement(constantInt);
       }
     }
-
   }
 
-  mLvalue = true;
+  if (!value) {
+    if (sObjectTable->getScopeKind() == ScopeKind::BLOCK) {
+      llvm::BasicBlock *basicBlock = sObjectTable->getBasicBlock();
+      value = sBuilder.CreateGEP(lhs.qualifiedType.getType()->getLLVMType(sModule),
+                                 lhs.value,
+                                 constantInt);
+    } else {
+      throw std::runtime_error("WTF: array position query in other scope? we may need global constructor here");
+    }
+  }
 
-  return QualifiedType(tObject,);
+  return Value(tPointer->getReferencedQualifiedType(), true, value);
 }
 void FunctionPostfixExpressionAST::print(int indent) {
   AST::print(indent);
@@ -1754,11 +1767,85 @@ void FunctionPostfixExpressionAST::print(int indent) {
   postfix_expression->print(indent);
   argument_expression_list->print(indent);
 }
+IExpression::Value FunctionPostfixExpressionAST::codegen() {
+  //6.5.2.2 Function calls
+  Value lhs = postfix_expression->codegen();
+  auto *p = dynamic_cast<const PointerType *>(lhs.qualifiedType.getType());
+  if (!p) {
+    throw SemaException("The expression that denotes the called function92) shall have type pointer to function",
+                        postfix_expression->involvedTokens());
+  }
+  auto *tFunction = dynamic_cast<const FunctionType *>(p->getReferencedType());
+  if (!tFunction) {
+    throw SemaException("left side must be a function type", postfix_expression->involvedTokens());
+  }
+  auto returnType = tFunction->getReturnType();
+  if (dynamic_cast<const ArrayType *>(returnType.getType())) {
+    throw SemaException("return type cannot be array type", postfix_expression->involvedTokens());
+  }
+  if (dynamic_cast<const FunctionType *>(returnType.getType())) {
+    throw SemaException("return type cannot be function type", postfix_expression->involvedTokens());
+  }
+  const auto &arguments = argument_expression_list->codegen();
+  if (tFunction->getParameters().size() != arguments.size()) {
+    throw SemaException("arguments do not match function proto type", postfix_expression->involvedTokens());
+  }
+  auto para = tFunction->getParameters().begin();
+  auto arg = arguments.begin();
+  std::vector<llvm::Value *> argumentValues;
+  while (para != tFunction->getParameters().end()) {
+    auto *argType = dynamic_cast<const ObjectType *>(arg->qualifiedType.getType());
+    if (!argType) {
+      throw SemaException("arguments must be object type", postfix_expression->involvedTokens());
+    }
+    if (!argType->complete()) {
+      throw SemaException("arguments must be completed type", postfix_expression->involvedTokens());
+    }
+    if (!argType->compatible(para->getType())) {
+      throw SemaException("arguments do not match function proto type", postfix_expression->involvedTokens());
+    }
+    argumentValues.push_back(arg->value);
+    ++para;
+    ++arg;
+  }
+  return Value(tFunction->getReturnType(), false, sBuilder.CreateCall(lhs.value, argumentValues));
+}
 void MemberPostfixExpressionAST::print(int indent) {
   AST::print(indent);
   ++indent;
   postfix_expression->print(indent);
   identifier->print(indent);
+}
+IExpression::Value MemberPostfixExpressionAST::codegen() {
+  //6.5.2.3 Structure and union members
+  Value lhs = postfix_expression->codegen();
+  const CompoundType *tCompoundType;
+  if (getProduction() == 3) {
+    if (!dynamic_cast<const StructType *>(postfix_expression->mType) && !dynamic_cast<const UnionType *>(postfix_expression->mType)) {
+      throw SemaException("left side must be a struct type or union type", postfix_expression->involvedTokens());
+    } else {
+      tCompoundType = dynamic_cast<const CompoundType *>(postfix_expression->mType);
+    }
+  } else {
+    if (const auto *p = dynamic_cast<const PointerType *>(postfix_expression->mType)) {
+      if (!dynamic_cast<const StructType *>(p->getReferencedType())
+          && !dynamic_cast<const UnionType *>(p->getReferencedType())) {
+        throw SemaException("left side must be a pointer to a struct type or union type",
+                            postfix_expression->involvedTokens());
+      } else {
+        tCompoundType = dynamic_cast<const CompoundType *>(p->getReferencedType());
+      }
+    } else {
+      throw SemaException("left side must be a pointer type", postfix_expression->involvedTokens());
+    }
+  }
+  auto *id = static_cast<IdentifierAST *>(right.get());
+  const std::string &memberName = id->token.getValue();
+  // TODO check if not a member
+  mLvalue = postfix_expression->mLvalue;
+  mQualifiers.insert(postfix_expression->mQualifiers.begin(), postfix_expression->mQualifiers.end());
+  mLvalue = postfix_expression->mLvalue;
+  return PostfixExpressionAST::codegen();
 }
 void PointerMemberPostfixExpressionAST::print(int indent) {
   AST::print(indent);
