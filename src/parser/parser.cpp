@@ -4,7 +4,7 @@
 #include <tokens/specifier_combination.h>
 Parser::Parser(std::ifstream &ifstream, SymbolTables &symbolTables)
     : in(ifstream), lex(ifstream), symbolTables(symbolTables) {
-  table = symbolTables.createTable(ScopeKind::FILE, nullptr);
+  table = symbolTables.createTable(ScopeKind::FILE);
 }
 bool Parser::expect(TokenKind kind) {
   TokenKind peekKind = lex.peek().getKind();
@@ -102,7 +102,7 @@ Parser::parseTranslationUnit() {
   while (lex.peek() != TokenKind::TOKEN_EOF) {
     declarations.push_back(parseExternalDeclaration());
   }
-  auto *tagTable = symbolTables.createTable(ScopeKind::FILE, nullptr);
+  auto *tagTable = symbolTables.createTable(ScopeKind::FILE);
   //remove all typedef symbol's which is used only in parser
   symbolTables.clear();
   return make_ast<TranslationUnitAST>(std::move(declarations), *table, *tagTable);
@@ -131,7 +131,7 @@ nt<ExternalDeclarationAST> Parser::parseExternalDeclaration() {
     // has <declaration> or next token is a '{', this is a function definition
     if (!declarations.empty() || lex.peek() == TokenKind::TOKEN_LBRACE) {
       auto declarator = std::move(init_declarators.back().first);
-      auto *labelTable = symbolTables.createTable(ScopeKind::LABEL, nullptr);
+      auto *labelTable = symbolTables.createTable(ScopeKind::LABEL);
       auto function_definition = make_ast<FunctionDefinitionAST>(std::move(specifiers),
                                                                  std::move(declarator),
                                                                  std::move(declarations),
@@ -328,30 +328,30 @@ nt<PrimaryExpressionAST> Parser::parsePrimaryExpression() {
   mStartToken = &lex.peek();
   TokenKind kind = lex.peek().getKind();
   switch (kind) {
-    case TokenKind::TOKEN_IDENTIFIER:return make_ast<PrimaryExpressionAST>(parseIdentifier());
+    case TokenKind::TOKEN_IDENTIFIER:return make_ast<IdentifierPrimaryExpressionAST>(parseIdentifier());
     case TokenKind::TOKEN_INT_CONSTANT: {
-      auto c = make_ast<PrimaryExpressionAST>(make_ast<IntegerConstantAST>(lex.peek()));
+      auto c = make_ast<IntegerConstantPrimaryExpressionAST>(make_ast<IntegerConstantAST>(lex.peek()));
       lex.consumeToken();
       return c;
     }
     case TokenKind::TOKEN_FLOAT_CONSTANT: {
-      auto c = make_ast<PrimaryExpressionAST>(make_ast<FloatingConstantAST>(lex.peek()));
+      auto c = make_ast<FloatingConstantPrimaryExpressionAST>(make_ast<FloatingConstantAST>(lex.peek()));
       lex.consumeToken();
       return c;
     }
     case TokenKind::TOKEN_CHARLITERAL: {
-      auto c = make_ast<PrimaryExpressionAST>(make_ast<CharacterConstantAST>(lex.peek()));
+      auto c = make_ast<CharacterConstantPrimaryExpressionAST>(make_ast<CharacterConstantAST>(lex.peek()));
       lex.consumeToken();
       return c;
     }
     case TokenKind::TOKEN_STRINGLITERAL: {
-      auto c = make_ast<PrimaryExpressionAST>(make_ast<StringAST>(lex.peek()));
+      auto c = make_ast<StringPrimaryExpressionAST>(make_ast<StringAST>(lex.peek()));
       lex.consumeToken();
       return c;
     }
     case TokenKind::TOKEN_LPAREN: {
       lex.consumeToken();
-      auto c = make_ast<PrimaryExpressionAST>(parseExpression());
+      auto c = make_ast<ExpressionPrimaryExpressionAST>(parseExpression());
       accept(TokenKind::TOKEN_RPAREN);
       return c;
     }
@@ -724,7 +724,7 @@ nt<ParameterTypeListAST> Parser::parseParameterTypeList() {
 ///                   | <parameter-list> , <parameter-declaration>
 nt<ParameterListAST> Parser::parseParameterList() {
   mStartToken = &lex.peek();
-  SymbolScope s(table, symbolTables.createTable(ScopeKind::FUNCTION_PROTOTYPE, table));
+  SymbolScope s(table, symbolTables.createTable(ScopeKind::FUNCTION_PROTOTYPE));
   nts<ParameterDeclarationAST> decls;
   do {
     decls.emplace_back(parseParameterDeclaration());
@@ -965,7 +965,7 @@ nt<InitializerListAST> Parser::parseInitializerList() {
 ///<compound-statement> ::= { {<declaration>}* {<statement>}* }
 nt<CompoundStatementAST> Parser::parseCompoundStatement() {
   mStartToken = &lex.peek();
-  SymbolScope s(table, symbolTables.createTable(ScopeKind::BLOCK, table));
+  SymbolScope s(table, symbolTables.createTable(ScopeKind::BLOCK));
   accept(TokenKind::TOKEN_LBRACE);
   auto declarations = parseDeclarations();
 
@@ -974,7 +974,7 @@ nt<CompoundStatementAST> Parser::parseCompoundStatement() {
     statements.push_back(parseStatement());
   }
   accept(TokenKind::TOKEN_RBRACE);
-  auto *tagTable = symbolTables.createTable(ScopeKind::BLOCK, nullptr);
+  auto *tagTable = symbolTables.createTable(ScopeKind::BLOCK);
   return make_ast<CompoundStatementAST>(std::move(declarations), std::move(statements), *table, *tagTable);
 }
 
@@ -1184,11 +1184,11 @@ nt<CastExpressionAST> Parser::parseCastExpression() {
 nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
   mStartToken = &lex.peek();
   if (expect(TokenKind::TOKEN_PLUSPLUS)) {
-    return make_ast<UnaryExpressionAST>(parseUnaryExpression(), UnaryExpressionAST::PrefixType::PLUSPLUS);
+    return make_ast<PrefixIncrementExpressionAST>(parseUnaryExpression());
   } else if (expect(TokenKind::TOKEN_SUBSUB)) {
-    return make_ast<UnaryExpressionAST>(parseUnaryExpression(), UnaryExpressionAST::PrefixType::SUBSUB);
+    return make_ast<PrefixDecrementExpressionAST>(parseUnaryExpression());
   } else if (expect(TokenKind::TOKEN_SIZEOF)) {
-    return make_ast<UnaryExpressionAST>(parseUnaryExpression(), UnaryExpressionAST::PrefixType::SIZE_OF);
+    return make_ast<SizeofUnaryExpressionAST>(parseUnaryExpression());
   } else if (lex.peek() == TokenKind::TOKEN_BANG
       || lex.peek() == TokenKind::TOKEN_AMP
       || lex.peek() == TokenKind::TOKEN_STAR
@@ -1196,7 +1196,7 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
       || lex.peek() == TokenKind::TOKEN_SUB
       || lex.peek() == TokenKind::TOKEN_TILDE) {
     auto uo = parseUnaryOperator();
-    return make_ast<UnaryExpressionAST>(uo, parseCastExpression());
+    return make_ast<UnaryOperatorExpressionAST>(uo, parseCastExpression());
   } else {
     return make_ast<UnaryExpressionAST>(parsePostfixExpression());
   }
@@ -1215,7 +1215,7 @@ nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
   while (true) {
     switch (lex.peek().getKind()) {
       case TokenKind::TOKEN_LBRACKET:lex.consumeToken();
-        p = make_ast<PostfixExpressionAST>(std::move(p), parseExpression());
+        p = make_ast<ArrayPostfixExpressionAST>(std::move(p), parseExpression());
         accept(TokenKind::TOKEN_RBRACKET);
         continue;
       case TokenKind::TOKEN_LPAREN: {
@@ -1225,26 +1225,22 @@ nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
           arguments.emplace_back(parseAssignmentExpression());
         } while (expect(TokenKind::TOKEN_COMMA));
 
-        p = make_ast<PostfixExpressionAST>(std::move(p),
-                                           make_ast<ArgumentExpressionList>(std::move(arguments)));
+        p = make_ast<FunctionPostfixExpressionAST>(std::move(p),
+                                                   make_ast<ArgumentExpressionList>(std::move(arguments)));
         accept(TokenKind::TOKEN_RPAREN);
         continue;
       }
       case TokenKind::TOKEN_DOT:lex.consumeToken();
-        p = make_ast<PostfixExpressionAST>(std::move(p),
-                                           PostfixExpressionAST::identifierOperator::DOT,
-                                           parseIdentifier());
+        p = make_ast<MemberPostfixExpressionAST>(std::move(p), parseIdentifier());
         continue;
       case TokenKind::TOKEN_ARROW:lex.consumeToken();
-        p = make_ast<PostfixExpressionAST>(std::move(p),
-                                           PostfixExpressionAST::identifierOperator::ARROW,
-                                           parseIdentifier());
+        p = make_ast<PointerMemberPostfixExpressionAST>(std::move(p), parseIdentifier());
         continue;
       case TokenKind::TOKEN_PLUSPLUS:lex.consumeToken();
-        p = make_ast<PostfixExpressionAST>(std::move(p), PostfixExpressionAST::Xcrement::PLUSPLUS);
+        p = make_ast<IncrementPostfixExpression>(std::move(p));
         continue;
       case TokenKind::TOKEN_SUBSUB:lex.consumeToken();
-        p = make_ast<PostfixExpressionAST>(std::move(p), PostfixExpressionAST::Xcrement::MINMIN);
+        p = make_ast<DecrementPostfixExpression>(std::move(p));
         continue;
       default:break;
     }

@@ -36,6 +36,11 @@ class QualifiedType {
   QualifiedType() = default;
   const Type *getType() const;
   const std::set<TypeQualifier> &getQualifiers() const;
+  const bool contains(TypeQualifier qualifier) const;
+  void addQualifier(TypeQualifier typeQualifier);
+  void addQualifiers(const std::set<TypeQualifier> &typeQualifers);
+  bool isConst() const;
+  bool isVolatile() const;
   QualifiedType(const Type *type, std::set<TypeQualifier> qualifiers);
   bool operator==(const QualifiedType &qualifiedType) const;
   bool operator!=(const QualifiedType &qualifiedType) const;
@@ -53,5 +58,20 @@ bool QualifiedType::operator==(const QualifiedType &qualifiedType) const {
 }
 bool QualifiedType::operator!=(const QualifiedType &qualifiedType) const {
   return !operator==(qualifiedType);
+}
+void QualifiedType::addQualifier(TypeQualifier typeQualifier) {
+  mQualifiers.emplace(typeQualifier);
+}
+void QualifiedType::addQualifiers(const std::set<TypeQualifier> &typeQualifers) {
+  mQualifiers.insert(typeQualifers.begin(), typeQualifers.end());
+}
+const bool QualifiedType::contains(TypeQualifier qualifier) const {
+  return mQualifiers.find(qualifier) != mQualifiers.end();
+}
+bool QualifiedType::isVolatile() const {
+  return contains(TypeQualifier::kVOLATILE);
+}
+bool QualifiedType::isConst() const {
+  return contains(TypeQualifier::kCONST);
 }
 #endif //MYCCPILER_QUALIFIEDTYPE_H

@@ -110,13 +110,16 @@ class ArrayType : public ObjectType {
 class CompoundType : public ObjectType {
  public:
   CompoundType();
+  CompoundType(std::string tagName);
   bool complete() const override;
   unsigned int getSizeInBits() const override;
   SymbolTable mTable;
   virtual void setBody(SymbolTable &&table, llvm::Module &module) = 0;
+  const std::string &getTagName() const;
  protected:
   bool mComplete;
   unsigned mSizeInBits;
+  std::string mTagName;
 };
 
 class StructType : public CompoundType {

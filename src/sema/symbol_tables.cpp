@@ -1,7 +1,7 @@
 #include <sema/symbol_tables.h>
 #include <sema/ast.h>
 #include <llvm/IR/IRBuilder.h>
-ISymbol *SymbolTable::lookup(const Token &token) {
+ISymbol *SymbolTable::lookup(const Token &token) const {
   try {
     return at(token.getValue());
   } catch (const std::out_of_range &) {
@@ -35,7 +35,7 @@ SymbolTable *SymbolTable::getFather() const {
 ScopeKind SymbolTable::getScopeKind() const {
   return mScopeKind;
 }
-SymbolTable *SymbolTables::createTable(ScopeKind kind, SymbolTable *father) {
-  tables.emplace_back(kind, father);
+SymbolTable *SymbolTables::createTable(ScopeKind kind) {
+  tables.emplace_back(kind);
   return &tables.back();
 }

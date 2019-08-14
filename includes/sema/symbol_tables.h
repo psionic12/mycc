@@ -92,7 +92,14 @@ class ObjectSymbol : public ISymbol {
   const QualifiedType &getQualifiedType() const {
     return mQualifiedType;
   }
+  unsigned getIndex() const {
+    return mIndex;
+  }
+  void setIndex(unsigned int index) {
+    mIndex = index;
+  }
  private:
+  unsigned int mIndex;
   QualifiedType mQualifiedType;
   llvm::Value *mValue;
 };
@@ -128,16 +135,12 @@ class TagSymbol : public ISymbol {
   CompoundType *getTagType() {
     return mCompoundType.get();
   }
+  llvm::Value *getValue() override {
+    return nullptr;
+  }
  private:
   std::unique_ptr<CompoundType> mCompoundType;
 };
-
-//class MemberSymbol : public ISymbol {
-// public:
-//  SymbolKind getKind() const override {
-//    return SymbolKind::MEMBER;
-//  }
-//};
 
 class TypedefSymbol : public ISymbol {
  public:
@@ -180,6 +183,9 @@ class EnumConstSymbol : public ISymbol {
   int64_t getIndex() const {
     return mIndex->getSExtValue();
   }
+  llvm::Value *getValue() override {
+    return mIndex;
+  }
  private:
   EnumerationType *mEnumType;
   llvm::ConstantInt *mIndex;
@@ -187,9 +193,8 @@ class EnumConstSymbol : public ISymbol {
 
 class SymbolTable : public std::map<std::string, ISymbol *> {
  public:
-  SymbolTable(ScopeKind kind, llvm::BasicBlock *basicBlock = nullptr)
-      : mScopeKind(kind), mBasicBlock(basicBlock) {}
-  ISymbol *lookup(const Token &token);
+  SymbolTable(ScopeKind kind) : mScopeKind(kind) {}
+  ISymbol *lookup(const Token &token) const;
   ISymbol *insert(const Token &token, ISymbol *symbol);
   ISymbol *insert(ISymbol *symbol);
   // TODO move this to parser
@@ -197,14 +202,10 @@ class SymbolTable : public std::map<std::string, ISymbol *> {
   void setFather(SymbolTable *father);
   SymbolTable *getFather() const;
   ScopeKind getScopeKind() const;
-  llvm::BasicBlock *getBasicBlock() {
-    return mBasicBlock;
-  }
  protected:
   ScopeKind mScopeKind;
   SymbolTable *mFather;
   int mAnonymousId = 0;
-  llvm::BasicBlock *mBasicBlock;
 };
 void ISymbol::setLinkage(Linkage linkage) {
   ISymbol::linkage = linkage;
@@ -215,7 +216,7 @@ Linkage ISymbol::getLinkage() const {
 
 class SymbolTables {
  public:
-  SymbolTable *createTable(ScopeKind kind, SymbolTable *father);
+  SymbolTable *createTable(ScopeKind kind);
   void clear() {
     for (auto &table: tables) {
       table.clear();
@@ -229,8 +230,7 @@ class SymbolScope {
  public:
   SymbolScope(SymbolTable *&outter, SymbolTable *inner) : outter(outter), outter_valule(outter) {
     outter = inner;
-    if (!inner->getFather())
-      inner->setFather(outter);
+    inner->setFather(outter);
   }
   ~SymbolScope() {
     outter = outter_valule;

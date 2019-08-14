@@ -191,6 +191,7 @@ class TypedefNameAST : public AST {
   TypedefNameAST(nt<IdentifierAST> identifier);
   const nt<IdentifierAST> id;
   void print(int indent) override;
+  QualifiedType codegen();
 };
 class TypeQualifierAST : public AST {
  public:
@@ -415,7 +416,7 @@ class ExpressionPrimaryExpressionAST : public PrimaryExpressionAST {
   Value codegen() override;
 };
 
-class ArgumentExpressionList : public AST{
+class ArgumentExpressionList : public AST {
  public:
   ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList);
   void print(int indent) override;
@@ -425,7 +426,6 @@ class ArgumentExpressionList : public AST{
 class PostfixExpressionAST : public AST, public IExpression {
  public:
   PostfixExpressionAST() : AST(Kind::POSTFIX_EXPRESSION) {}
-  Value codegen() override;
 };
 
 class SimplePostfixExpressionAST : public PostfixExpressionAST {
@@ -503,23 +503,60 @@ class TypeNameAST : public AST {
 };
 class UnaryExpressionAST : public AST, public IExpression {
  public:
-  enum class PrefixType : int {
-    PLUSPLUS = 1,
-    SUBSUB = 2,
-    SIZE_OF = 4,
-  };
-  UnaryExpressionAST(nt<PostfixExpressionAST> postfix_expression);
-  UnaryExpressionAST(nt<UnaryExpressionAST> unary_expression, PrefixType type);
-  UnaryExpressionAST(Terminal<UnaryOp> op, nt<CastExpressionAST> cast_expression);
-  UnaryExpressionAST(nt<TypeNameAST> type_name);
-  const nt<PostfixExpressionAST> postfix_expression;
-  const nt<UnaryExpressionAST> unary_expression;
-  const std::unique_ptr<Terminal<UnaryOp>> op;
-  const nt<CastExpressionAST> cast_expression;
-  const nt<TypeNameAST> type_name;
+  UnaryExpressionAST() : AST(Kind::UNARY_EXPRESSION) {}
+};
+
+class SimpleUnaryExpressionAST : public UnaryExpressionAST {
+ public:
+  SimpleUnaryExpressionAST(nt<PostfixExpressionAST> postfixExpression)
+      : mPostfixExpression(std::move(postfixExpression)) {}
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<PostfixExpressionAST> mPostfixExpression;
 };
+
+class PrefixIncrementExpressionAST : public UnaryExpressionAST {
+ public:
+  PrefixIncrementExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST)
+      : mUnaryExpression(std::move(unaryExpressionAST)) {}
+  void print(int indent) override;
+  Value codegen() override;
+ private:
+  nt<UnaryExpressionAST> mUnaryExpression;
+};
+
+class PrefixDecrementExpressionAST : public UnaryExpressionAST {
+ public:
+  PrefixDecrementExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST)
+      : mUnaryExpression(std::move(unaryExpressionAST)) {}
+  void print(int indent) override;
+  Value codegen() override;
+ private:
+  nt<UnaryExpressionAST> mUnaryExpression;
+};
+
+class UnaryOperatorExpressionAST : public UnaryExpressionAST {
+ public:
+  UnaryOperatorExpressionAST(Terminal<UnaryOp> op, nt<UnaryExpressionAST> unaryExpressionAST)
+      : mOp(op), mUnaryExpression(std::move(unaryExpressionAST)) {}
+  void print(int indent) override;
+  Value codegen() override;
+ private:
+  Terminal<UnaryOp> mOp;
+  nt<UnaryExpressionAST> mUnaryExpression;
+};
+
+class SizeofUnaryExpressionAST : public UnaryExpressionAST {
+ public:
+  SizeofUnaryExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST)
+      : mUnaryExpression(std::move(unaryExpressionAST)) {}
+  void print(int indent) override;
+  Value codegen() override;
+ private:
+  nt<UnaryExpressionAST> mUnaryExpression;
+};
+
 class CastExpressionAST : public AST {
  public:
   CastExpressionAST(nt<UnaryExpressionAST> unary_expression);
@@ -639,7 +676,7 @@ class StructDeclaratorAST : public AST {
   const nt<DeclaratorAST> declarator;
   const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
-  const ISymbol *codegen(const QualifiedType &derivedType);
+  ISymbol *codegen(const QualifiedType &derivedType);
 };
 class StructDeclaratorListAST : public AST {
  public:
@@ -654,7 +691,7 @@ class StructDeclarationAST : public AST {
   const nt<SpecifierQualifierAST> specifier_qualifier;
   const nt<StructDeclaratorListAST> struct_declarator_list;
   void print(int indent) override;
-  std::vector<ISymbol *> codegen();
+  std::vector<ObjectSymbol *> codegen();
 };
 class EnumSpecifierAST : public AST {
  public:
@@ -703,7 +740,7 @@ class TypeSpecifiersAST : public AST {
   bool empty();
   void print(int indent) override;
   const ObjectType *type;
-  const ObjectType *codegen();
+  QualifiedType codegen();
 };
 class SpecifierQualifierAST : public AST {
  public:
@@ -740,7 +777,7 @@ class DeclarationSpecifiersAST : public AST {
   const nts<TypeQualifierAST> type_qualifiers;
   bool empty();
   void print(int indent) override;
-  std::pair<const Terminal<StorageSpecifier> &, const QualifiedType> codegen();
+  std::pair<const Terminal<StorageSpecifier> &, QualifiedType> codegen();
 };
 class DeclarationAST : public AST {
  public:

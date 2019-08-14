@@ -103,7 +103,8 @@ unsigned int PointerType::getSizeInBits() const {
   //TODO 32 or 64?
   return 64;
 }
-PointerType::PointerType(QualifiedType referencedQualifiedType) : mReferencedQualifiedType(std::move(referencedQualifiedType)) {}
+PointerType::PointerType(QualifiedType referencedQualifiedType) : mReferencedQualifiedType(std::move(
+    referencedQualifiedType)) {}
 const QualifiedType &PointerType::getReferencedQualifiedType() const {
   return mReferencedQualifiedType;
 }
@@ -125,9 +126,14 @@ bool CompoundType::complete() const {
 unsigned int CompoundType::getSizeInBits() const {
   return mSizeInBits;
 }
+CompoundType::CompoundType(std::string tagName)
+    : mSizeInBits(0), mComplete(false), mTable(ScopeKind::TAG), mTagName(std::move(tagName)) {}
+const std::string &CompoundType::getTagName() const {
+  return mTagName;
+}
 
 StructType::StructType(const std::string &tag, llvm::Module &module)
-    : mLLVMType(llvm::StructType::create(module.getContext(), tag)) {}
+    : mLLVMType(llvm::StructType::create(module.getContext(), tag)), CompoundType(tag) {}
 
 StructType::StructType(llvm::Module &module) : mLLVMType(llvm::StructType::create(module.getContext())) {}
 llvm::StructType *StructType::getLLVMType(llvm::Module &module) const {
@@ -135,11 +141,11 @@ llvm::StructType *StructType::getLLVMType(llvm::Module &module) const {
 }
 void StructType::setBody(SymbolTable &&table, llvm::Module &module) {
   mTable = std::move(table);
-  std::vector<llvm::Type *> fields;
+  std::vector<llvm::Type *> fields(mTable.size());
   for (const auto &pair : mTable) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
       if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
-        fields.push_back(obj->getQualifiedType().getType()->getLLVMType(module));
+        fields[obj->getIndex()] = (obj->getQualifiedType().getType()->getLLVMType(module));
         mSizeInBits += type->getSizeInBits();
       }
     }
@@ -147,7 +153,7 @@ void StructType::setBody(SymbolTable &&table, llvm::Module &module) {
   mLLVMType->setBody(fields);
 }
 UnionType::UnionType(const std::string &tag, llvm::Module &module)
-    : mLLVMType(llvm::StructType::create(module.getContext(), tag)) {}
+    : mLLVMType(llvm::StructType::create(module.getContext(), tag)), CompoundType(tag) {}
 
 UnionType::UnionType(llvm::Module &module) : mLLVMType(llvm::StructType::create(module.getContext())) {}
 llvm::StructType *UnionType::getLLVMType(llvm::Module &module) const {
