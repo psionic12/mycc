@@ -701,8 +701,7 @@ void InitializerAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
 }
-InitializerListAST::InitializerListAST(nts<InitializerAST>
-                                       initializer)
+InitializerListAST::InitializerListAST(nts<InitializerAST> initializer)
     : AST(AST::Kind::INITIALIZER_LIST), initializer(std::move(initializer)) {}
 void InitializerListAST::print(int indent) {
   AST::print(indent);
@@ -1694,6 +1693,7 @@ IExpression::Value IncrementPostfixExpression::codegen() {
   const Type *type = lhs.qualifiedType.getType();
   llvm::Value *result = sBuilder.CreateAlloca(lhs.qualifiedType.getType()->getLLVMType(sModule));
   sBuilder.CreateStore(lhs.value, result, lhs.qualifiedType.isVolatile());
+  result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
   if (dynamic_cast<const IntegerType *>(type) || dynamic_cast<const EnumerationType *>(type)) {
     newVal = sBuilder.CreateAdd(lhs.value, llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
@@ -1722,6 +1722,7 @@ IExpression::Value DecrementPostfixExpression::codegen() {
   const Type *type = lhs.qualifiedType.getType();
   llvm::Value *result = sBuilder.CreateAlloca(lhs.qualifiedType.getType()->getLLVMType(sModule));
   sBuilder.CreateStore(lhs.value, result, lhs.qualifiedType.isVolatile());
+  result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
   if (dynamic_cast<const IntegerType *>(type) || dynamic_cast<const EnumerationType *>(type)) {
     newVal = sBuilder.CreateSub(lhs.value, llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
@@ -1798,4 +1799,119 @@ IExpression::Value PrefixDecrementExpressionAST::codegen() {
     throw SemaException("The operand shall be a modifiable lvalue", mUnaryExpression->involvedTokens());
   }
   return value;
+}
+void UnaryOperatorExpressionAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  mOp.print(indent);
+  mUnaryExpression->print(indent);
+}
+IExpression::Value UnaryOperatorExpressionAST::codegen() {
+  Value value = mUnaryExpression->codegen();
+  const Type *type = value.qualifiedType.getType();
+  llvm::Value *newVal = value.value;
+  switch (mOp.type) {
+    case UnaryOp::AMP:
+      //TODO is checking lvalue fit constaints of 6.5.3.2 Address and indirection operators?
+      if (!value.lvalue) {
+        throw SemaException("only lvalue can access address", mOp.token);
+      }
+      mPointerType = std::make_unique<PointerType>(value.qualifiedType);
+      type = mPointerType.get();
+      if (!llvm::cast<llvm::PointerType>(newVal->getType())) {
+        throw std::runtime_error("WTF: expression value is not llvm::PointerType");
+      }
+      break;
+    case UnaryOp::STAR:
+      if (const auto *pointerType = dynamic_cast<const PointerType *>(type)) {
+        newVal = sBuilder.CreateLoad(newVal);
+        return Value(pointerType->getReferencedQualifiedType(), false, newVal);
+      } else {
+        throw SemaException("The operand of the unary * operator shall have pointer type.", mOp.token);
+      }
+    case UnaryOp::PLUS:
+      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+        if (integerType->canPromote()) {
+          //type promotion
+          type = &IntegerType::sIntType;
+          newVal = sBuilder.CreateSExt(value.value, IntegerType::sIntType.getLLVMType(sModule));
+        }
+      } else if (dynamic_cast<const FloatingType *>(type)) {
+      } else
+        throw SemaException("The operand of the unary + or - operator shall have arithmetic type",
+                            mUnaryExpression->involvedTokens());
+      return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
+    case UnaryOp::SUB:
+      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+        if (integerType->canPromote()) {
+          //type promotion
+          type = &IntegerType::sIntType;
+          newVal = sBuilder.CreateSExt(value.value, IntegerType::sIntType.getLLVMType(sModule));
+          newVal = sBuilder.CreateSub(
+              llvm::ConstantInt::get(sContext, llvm::APInt(32, 0)),
+              newVal);
+        }
+      } else if (dynamic_cast<const FloatingType *>(type)) {
+        newVal = sBuilder.CreateFSub(
+            llvm::ConstantFP::get(sContext, llvm::APFloat(0.0f)),
+            newVal);
+      } else
+        throw SemaException("The operand of the unary + or - operator shall have arithmetic type",
+                            mUnaryExpression->involvedTokens());
+      return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
+    case UnaryOp::TILDE:
+      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+        if (integerType->canPromote()) {
+          type = &IntegerType::sIntType;
+          newVal = sBuilder.CreateSExt(value.value, IntegerType::sIntType.getLLVMType(sModule));
+        }
+        newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(sContext, llvm::APInt(32, -1, true)));
+      } else {
+        throw SemaException("The operand of the unary ~ operator shall have integer type",
+                            mUnaryExpression->involvedTokens());
+      }
+      return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
+    case UnaryOp::BANG:
+      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+        newVal = sBuilder.CreateICmpEQ(newVal, llvm::ConstantInt::get(sContext, llvm::APInt(32, 0)));
+        type = &IntegerType::sIntType;
+        newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType(sModule));
+      } else if (dynamic_cast<const FloatingType *>(type)) {
+        newVal = sBuilder.CreateFCmpUEQ(newVal, llvm::ConstantFP::get(sContext, llvm::APFloat(0.0f)));
+        newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(sContext, llvm::APInt(1, 1)));
+        type = &IntegerType::sIntType;
+        newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType(sModule));
+      } else if (dynamic_cast<const PointerType *>(type)) {
+        auto *pointerTy = llvm::PointerType::get(type->getLLVMType(sModule), 0);
+        auto *const_null = llvm::ConstantPointerNull::get(pointerTy);
+        newVal = sBuilder.CreateICmpEQ(newVal, const_null);
+        type = &IntegerType::sIntType;
+        newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType(sModule));
+      } else {
+        throw SemaException("The operand of the unary ! operator shall have scalar type",
+                            mUnaryExpression->involvedTokens());
+      }
+      break;
+  }
+  return
+      IExpression::Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
+}
+IExpression::Value SizeofUnaryExpressionAST::codegen() {
+  auto value = mUnaryExpression->codegen();
+  if (dynamic_cast<const FunctionType *>(value.qualifiedType.getType())) {
+    throw SemaException("The sizeof operator shall not be applied to an expression that has function type",
+                        mUnaryExpression->involvedTokens());
+  } else if (!value.qualifiedType.getType()->complete()) {
+    throw SemaException("The sizeof operator shall not be applied to an expression that has an incomplete type",
+                        mUnaryExpression->involvedTokens());
+  } // or a bit field
+  return Value(QualifiedType(&IntegerType::sIntType, {TypeQualifier::kCONST}),
+               false,
+               llvm::ConstantInt::get(sContext,
+                                      llvm::APInt(IntegerType::sIntType.getSizeInBits(),
+                                                  IntegerType::sIntType.getSizeInBits() / 8)));
+}
+void SizeofUnaryExpressionAST::print(int indent) {
+  AST::print(indent);
+  mUnaryExpression->print(++indent);
 }

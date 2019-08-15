@@ -29,6 +29,7 @@ class IntegerType : public ObjectType {
  public:
   unsigned int getSizeInBits() const;
   bool compatible(const Type *type) const override;
+  bool canPromote() const;
   static const IntegerType sCharType;
   static const IntegerType sShortIntType;
   static const IntegerType sIntType;

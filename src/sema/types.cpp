@@ -31,6 +31,11 @@ llvm::IntegerType *IntegerType::getLLVMType(llvm::Module &module) const {
 llvm::APInt IntegerType::getAPInt(uint64_t value) const {
   return llvm::APInt(mSizeInBits, value, mSigned);
 }
+bool IntegerType::canPromote() const {
+  // Standard point out there's a unsigned int promotion,
+  // which I'm confused and cannot find a case for an unsigned int promotion
+  return mSizeInBits < sIntType.mSizeInBits;
+}
 bool FloatingType::compatible(const Type *type) const {
   return dynamic_cast<const IntegerType *>(type) || dynamic_cast<const FloatingType *>(type);
 }

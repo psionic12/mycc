@@ -545,6 +545,7 @@ class UnaryOperatorExpressionAST : public UnaryExpressionAST {
  private:
   Terminal<UnaryOp> mOp;
   nt<UnaryExpressionAST> mUnaryExpression;
+  std::unique_ptr<PointerType> mPointerType;
 };
 
 class SizeofUnaryExpressionAST : public UnaryExpressionAST {
@@ -835,5 +836,6 @@ class TranslationUnitAST : public AST {
   SymbolTable &mTagTable;
   void print(int indent) override;
   void codegen();
+  //TODO private members
 };
 #endif //MYCCPILER_AST_H
