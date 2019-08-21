@@ -63,7 +63,7 @@ class Parser {
   nt<DirectDeclaratorAST> parseDirectDeclarator(DeclaratorKind kind);
   nt<ConstantExpressionAST> parseConstantExpression();
   nt<ConditionalExpressionAST> parseConditionalExpression();
-  nt<LogicalOrExpressionAST> parseLogicalOrExpression(int calling_prec = 0);
+  nt<IBinaryOperationAST> parseBinaryOperationAST(int calling_prec = 0);
   nt<CastExpressionAST> parseCastExpression();
   nt<UnaryExpressionAST> parseUnaryExpression();
   nt<PostfixExpressionAST> parsePostfixExpression();

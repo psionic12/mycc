@@ -162,7 +162,7 @@ class AssignmentExpressionAST;
 class InitializerAST;
 class CompoundStatementAST;
 class StatementAST;
-class IExpression {
+class IExpression : public AST {
  public:
   class Value {
    public:
@@ -172,6 +172,7 @@ class IExpression {
     bool lvalue = false;
     llvm::Value *value = nullptr;
   };
+  IExpression(AST::Kind kind) : AST(kind) {}
   virtual Value codegen() = 0;
 };
 class StringAST : public AST {
@@ -351,7 +352,7 @@ class IntegerConstantAST : public AST {
   Suffix suffix;
   void print(int indent) override;
 };
-class AssignmentExpressionAST : public AST, public IExpression {
+class AssignmentExpressionAST : public IExpression {
  public:
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression,
@@ -363,9 +364,9 @@ class AssignmentExpressionAST : public AST, public IExpression {
   const nt<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
 };
-class PrimaryExpressionAST : public AST, public IExpression {
+class PrimaryExpressionAST : public IExpression {
  public:
-  PrimaryExpressionAST() : AST(Kind::PRIMARY_EXPRESSION) {}
+  PrimaryExpressionAST() : IExpression(Kind::PRIMARY_EXPRESSION) {}
 };
 
 class IdentifierPrimaryExpressionAST : public PrimaryExpressionAST {
@@ -423,9 +424,9 @@ class ArgumentExpressionList : public AST {
   const nts<AssignmentExpressionAST> argumentsList;
   std::vector<IExpression::Value> codegen();
 };
-class PostfixExpressionAST : public AST, public IExpression {
+class PostfixExpressionAST : public IExpression {
  public:
-  PostfixExpressionAST() : AST(Kind::POSTFIX_EXPRESSION) {}
+  PostfixExpressionAST() : IExpression(Kind::POSTFIX_EXPRESSION) {}
 };
 
 class SimplePostfixExpressionAST : public PostfixExpressionAST {
@@ -500,10 +501,11 @@ class TypeNameAST : public AST {
   const nt<SpecifierQualifierAST> specifiers;
   const nt<DeclaratorAST> declarator;
   void print(int indent) override;
+  QualifiedType codegen();
 };
-class UnaryExpressionAST : public AST, public IExpression {
+class UnaryExpressionAST : public IExpression {
  public:
-  UnaryExpressionAST() : AST(Kind::UNARY_EXPRESSION) {}
+  UnaryExpressionAST() : IExpression(Kind::UNARY_EXPRESSION) {}
 };
 
 class SimpleUnaryExpressionAST : public UnaryExpressionAST {
@@ -558,37 +560,72 @@ class SizeofUnaryExpressionAST : public UnaryExpressionAST {
   nt<UnaryExpressionAST> mUnaryExpression;
 };
 
-class CastExpressionAST : public AST {
+class CastExpressionAST : public IExpression {
  public:
-  CastExpressionAST(nt<UnaryExpressionAST> unary_expression);
-  CastExpressionAST(nt<TypeNameAST> type_name, nt<CastExpressionAST> cast_expression);
-  const nt<UnaryExpressionAST> unary_expression;
-  const nt<TypeNameAST> type_name;
-  const nt<CastExpressionAST> cast_expression;
-  void print(int indent) override;
+  CastExpressionAST() : IExpression(Kind::CAST_EXPRESSION) {}
 };
-class ExpressionAST : public AST, public IExpression {
+
+class SimpleCastExpressionAST : public CastExpressionAST {
+ public:
+  SimpleCastExpressionAST(nt<UnaryExpressionAST> unaryExpression)
+      : mUnaryExpression(std::move(unaryExpression)) {}
+  void print(int indent) override;
+  Value codegen() override;
+ private:
+  nt<UnaryExpressionAST> mUnaryExpression;
+};
+
+class RealCastExpressionAST : public CastExpressionAST {
+ public:
+  RealCastExpressionAST(nt<TypeNameAST> typeName, nt<CastExpressionAST> castExpression)
+      : mTypeName(std::move(typeName)), mCastExpression(std::move(castExpression)) {}
+  void print(int indent) override;
+  Value codegen() override;
+ private:
+  nt<TypeNameAST> mTypeName;
+  nt<CastExpressionAST> mCastExpression;
+};
+
+class ExpressionAST : public IExpression {
  public:
   ExpressionAST(nts<AssignmentExpressionAST> assignment_expression);
   const nts<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
 };
-class LogicalOrExpressionAST : public AST {
+
+class IBinaryOperationAST : public IExpression {
  public:
-  LogicalOrExpressionAST(nt<LogicalOrExpressionAST> left, Terminal<InfixOp> op, nt<LogicalOrExpressionAST> right);
-  LogicalOrExpressionAST(nt<CastExpressionAST> leaf);
-  const nt<AST> left;
-  const std::unique_ptr<Terminal<InfixOp>> op;
-  const nt<LogicalOrExpressionAST> right;
+  IBinaryOperationAST() : IExpression(Kind::LOGICAL_OR_EXPRESSION) {}
+};
+
+class SimpleBinaryOperatorAST : public IBinaryOperationAST {
+ public :
+  SimpleBinaryOperatorAST(nt<CastExpressionAST> castExpression) : mCastExpression(std::move(castExpression)) {}
   void print(int indent) override;
+  Value codegen() override;
+ private:
+  nt<CastExpressionAST> mCastExpression;
+};
+
+class BinaryOperatorAST : public IBinaryOperationAST {
+ public:
+  BinaryOperatorAST(nt<IBinaryOperationAST> left, Terminal<InfixOp> op, nt<IBinaryOperationAST> right)
+      : mLeft(std::move(left)), mOp(op), mRight(std::move(right)) {}
+  void print(int indent) override;
+  Value codegen() override;
+ private:
+  nt<IBinaryOperationAST> mLeft;
+  Terminal<InfixOp> mOp;
+  nt<IBinaryOperationAST> mRight;
+  std::tuple<const Type *, const llvm::Value *, const llvm::Value *> getCompatibleValues(Value lhs, Value rhs);
 };
 class ConditionalExpressionAST : public AST {
  public:
-  ConditionalExpressionAST(nt<LogicalOrExpressionAST> logical_or_expression);
-  ConditionalExpressionAST(nt<LogicalOrExpressionAST> logical_or_expression,
+  ConditionalExpressionAST(nt<IBinaryOperationAST> logical_or_expression);
+  ConditionalExpressionAST(nt<IBinaryOperationAST> logical_or_expression,
                            nt<ExpressionAST> expression,
                            nt<ConditionalExpressionAST> conditional_expression);
-  const nt<LogicalOrExpressionAST> logical_or_expression;
+  const nt<IBinaryOperationAST> logical_or_expression;
   const nt<ExpressionAST> expression;
   const nt<ConditionalExpressionAST> conditional_expression;
   void print(int indent) override;
@@ -663,7 +700,7 @@ class PointerAST : public AST {
  private:
   std::unique_ptr<PointerType> mPointerType;
 };
-class ConstantExpressionAST : public AST, public IExpression {
+class ConstantExpressionAST : public IExpression {
  public:
   ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
   const nt<ConditionalExpressionAST> conditional_expression;

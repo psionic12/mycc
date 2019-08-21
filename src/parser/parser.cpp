@@ -402,7 +402,7 @@ nt<AssignmentExpressionAST> Parser::parseAssignmentExpression() {
 
 nt<ConditionalExpressionAST> Parser::parseConditionalExpression() {
   mStartToken = &lex.peek();
-  auto LHS = parseLogicalOrExpression();
+  auto LHS = parseBinaryOperationAST();
   if (expect(TokenKind::TOKEN_QUES)) {
     auto exp = parseExpression();
     accept(TokenKind::TOKEN_COLON);
@@ -415,9 +415,9 @@ nt<ConditionalExpressionAST> Parser::parseConditionalExpression() {
 
 // Traditional top down parsing will not work in parsing logical expressions.
 // All logical expressions can be abstract as <term> <infixop> <term>
-nt<LogicalOrExpressionAST> Parser::parseLogicalOrExpression(int calling_prec) {
+nt<IBinaryOperationAST> Parser::parseBinaryOperationAST(int calling_prec) {
   mStartToken = &lex.peek();
-  auto term1 = make_ast<LogicalOrExpressionAST>(parseCastExpression());
+  nt<IBinaryOperationAST> term1 = make_ast<SimpleBinaryOperatorAST>(parseCastExpression());
   while (true) {
     InfixOp op;
     try {
@@ -430,10 +430,10 @@ nt<LogicalOrExpressionAST> Parser::parseLogicalOrExpression(int calling_prec) {
       return term1;
     } else {
       lex.consumeToken();
-      auto term2 = parseLogicalOrExpression(prec);
-      term1 = make_ast<LogicalOrExpressionAST>(std::move(term1),
-                                               Terminal<InfixOp>(op, lex.peek()),
-                                               std::move(term2));
+      auto term2 = parseBinaryOperationAST(prec);
+      term1 = make_ast<BinaryOperatorAST>(std::move(term1),
+                                          Terminal<InfixOp>(op, lex.peek()),
+                                          std::move(term2));
     }
 
   }
