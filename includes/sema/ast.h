@@ -617,7 +617,7 @@ class BinaryOperatorAST : public IBinaryOperationAST {
   nt<IBinaryOperationAST> mLeft;
   Terminal<InfixOp> mOp;
   nt<IBinaryOperationAST> mRight;
-  std::tuple<const Type *, const llvm::Value *, const llvm::Value *> getCompatibleValues(Value lhs, Value rhs);
+  std::tuple<const Type *, const llvm::Value *, const llvm::Value *> getCompatibleArithmeticValue(Value lhs, Value rhs);
 };
 class ConditionalExpressionAST : public AST {
  public:

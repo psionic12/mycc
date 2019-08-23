@@ -24,9 +24,9 @@ class ObjectType : public Type {
   virtual unsigned int getSizeInBits() const = 0;
 };
 
-class ScalarType{};
+class ScalarType {};
 class ArithmeticType : public ScalarType {};
-
+class AggregateType {};
 
 class IntegerType : public ObjectType, public ArithmeticType {
  public:
@@ -41,6 +41,7 @@ class IntegerType : public ObjectType, public ArithmeticType {
   static const IntegerType sUnsignedIntType;
   static const IntegerType sUnsignedLongIntType;
   static const IntegerType sUnsignedLongLongIntType;
+  static const IntegerType sOneBitBoolIntType;// used for llvm i1 only
   llvm::IntegerType *getLLVMType(llvm::Module &module) const override;
   llvm::APInt getAPInt(uint64_t value) const;
   bool isSigned() const;
@@ -53,9 +54,10 @@ class IntegerType : public ObjectType, public ArithmeticType {
                                                         llvm::IRBuilder<> &builder,
                                                         llvm::Module &module) const;
  private:
-  IntegerType(unsigned int mSizeInBits, bool bSigned);
   unsigned int mSizeInBits;
   bool mSigned;
+ protected:
+  IntegerType(unsigned int mSizeInBits, bool bSigned);
 };
 
 class FloatingType : public ObjectType, public ArithmeticType {
@@ -98,7 +100,7 @@ class PointerType : public ObjectType, ScalarType {
                     std::pair<const Token &, const Token &> involvedTokens) const;
   bool complete() const override;
   bool compatible(const Type *type) const override;
-  const static IntegerType* const sAddrType;
+  const static IntegerType *const sAddrType;
  protected:
   QualifiedType mReferencedQualifiedType;
 };
@@ -118,7 +120,7 @@ class FunctionType : public Type {
   PointerType mPointerType;
 };
 
-class ArrayType : public ObjectType {
+class ArrayType : public ObjectType, public AggregateType {
  public:
   ArrayType(QualifiedType elementType, unsigned int size);
   bool complete() const override;
@@ -148,7 +150,7 @@ class CompoundType : public ObjectType {
   std::string mTagName;
 };
 
-class StructType : public CompoundType {
+class StructType : public CompoundType, public AggregateType {
  public:
   StructType(const std::string &tag, llvm::Module &module);
   StructType(llvm::Module &module);
@@ -172,12 +174,10 @@ class UnionType : public CompoundType {
 };
 
 //TODO
-class EnumerationType : public CompoundType {
+class EnumerationType : public CompoundType, public IntegerType {
  public:
+  EnumerationType() : IntegerType(IntegerType::sIntType.getSizeInBits(), IntegerType::sIntType.isSigned()) {}
   void setBody(SymbolTable &&table, llvm::Module &module) override;
-  unsigned int getSizeInBits() const override;
-  llvm::IntegerType *getLLVMType(llvm::Module &module) const override;
-  bool compatible(const Type *type) const override;
 };
 #endif //MYCCPILER_TYPES_H
 

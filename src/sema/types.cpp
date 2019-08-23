@@ -21,6 +21,7 @@ const IntegerType IntegerType::sUnsignedShortIntType(16, false);
 const IntegerType IntegerType::sUnsignedIntType(32, false);
 const IntegerType IntegerType::sUnsignedLongIntType(64, false);
 const IntegerType IntegerType::sUnsignedLongLongIntType(64, false);
+const IntegerType IntegerType::sOneBitBoolIntType(1, false);
 IntegerType::IntegerType(unsigned int mSizeInBits, bool bSigned) : mSizeInBits(mSizeInBits), mSigned(bSigned) {}
 llvm::IntegerType *IntegerType::getLLVMType(llvm::Module &module) const {
   return llvm::IntegerType::get(module.getContext(), mSizeInBits);
@@ -347,16 +348,7 @@ bool UnionType::compatible(const Type *type) const {
     return true;
   }
 }
-unsigned int EnumerationType::getSizeInBits() const {
-  return IntegerType::sIntType.getSizeInBits();
-}
-llvm::IntegerType *EnumerationType::getLLVMType(llvm::Module &module) const {
-  return llvm::IntegerType::get(module.getContext(), getSizeInBits());
-}
 void EnumerationType::setBody(SymbolTable &&table, llvm::Module &module) {
   mTable = std::move(table);
-}
-bool EnumerationType::compatible(const Type *type) const {
-  return Type::compatible(type) || type == &IntegerType::sIntType;
 }
 
