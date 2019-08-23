@@ -431,9 +431,15 @@ nt<IBinaryOperationAST> Parser::parseBinaryOperationAST(int calling_prec) {
     } else {
       lex.consumeToken();
       auto term2 = parseBinaryOperationAST(prec);
-      term1 = make_ast<BinaryOperatorAST>(std::move(term1),
-                                          Terminal<InfixOp>(op, lex.peek()),
-                                          std::move(term2));
+      if (op == InfixOp::BARBAR || op == InfixOp::AMPAMP) {
+        term1 = make_ast<LogicalBinaryOperatorAST>(std::move(term1),
+                                                   Terminal<InfixOp>(op, lex.peek()),
+                                                   std::move(term2));
+      } else {
+        term1 = make_ast<BinaryOperatorAST>(std::move(term1),
+                                            Terminal<InfixOp>(op, lex.peek()),
+                                            std::move(term2));
+      }
     }
 
   }

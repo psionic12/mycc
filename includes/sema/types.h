@@ -10,13 +10,15 @@
 #include "symbol_tables.h"
 #include "llvm/IR/IRBuilder.h"
 
+class AST;
+
 class Type {
  private:
  public:
   virtual ~Type() = default;
   virtual bool compatible(const Type *type) const;
   virtual bool complete() const;
-  virtual llvm::Type *getLLVMType(llvm::Module &module) const = 0;
+  virtual llvm::Type *getLLVMType() const = 0;
 };
 
 class ObjectType : public Type {
@@ -42,17 +44,11 @@ class IntegerType : public ObjectType, public ArithmeticType {
   static const IntegerType sUnsignedLongIntType;
   static const IntegerType sUnsignedLongLongIntType;
   static const IntegerType sOneBitBoolIntType;// used for llvm i1 only
-  llvm::IntegerType *getLLVMType(llvm::Module &module) const override;
+  llvm::IntegerType *getLLVMType() const override;
   llvm::APInt getAPInt(uint64_t value) const;
   bool isSigned() const;
-  llvm::Value *cast(const Type *type,
-                    llvm::Value *value,
-                    llvm::IRBuilder<> &builder,
-                    llvm::Module &module,
-                    std::pair<const Token &, const Token &> invovledTokens) const;
-  std::pair<const IntegerType *, llvm::Value *> promote(llvm::Value *value,
-                                                        llvm::IRBuilder<> &builder,
-                                                        llvm::Module &module) const;
+  llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const;
+  std::pair<const IntegerType *, llvm::Value *> promote(llvm::Value *value) const;
  private:
   unsigned int mSizeInBits;
   bool mSigned;
@@ -65,14 +61,12 @@ class FloatingType : public ObjectType, public ArithmeticType {
   static const FloatingType sFloatType;
   static const FloatingType sDoubleType;
   static const FloatingType sLongDoubleType;
-  llvm::Type *getLLVMType(llvm::Module &module) const override;
+  llvm::Type *getLLVMType() const override;
   unsigned int getSizeInBits() const override;
   llvm::APFloat getAPFloat(long double) const;
   llvm::Value *cast(const Type *type,
                     llvm::Value *value,
-                    llvm::IRBuilder<> &builder,
-                    llvm::Module &module,
-                    std::pair<const Token &, const Token &> invovledTokens) const;
+                    const AST *ast) const;
  private:
   FloatingType(unsigned int mSizeInBits);
   unsigned int mSizeInBits;
@@ -82,22 +76,20 @@ class VoidType : public ObjectType {
  public:
   static const VoidType sVoidType;
   bool complete() const override;
-  llvm::Type *getLLVMType(llvm::Module &module) const override;
+  llvm::Type *getLLVMType() const override;
   unsigned int getSizeInBits() const override;
 };
 
-class PointerType : public ObjectType, ScalarType {
+class PointerType : public ObjectType, public ScalarType {
  public:
   PointerType(QualifiedType referencedQualifiedType);
   const Type *getReferencedType() const;
-  llvm::PointerType *getLLVMType(llvm::Module &module) const override;
+  llvm::PointerType *getLLVMType() const override;
   unsigned int getSizeInBits() const override;
   const QualifiedType &getReferencedQualifiedType() const;
   llvm::Value *cast(const Type *type,
                     llvm::Value *value,
-                    llvm::IRBuilder<> &builder,
-                    llvm::Module &module,
-                    std::pair<const Token &, const Token &> involvedTokens) const;
+                    const AST *ast) const;
   bool complete() const override;
   bool compatible(const Type *type) const override;
   const static IntegerType *const sAddrType;
@@ -110,8 +102,7 @@ class FunctionType : public Type {
   FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg);
   QualifiedType getReturnType() const;
   const std::vector<QualifiedType> &getParameters() const;
-  llvm::FunctionType *getLLVMType(llvm::Module &module) const override;
-  explicit operator const PointerType *() const;
+  llvm::FunctionType *getLLVMType() const override;
   bool compatible(const Type *type) const override;
  private:
   bool mVarArg;
@@ -125,8 +116,7 @@ class ArrayType : public ObjectType, public AggregateType {
   ArrayType(QualifiedType elementType, unsigned int size);
   bool complete() const override;
   void setSize(unsigned int size);
-  llvm::ArrayType *getLLVMType(llvm::Module &module) const override;
-  explicit operator const PointerType *() const;
+  llvm::ArrayType *getLLVMType() const override;
   bool compatible(const Type *type) const override;
   const QualifiedType &getReferencedQualifiedType() const;
  private:
@@ -154,7 +144,7 @@ class StructType : public CompoundType, public AggregateType {
  public:
   StructType(const std::string &tag, llvm::Module &module);
   StructType(llvm::Module &module);
-  llvm::StructType *getLLVMType(llvm::Module &module) const override;
+  llvm::StructType *getLLVMType() const override;
   void setBody(SymbolTable &&table, llvm::Module &module) override;
   bool compatible(const Type *type) const override;
  private:
@@ -166,7 +156,7 @@ class UnionType : public CompoundType {
  public:
   UnionType(const std::string &tag, llvm::Module &module);
   UnionType(llvm::Module &module);
-  llvm::StructType *getLLVMType(llvm::Module &module) const override;
+  llvm::StructType *getLLVMType() const override;
   void setBody(SymbolTable &&table, llvm::Module &module) override;
   bool compatible(const Type *type) const override;
  private:

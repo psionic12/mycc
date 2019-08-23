@@ -87,22 +87,24 @@ class AST {
   };
   AST(Kind kind, int id = 0);
   const Kind getKind() const {
-    return kind;
+    return mKind;
   }
   const int getProduction() const {
-    return productionId;
+    return mProductionId;
   }
   virtual const char *toString();
   virtual void print(int indent = 0);
   virtual void printIndent(int indent);
-  std::pair<const Token &, const Token &> involvedTokens();
+  std::pair<const Token &, const Token &> involvedTokens() const;
   virtual ~AST() = default;
-  const Token *mLeftMost;
-  const Token *mRightMost;
+  friend class Parser;
+  static llvm::LLVMContext &getContext();
+  static llvm::Module &getModule();
+  static llvm::IRBuilder<> &getBuilder();
  private:
-  const Kind kind;
+  const Kind mKind;
   //the id of which production
-  const int productionId;
+  const int mProductionId;
  protected:
   static llvm::LLVMContext sContext;
   static llvm::Module sModule;
@@ -110,6 +112,8 @@ class AST {
   SymbolTable *sObjectTable;
   SymbolTable *sTagTable;
   SymbolTable *sLabelTable;
+  const Token *mLeftMost;
+  const Token *mRightMost;
 };
 template<typename T>
 class Terminal {
@@ -613,13 +617,23 @@ class BinaryOperatorAST : public IBinaryOperationAST {
       : mLeft(std::move(left)), mOp(op), mRight(std::move(right)) {}
   void print(int indent) override;
   Value codegen() override;
- private:
+  static std::tuple<const Type *,
+                      const llvm::Value *,
+                      const llvm::Value *> getCompatibleArithmeticValue(const Value &lhs,
+                                                                                 const Value &rhs,
+                                                                                 const AST *ast);
+ protected:
   nt<IBinaryOperationAST> mLeft;
   Terminal<InfixOp> mOp;
   nt<IBinaryOperationAST> mRight;
-  std::tuple<const Type *, const llvm::Value *, const llvm::Value *> getCompatibleArithmeticValue(Value lhs, Value rhs);
 };
-class ConditionalExpressionAST : public AST {
+
+class LogicalBinaryOperatorAST : public BinaryOperatorAST {
+ public:
+  using BinaryOperatorAST::BinaryOperatorAST;
+  Value codegen() override;
+};
+class ConditionalExpressionAST : public IExpression {
  public:
   ConditionalExpressionAST(nt<IBinaryOperationAST> logical_or_expression);
   ConditionalExpressionAST(nt<IBinaryOperationAST> logical_or_expression,
@@ -629,6 +643,7 @@ class ConditionalExpressionAST : public AST {
   const nt<ExpressionAST> expression;
   const nt<ConditionalExpressionAST> conditional_expression;
   void print(int indent) override;
+  Value codegen() override;
 };
 class ParameterTypeListAST : public AST {
  public:

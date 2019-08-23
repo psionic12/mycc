@@ -23,8 +23,8 @@ const IntegerType IntegerType::sUnsignedLongIntType(64, false);
 const IntegerType IntegerType::sUnsignedLongLongIntType(64, false);
 const IntegerType IntegerType::sOneBitBoolIntType(1, false);
 IntegerType::IntegerType(unsigned int mSizeInBits, bool bSigned) : mSizeInBits(mSizeInBits), mSigned(bSigned) {}
-llvm::IntegerType *IntegerType::getLLVMType(llvm::Module &module) const {
-  return llvm::IntegerType::get(module.getContext(), mSizeInBits);
+llvm::IntegerType *IntegerType::getLLVMType() const {
+  return llvm::IntegerType::get(AST::getContext(), mSizeInBits);
 }
 llvm::APInt IntegerType::getAPInt(uint64_t value) const {
   return llvm::APInt(mSizeInBits, value, mSigned);
@@ -32,45 +32,43 @@ llvm::APInt IntegerType::getAPInt(uint64_t value) const {
 bool IntegerType::isSigned() const {
   return mSigned;
 }
-llvm::Value *IntegerType::cast(const Type *type,
-                               llvm::Value *value,
-                               llvm::IRBuilder<> &builder,
-                               llvm::Module &module,
-                               std::pair<const Token &, const Token &> invovledTokens) const {
+
+llvm::Value *IntegerType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+  auto &builder = AST::getBuilder();
+  auto &module = AST::getModule();
   if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
     if (mSizeInBits > integerType->mSizeInBits) {
       if (integerType->mSizeInBits) {
-        return builder.CreateSExt(value, type->getLLVMType(module));
+        return builder.CreateSExt(value, type->getLLVMType());
       } else {
-        return builder.CreateZExt(value, type->getLLVMType(module));
+        return builder.CreateZExt(value, type->getLLVMType());
       }
     } else if (mSizeInBits == integerType->mSizeInBits) {
 
       return value;
     } else {
-      return builder.CreateTrunc(value, type->getLLVMType(module));
+      return builder.CreateTrunc(value, type->getLLVMType());
     }
   } else if (dynamic_cast<const FloatingType * >(type)) {
     if (isSigned()) {
-      return builder.CreateSIToFP(value, type->getLLVMType(module));
+      return builder.CreateSIToFP(value, type->getLLVMType());
     } else {
-      return builder.CreateUIToFP(value, type->getLLVMType(module));
+      return builder.CreateUIToFP(value, type->getLLVMType());
     }
   } else if (dynamic_cast<const PointerType *>(type)) {
-    return builder.CreateIntToPtr(value, type->getLLVMType(module));
+    return builder.CreateIntToPtr(value, type->getLLVMType());
     //TODO do I need extend the size?
   } else if (dynamic_cast<const VoidType *>(type)) {
     return nullptr;
   } else {
-    throw SemaException("cannot cast to integer type", invovledTokens);
+    throw SemaException("cannot cast to integer type", ast->involvedTokens());
   }
 }
-std::pair<const IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *value,
-                                                                   llvm::IRBuilder<> &builder,
-                                                                   llvm::Module &module) const {
+std::pair<const IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *value) const {
   if (mSizeInBits < sIntType.mSizeInBits) {
     return std::make_pair<const IntegerType *, llvm::Value *>(this,
-                                                              builder.CreateSExt(value, sIntType.getLLVMType(module)));
+                                                              AST::getBuilder().CreateSExt(value,
+                                                                                           sIntType.getLLVMType()));
   } else {
     return std::make_pair<const IntegerType *, llvm::Value *>(this, std::move(value));
   }
@@ -79,13 +77,13 @@ const FloatingType FloatingType::sFloatType(32);
 const FloatingType FloatingType::sDoubleType(64);
 const FloatingType FloatingType::sLongDoubleType(128);
 FloatingType::FloatingType(unsigned int mSizeInBits) : mSizeInBits(mSizeInBits) {}
-llvm::Type *FloatingType::getLLVMType(llvm::Module &module) const {
+llvm::Type *FloatingType::getLLVMType() const {
   if (mSizeInBits <= 32) {
-    return llvm::Type::getFloatTy(module.getContext());
+    return llvm::Type::getFloatTy(AST::getContext());
   } else if (mSizeInBits <= 64) {
-    return llvm::Type::getDoubleTy(module.getContext());
+    return llvm::Type::getDoubleTy(AST::getContext());
   } else {
-    return llvm::Type::getFP128Ty(module.getContext());
+    return llvm::Type::getFP128Ty(AST::getContext());
   }
 }
 unsigned int FloatingType::getSizeInBits() const {
@@ -99,27 +97,25 @@ llvm::APFloat FloatingType::getAPFloat(long double n) const {
   }
   //TODO implement long double
 }
-llvm::Value *FloatingType::cast(const Type *type,
-                                llvm::Value *value,
-                                llvm::IRBuilder<> &builder,
-                                llvm::Module &module,
-                                std::pair<const Token &, const Token &> invovledTokens) const {
+llvm::Value *FloatingType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+  auto &builder = AST::getBuilder();
+  auto &module = AST::getModule();
   if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
     if (integerType->isSigned()) {
-      return builder.CreateFPToSI(value, type->getLLVMType(module));
+      return builder.CreateFPToSI(value, type->getLLVMType());
     } else {
-      return builder.CreateFPToUI(value, type->getLLVMType(module));
+      return builder.CreateFPToUI(value, type->getLLVMType());
     }
   } else if (const auto *floatType = dynamic_cast<const FloatingType * >(type)) {
     if (mSizeInBits > floatType->mSizeInBits) {
-      return builder.CreateFPTrunc(value, type->getLLVMType(module));
+      return builder.CreateFPTrunc(value, type->getLLVMType());
     } else {
-      return builder.CreateFPExt(value, type->getLLVMType(module));
+      return builder.CreateFPExt(value, type->getLLVMType());
     }
   } else if (dynamic_cast<const VoidType *>(type)) {
     return nullptr;
   } else {
-    throw SemaException("cannot cast to float type", invovledTokens);
+    throw SemaException("cannot cast to float type", ast->involvedTokens());
   }
 }
 FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg)
@@ -133,15 +129,12 @@ QualifiedType FunctionType::getReturnType() const {
 const std::vector<QualifiedType> &FunctionType::getParameters() const {
   return mParameters;
 }
-llvm::FunctionType *FunctionType::getLLVMType(llvm::Module &module) const {
+llvm::FunctionType *FunctionType::getLLVMType() const {
   std::vector<llvm::Type *> args;
   for (auto &paramter : mParameters) {
-    args.push_back(paramter.getType()->getLLVMType(module));
+    args.push_back(paramter.getType()->getLLVMType());
   }
-  return llvm::FunctionType::get(mReturnType.getType()->getLLVMType(module), args, mVarArg);
-}
-FunctionType::operator const PointerType *() const {
-  return &mPointerType;
+  return llvm::FunctionType::get(mReturnType.getType()->getLLVMType(), args, mVarArg);
 }
 bool FunctionType::compatible(const Type *type) const {
   if (Type::compatible(type)) {
@@ -173,11 +166,8 @@ bool ArrayType::complete() const {
 void ArrayType::setSize(unsigned int size) {
   mSize = size;
 }
-llvm::ArrayType *ArrayType::getLLVMType(llvm::Module &module) const {
-  return llvm::ArrayType::get(mElementType.getType()->getLLVMType(module), mSize);
-}
-ArrayType::operator const PointerType *() const {
-  return &mPointerType;
+llvm::ArrayType *ArrayType::getLLVMType() const {
+  return llvm::ArrayType::get(mElementType.getType()->getLLVMType(), mSize);
 }
 bool ArrayType::compatible(const Type *type) const {
   if (Type::compatible(type)) {
@@ -195,8 +185,8 @@ const Type *PointerType::getReferencedType() const {
   return mReferencedQualifiedType.getType();
 }
 const IntegerType *const PointerType::sAddrType = &IntegerType::sUnsignedLongIntType;
-llvm::PointerType *PointerType::getLLVMType(llvm::Module &module) const {
-  return llvm::PointerType::get(mReferencedQualifiedType.getType()->getLLVMType(module), 0);
+llvm::PointerType *PointerType::getLLVMType() const {
+  return llvm::PointerType::get(mReferencedQualifiedType.getType()->getLLVMType(), 0);
 }
 unsigned int PointerType::getSizeInBits() const {
   //TODO 32 or 64?
@@ -206,21 +196,6 @@ PointerType::PointerType(QualifiedType referencedQualifiedType) : mReferencedQua
     referencedQualifiedType)) {}
 const QualifiedType &PointerType::getReferencedQualifiedType() const {
   return mReferencedQualifiedType;
-}
-llvm::Value *PointerType::cast(const Type *type,
-                               llvm::Value *value,
-                               llvm::IRBuilder<> &builder,
-                               llvm::Module &module,
-                               std::pair<const Token &, const Token &> involvedTokens) const {
-  if (dynamic_cast<const IntegerType *>(type)) {
-    return builder.CreatePtrToInt(value, type->getLLVMType(module));
-  } else if (dynamic_cast<const PointerType *>(type)) {
-    return builder.CreateBitCast(value, type->getLLVMType(module));
-  } else if (dynamic_cast<const VoidType *>(type)) {
-    return nullptr;
-  } else {
-    throw SemaException("cannot cast to pointer type", involvedTokens);
-  }
 }
 bool PointerType::complete() const {
   return mReferencedQualifiedType.getType()->complete();
@@ -234,12 +209,25 @@ bool PointerType::compatible(const Type *type) const {
     return false;
   }
 }
+llvm::Value *PointerType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+  auto &builder = AST::getBuilder();
+  auto &module = AST::getModule();
+  if (dynamic_cast<const IntegerType *>(type)) {
+    return builder.CreatePtrToInt(value, type->getLLVMType());
+  } else if (dynamic_cast<const PointerType *>(type)) {
+    return builder.CreateBitCast(value, type->getLLVMType());
+  } else if (dynamic_cast<const VoidType *>(type)) {
+    return nullptr;
+  } else {
+    throw SemaException("cannot cast to pointer type", ast->involvedTokens());
+  }
+}
 const VoidType VoidType::sVoidType;
 bool VoidType::complete() const {
   return false;
 }
-llvm::Type *VoidType::getLLVMType(llvm::Module &module) const {
-  return llvm::Type::getVoidTy(module.getContext());
+llvm::Type *VoidType::getLLVMType() const {
+  return llvm::Type::getVoidTy(AST::getContext());
 }
 unsigned int VoidType::getSizeInBits() const {
   return 0;
@@ -259,10 +247,10 @@ const std::string &CompoundType::getTagName() const {
 }
 
 StructType::StructType(const std::string &tag, llvm::Module &module)
-    : mLLVMType(llvm::StructType::create(module.getContext(), tag)), CompoundType(tag) {}
+    : mLLVMType(llvm::StructType::create(AST::getContext(), tag)), CompoundType(tag) {}
 
-StructType::StructType(llvm::Module &module) : mLLVMType(llvm::StructType::create(module.getContext())) {}
-llvm::StructType *StructType::getLLVMType(llvm::Module &module) const {
+StructType::StructType(llvm::Module &module) : mLLVMType(llvm::StructType::create(AST::getContext())) {}
+llvm::StructType *StructType::getLLVMType() const {
   return mLLVMType;
 }
 void StructType::setBody(SymbolTable &&table, llvm::Module &module) {
@@ -271,7 +259,7 @@ void StructType::setBody(SymbolTable &&table, llvm::Module &module) {
   for (const auto &pair : mTable) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
       if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
-        fields[obj->getIndex()] = (obj->getQualifiedType().getType()->getLLVMType(module));
+        fields[obj->getIndex()] = (obj->getQualifiedType().getType()->getLLVMType());
         mSizeInBits += type->getSizeInBits();
       }
     }
@@ -304,10 +292,10 @@ bool StructType::compatible(const Type *type) const {
   }
 }
 UnionType::UnionType(const std::string &tag, llvm::Module &module)
-    : mLLVMType(llvm::StructType::create(module.getContext(), tag)), CompoundType(tag) {}
+    : mLLVMType(llvm::StructType::create(AST::getContext(), tag)), CompoundType(tag) {}
 
-UnionType::UnionType(llvm::Module &module) : mLLVMType(llvm::StructType::create(module.getContext())) {}
-llvm::StructType *UnionType::getLLVMType(llvm::Module &module) const {
+UnionType::UnionType(llvm::Module &module) : mLLVMType(llvm::StructType::create(AST::getContext())) {}
+llvm::StructType *UnionType::getLLVMType() const {
   return mLLVMType;
 }
 void UnionType::setBody(SymbolTable &&table, llvm::Module &module) {
@@ -316,7 +304,7 @@ void UnionType::setBody(SymbolTable &&table, llvm::Module &module) {
   for (const auto &pair : mTable) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
       if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
-        fields.push_back(obj->getQualifiedType().getType()->getLLVMType(module));
+        fields.push_back(obj->getQualifiedType().getType()->getLLVMType());
         auto size = type->getSizeInBits();
         mSizeInBits = mSizeInBits > size ? size : mSizeInBits;
       }
