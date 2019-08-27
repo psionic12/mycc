@@ -174,11 +174,11 @@ class EnumConstSymbol : public ISymbol {
   SymbolKind getKind() const override {
     return SymbolKind::ENUMERATION_CONSTANT;
   }
-  EnumConstSymbol(const EnumerationType *mEnumType,
+  EnumConstSymbol(std::unique_ptr<EnumerationMemberType> &&enumType,
                   const Token *token, llvm::ConstantInt *index)
-      : ISymbol(token), mEnumType(mEnumType), mIndex(index) {}
-  const EnumerationType *getType() const {
-    return mEnumType;
+      : ISymbol(token), mEnumType(std::move(enumType)), mIndex(index) {}
+  const EnumerationMemberType *getType() const {
+    return mEnumType.get();
   }
   int64_t getIndex() const {
     return mIndex->getSExtValue();
@@ -187,7 +187,7 @@ class EnumConstSymbol : public ISymbol {
     return mIndex;
   }
  private:
-  const EnumerationType *mEnumType;
+  std::unique_ptr<EnumerationMemberType> mEnumType;
   llvm::ConstantInt *mIndex;
 };
 

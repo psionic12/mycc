@@ -363,11 +363,11 @@ nt<PrimaryExpressionAST> Parser::parsePrimaryExpression() {
 ///               | <expression> , <assignment-expression>
 nt<ExpressionAST> Parser::parseExpression() {
   mStartToken = &lex.peek();
-  nts<AssignmentExpressionAST> list;
-  do {
-    list.emplace_back(parseAssignmentExpression());
-  } while (expect(TokenKind::TOKEN_COMMA));
-  return make_ast<ExpressionAST>(std::move(list));
+  nt<ExpressionAST> ast = std::make_unique<ExpressionAST>(nullptr, parseAssignmentExpression());
+  while (expect(TokenKind::TOKEN_COMMA)) {
+    ast = std::make_unique<ExpressionAST>(std::move(ast), parseAssignmentExpression());
+  };
+  return ast;
 }
 
 ///<assignment-expression> ::= <conditional-expression>

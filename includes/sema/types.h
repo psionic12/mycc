@@ -26,11 +26,14 @@ class ObjectType : public Type {
   virtual unsigned int getSizeInBits() const = 0;
 };
 
-class ScalarType {};
+class ScalarType : public ObjectType {
+ public:
+  virtual llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const = 0;
+};
 class ArithmeticType : public ScalarType {};
-class AggregateType {};
+class AggregateType : public ObjectType {};
 
-class IntegerType : public ObjectType, public ArithmeticType {
+class IntegerType : public ArithmeticType {
  public:
   unsigned int getSizeInBits() const;
   static const IntegerType sCharType;
@@ -56,7 +59,7 @@ class IntegerType : public ObjectType, public ArithmeticType {
   IntegerType(unsigned int mSizeInBits, bool bSigned);
 };
 
-class FloatingType : public ObjectType, public ArithmeticType {
+class FloatingType : public ArithmeticType {
  public:
   static const FloatingType sFloatType;
   static const FloatingType sDoubleType;
@@ -80,7 +83,7 @@ class VoidType : public ObjectType {
   unsigned int getSizeInBits() const override;
 };
 
-class PointerType : public ObjectType, public ScalarType {
+class PointerType : public ScalarType {
  public:
   PointerType(QualifiedType referencedQualifiedType);
   const Type *getReferencedType() const;
@@ -111,7 +114,7 @@ class FunctionType : public Type {
   PointerType mPointerType;
 };
 
-class ArrayType : public ObjectType, public AggregateType {
+class ArrayType : public AggregateType {
  public:
   ArrayType(QualifiedType elementType, unsigned int size);
   bool complete() const override;
@@ -132,7 +135,7 @@ class CompoundType : public ObjectType {
   bool complete() const override;
   unsigned int getSizeInBits() const override;
   SymbolTable mTable;
-  virtual void setBody(SymbolTable &&table, llvm::Module &module) = 0;
+  virtual void setBody(SymbolTable &&table) = 0;
   const std::string &getTagName() const;
  protected:
   bool mComplete;
@@ -142,32 +145,39 @@ class CompoundType : public ObjectType {
 
 class StructType : public CompoundType, public AggregateType {
  public:
-  StructType(const std::string &tag, llvm::Module &module);
-  StructType(llvm::Module &module);
+  StructType() = default;
+  StructType(const std::string &tag);
   llvm::StructType *getLLVMType() const override;
-  void setBody(SymbolTable &&table, llvm::Module &module) override;
+  void setBody(SymbolTable &&table) override;
   bool compatible(const Type *type) const override;
  private:
   llvm::StructType *mLLVMType;
 };
 
-//TODO
 class UnionType : public CompoundType {
  public:
-  UnionType(const std::string &tag, llvm::Module &module);
-  UnionType(llvm::Module &module);
+  UnionType() = default;
+  UnionType(const std::string &tag);
   llvm::StructType *getLLVMType() const override;
-  void setBody(SymbolTable &&table, llvm::Module &module) override;
+  void setBody(SymbolTable &&table) override;
   bool compatible(const Type *type) const override;
  private:
   llvm::StructType *mLLVMType;
 };
 
-//TODO
-class EnumerationType : public CompoundType, public IntegerType {
+class EnumerationType : public CompoundType {
  public:
-  EnumerationType() : IntegerType(IntegerType::sIntType.getSizeInBits(), IntegerType::sIntType.isSigned()) {}
-  void setBody(SymbolTable &&table, llvm::Module &module) override;
+  EnumerationType() = default;
+  EnumerationType(const std::string &tag);
+  void setBody(SymbolTable &&table) override;
+  llvm::Type *getLLVMType() const override;
+};
+
+class EnumerationMemberType : public IntegerType {
+ public:
+  EnumerationMemberType(const EnumerationType *enumType) : mEnumerationType(enumType), IntegerType(32, true) {}
+ private:
+  const EnumerationType *mEnumerationType;
 };
 #endif //MYCCPILER_TYPES_H
 

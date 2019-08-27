@@ -32,3 +32,16 @@ bool QualifiedType::isConst() const {
 bool QualifiedType::compatible(const QualifiedType &qualifiedType) const {
   return qualifiedType.getType()->compatible(mType) && qualifiedType.getQualifiers() == mQualifiers;
 }
+const bool QualifiedType::isSub(const std::set<TypeQualifier> &set) const {
+  auto i1 = mQualifiers.begin();
+  auto i2 = set.begin();
+  while (i2 != set.end() || i1 != set.end()) {
+    if (*i2 != *i1) {
+      ++i1;
+    } else {
+      ++i1;
+      ++i2;
+    }
+  }
+  return i2 == set.end();
+}

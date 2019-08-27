@@ -246,14 +246,13 @@ const std::string &CompoundType::getTagName() const {
   return mTagName;
 }
 
-StructType::StructType(const std::string &tag, llvm::Module &module)
+StructType::StructType(const std::string &tag)
     : mLLVMType(llvm::StructType::create(AST::getContext(), tag)), CompoundType(tag) {}
 
-StructType::StructType(llvm::Module &module) : mLLVMType(llvm::StructType::create(AST::getContext())) {}
 llvm::StructType *StructType::getLLVMType() const {
   return mLLVMType;
 }
-void StructType::setBody(SymbolTable &&table, llvm::Module &module) {
+void StructType::setBody(SymbolTable &&table) {
   mTable = std::move(table);
   std::vector<llvm::Type *> fields(mTable.size());
   for (const auto &pair : mTable) {
@@ -291,14 +290,13 @@ bool StructType::compatible(const Type *type) const {
     return true;
   }
 }
-UnionType::UnionType(const std::string &tag, llvm::Module &module)
+UnionType::UnionType(const std::string &tag)
     : mLLVMType(llvm::StructType::create(AST::getContext(), tag)), CompoundType(tag) {}
 
-UnionType::UnionType(llvm::Module &module) : mLLVMType(llvm::StructType::create(AST::getContext())) {}
 llvm::StructType *UnionType::getLLVMType() const {
   return mLLVMType;
 }
-void UnionType::setBody(SymbolTable &&table, llvm::Module &module) {
+void UnionType::setBody(SymbolTable &&table) {
   mTable = std::move(table);
   std::vector<llvm::Type *> fields;
   for (const auto &pair : mTable) {
@@ -336,7 +334,12 @@ bool UnionType::compatible(const Type *type) const {
     return true;
   }
 }
-void EnumerationType::setBody(SymbolTable &&table, llvm::Module &module) {
+void EnumerationType::setBody(SymbolTable &&table) {
   mTable = std::move(table);
 }
+EnumerationType::EnumerationType(const std::string &tag) : CompoundType(tag) {}
+llvm::Type *EnumerationType::getLLVMType() const {
+  return nullptr;
+}
+
 

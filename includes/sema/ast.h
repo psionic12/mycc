@@ -171,10 +171,50 @@ class IExpression : public AST {
   class Value {
    public:
     Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
-        : qualifiedType(std::move(qualifiedType)), lvalue(lvalue), value(value) {}
+        : qualifiedType(std::move(qualifiedType)), lvalue(lvalue), mValue(value) {}
     const QualifiedType qualifiedType;
-    bool lvalue = false;
-    llvm::Value *value = nullptr;
+    const bool lvalue;
+    llvm::Value *getValue() const {
+      if (lvalue) {
+        return sBuilder.CreateLoad(mValue, qualifiedType.isVolatile());
+      } else {
+        return mValue;
+      }
+    }
+    llvm::Value * getAddr() const {
+      if (lvalue) {
+        return mValue;
+      } else {
+        throw std::runtime_error("WTF: get addr for rvalue");
+      }
+    }
+    bool modifiable() const {
+      if (lvalue) {
+        if (dynamic_cast<const ArrayType *>(qualifiedType.getType())) {
+          return false;
+        } else if (!qualifiedType.getType()->complete()) {
+          return false;
+        } else if (qualifiedType.isConst()) {
+          return false;
+        } else if (const auto *type = dynamic_cast<const CompoundType *>(qualifiedType.getType())) {
+          for (const auto &pair : type->mTable) {
+            const auto *symbol = pair.second;
+            if (const auto *obj = dynamic_cast<const ObjectSymbol *>(symbol)) {
+              if (obj->getQualifiedType().isConst()) {
+                return false;
+              }
+            }
+          }
+          return true;
+        } else {
+          return true;
+        }
+      } else {
+        return false;
+      }
+    }
+   private:
+    llvm::Value *mValue;
   };
   IExpression(AST::Kind kind) : AST(kind) {}
   virtual Value codegen() = 0;
@@ -277,6 +317,7 @@ class InitializerAST : public AST {
   InitializerAST(nt<InitializerListAST> initializer_list);
   const nt<AST> ast;
   void print(int indent) override;
+  void codegen(const ObjectType *type, llvm::Value *value);
 };
 
 typedef std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> InitDeclarators;
@@ -296,7 +337,7 @@ class EnumeratorListAST : public AST {
   EnumeratorListAST(nts<EnumeratorAST> enumerator);
   const nts<EnumeratorAST> enumerators;
   void print(int indent) override;
-  std::vector<EnumConstSymbol *> codegen();
+  std::vector<EnumConstSymbol *> codegen(const EnumerationType *enumType);
 };
 class ParameterDeclarationAST : public AST {
  public:
@@ -362,11 +403,12 @@ class AssignmentExpressionAST : public IExpression {
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression,
                           Terminal<AssignmentOp> op,
                           nt<AssignmentExpressionAST> assignment_expression);
-  //TODO check is LHS a lvalue
   const nt<ConditionalExpressionAST> conditional_expression;
   const std::unique_ptr<Terminal<AssignmentOp>> op;
   const nt<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
+  Value codegen() override;
+  static llvm::Value * eqCodegen(const Value &lhs, const Value &rhs, AST *lhsAST, AST *rhsAST);
 };
 class PrimaryExpressionAST : public IExpression {
  public:
@@ -592,9 +634,15 @@ class RealCastExpressionAST : public CastExpressionAST {
 
 class ExpressionAST : public IExpression {
  public:
-  ExpressionAST(nts<AssignmentExpressionAST> assignment_expression);
-  const nts<AssignmentExpressionAST> assignment_expression;
+  ExpressionAST(nt<ExpressionAST> expression, nt<AssignmentExpressionAST> assignment_expression)
+      : IExpression(AST::Kind::EXPRESSION),
+        mExpression(std::move(expression)),
+        mAssignmentExpression(std::move(assignment_expression)) {};
   void print(int indent) override;
+  Value codegen() override;
+ private:
+  nt<ExpressionAST> mExpression;
+  nt<AssignmentExpressionAST> mAssignmentExpression;
 };
 
 class IBinaryOperationAST : public IExpression {
@@ -617,11 +665,12 @@ class BinaryOperatorAST : public IBinaryOperationAST {
       : mLeft(std::move(left)), mOp(op), mRight(std::move(right)) {}
   void print(int indent) override;
   Value codegen() override;
+  static Value codegen(const Value &lhs, const Value &rhs, InfixOp op, const AST *lAST, const AST *rAST);
   static std::tuple<const Type *,
-                      const llvm::Value *,
-                      const llvm::Value *> getCompatibleArithmeticValue(const Value &lhs,
-                                                                                 const Value &rhs,
-                                                                                 const AST *ast);
+                    const llvm::Value *,
+                    const llvm::Value *> UsualArithmeticConversions(const Value &lhs,
+                                                                    const Value &rhs,
+                                                                    const AST *ast);
  protected:
   nt<IBinaryOperationAST> mLeft;
   Terminal<InfixOp> mOp;
@@ -720,6 +769,7 @@ class ConstantExpressionAST : public IExpression {
   ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
   const nt<ConditionalExpressionAST> conditional_expression;
   void print(int indent) override;
+  Value codegen() override;
 };
 class StructDeclaratorAST : public AST {
  public:
