@@ -8,6 +8,14 @@ bool Type::compatible(const Type *type) const {
 bool Type::complete() const {
   return true;
 }
+llvm::Value *Type::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+  if (type != this) {
+    throw SemaException("cannot cast type", ast->involvedTokens());
+  } else {
+    return value;
+  }
+
+}
 unsigned int IntegerType::getSizeInBits() const {
   return mSizeInBits;
 }
@@ -71,6 +79,11 @@ std::pair<const IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *
                                                                                            sIntType.getLLVMType()));
   } else {
     return std::make_pair<const IntegerType *, llvm::Value *>(this, std::move(value));
+  }
+}
+llvm::Value *IntegerType::initializerCodegen(InitializerAST *initializer) {
+  if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(initializer->ast.get())) {
+    auto v = exp->codegen();
   }
 }
 const FloatingType FloatingType::sFloatType(32);

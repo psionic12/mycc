@@ -26,8 +26,26 @@ void TranslationUnitAST::print(int indent) {
 void TranslationUnitAST::codegen() {
   sObjectTable = &mObjectTable;
   sTagTable = &mTagTable;
+  // create global initialization function
+  // c do not have global constructors for initiate global variables, the reason why we create one is because
+  // we don't know if an initializer is a constant or not before we evaluate it,
+  // if there's no BB for global variable to evaluate, the IRBuilder will crash.
+  llvm::FunctionType *globalVarInit_t = llvm::FunctionType::get(
+      VoidType::sVoidType.getLLVMType(), {}, false);
+
+  auto *globalVarInit = llvm::Function::Create(globalVarInit_t,
+                                               llvm::GlobalVariable::LinkageTypes::InternalLinkage);
+  // we do not create llvm.global_ctors cause we don't really use globalVarInit;
+
+  auto *globalVarInitBB = llvm::BasicBlock::Create(sContext, "", globalVarInit, 0);
+  sBuilder.SetInsertPoint(globalVarInitBB);
   for (const auto &ds : external_declarations) {
     ds->codegen();
+  }
+  if (!globalVarInitBB->empty()) {
+    throw std::runtime_error("WTF: globalVarInitBB is not empty");
+  } else {
+    globalVarInit->eraseFromParent();
   }
 }
 ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def)
@@ -418,7 +436,7 @@ void ConstantExpressionAST::print(int indent) {
   ++indent;
   conditional_expression->print(indent);
 }
-IExpression::Value ConstantExpressionAST::codegen() {
+Value ConstantExpressionAST::codegen() {
   Value result = conditional_expression->codegen();
   if (!llvm::dyn_cast<llvm::Constant>(result.getValue())) {
     throw SemaException("cannot envalue on compile time", conditional_expression->involvedTokens());
@@ -477,7 +495,7 @@ void ConditionalExpressionAST::print(int indent) {
     conditional_expression->print(indent);
   }
 }
-IExpression::Value ConditionalExpressionAST::codegen() {
+Value ConditionalExpressionAST::codegen() {
   auto condValue = logical_or_expression->codegen();
   const auto *condType = dynamic_cast<const ScalarType *> (condValue.qualifiedType.getType());
   if (!condType) {
@@ -566,7 +584,7 @@ void ExpressionAST::print(int indent) {
   }
   mAssignmentExpression->print(indent);
 }
-IExpression::Value ExpressionAST::codegen() {
+Value ExpressionAST::codegen() {
   mExpression->codegen();
   return mAssignmentExpression->codegen();
 }
@@ -609,7 +627,7 @@ void AssignmentExpressionAST::print(int indent) {
     assignment_expression->print(indent);
   }
 }
-IExpression::Value AssignmentExpressionAST::codegen() {
+Value AssignmentExpressionAST::codegen() {
   auto lhs = conditional_expression->codegen();
   llvm::Value *result;
   if (lhs.lvalue) {
@@ -734,8 +752,8 @@ IExpression::Value AssignmentExpressionAST::codegen() {
   }
   return Value(lhs.qualifiedType, false, result);
 }
-llvm::Value *AssignmentExpressionAST::eqCodegen(const IExpression::Value &lhs,
-                                                const IExpression::Value &rhs,
+llvm::Value *AssignmentExpressionAST::eqCodegen(const Value &lhs,
+                                                const Value &rhs,
                                                 AST *lhsAST,
                                                 AST *rhsAST) {
   llvm::Value *rhsValue = lhs.getValue();
@@ -770,8 +788,8 @@ llvm::Value *AssignmentExpressionAST::eqCodegen(const IExpression::Value &lhs,
     throw SemaException("cannot assign", lhsAST->involvedTokens());
   }
 
-  sBuilder.CreateStore(lhs.getAddr(), rhsValue, lhs.qualifiedType.isVolatile());
-  return sBuilder.CreateLoad(lhs.getAddr(), lhs.qualifiedType.isVolatile());
+  sBuilder.CreateStore(rhs.getValue(), lhs.getPtr(), lhs.qualifiedType.isVolatile());
+  return sBuilder.CreateLoad(lhs.getPtr(), lhs.qualifiedType.isVolatile());
 }
 CharacterConstantAST::CharacterConstantAST(
     const Token &token)
@@ -920,11 +938,9 @@ EnumConstSymbol *EnumeratorAST::codegen(const EnumerationType *enumerationType, 
   sObjectTable->insert(mSymbol.get());
   return mSymbol.get();
 }
-InitializerAST::InitializerAST(nt<AssignmentExpressionAST>
-                               assignment_expression)
+InitializerAST::InitializerAST(nt<AssignmentExpressionAST> assignment_expression)
     : AST(AST::Kind::INITIALIZER, 0), ast(std::move(assignment_expression)) {}
-InitializerAST::InitializerAST(nt<InitializerListAST>
-                               initializer_list)
+InitializerAST::InitializerAST(nt<InitializerListAST> initializer_list)
     : AST(AST::Kind::INITIALIZER, 1), ast(std::move(initializer_list)) {}
 void InitializerAST::print(int indent) {
   AST::print(indent);
@@ -933,9 +949,13 @@ void InitializerAST::print(int indent) {
 void InitializerAST::codegen(const ObjectType *type, llvm::Value *value) {
   if (auto *assignmentExp = dynamic_cast<AssignmentExpressionAST *>(ast.get())) {
     auto v = assignmentExp->codegen();
-    if (type == v.qualifiedType.getType()) {
+    if (llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+
+    } else {
+      // the same with stack variable assignment
 
     }
+
   }
 }
 InitializerListAST::InitializerListAST(nts<InitializerAST> initializer)
@@ -1282,8 +1302,8 @@ void ArgumentExpressionList::print(int indent) {
 ArgumentExpressionList::ArgumentExpressionList(nts<AssignmentExpressionAST>
                                                argumentList)
     : AST(AST::Kind::ARGUMENT_EXPRESSION_LIST), argumentsList(std::move(argumentList)) {}
-std::vector<IExpression::Value> ArgumentExpressionList::codegen() {
-  std::vector<IExpression::Value> arguments;
+std::vector<Value> ArgumentExpressionList::codegen() {
+  std::vector<Value> arguments;
   for (const auto &argument : argumentsList) {
     argument->codegen();
   }
@@ -1579,7 +1599,7 @@ void IdentifierPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
   identifier->print(++indent);
 }
-IExpression::Value IdentifierPrimaryExpressionAST::codegen() {
+Value IdentifierPrimaryExpressionAST::codegen() {
   auto *symbol = sObjectTable->lookup(identifier->token);
   if (!symbol) {
     throw SemaException(identifier->token.getValue() + " is not declared", identifier->token);
@@ -1606,7 +1626,7 @@ void IntegerConstantPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::printIndent(indent);
   integer_constant->print(++indent);
 }
-IExpression::Value IntegerConstantPrimaryExpressionAST::codegen() {
+Value IntegerConstantPrimaryExpressionAST::codegen() {
   bool isBase10 = integer_constant->mToken.getValue()[0] != 0;
   unsigned long long int n = integer_constant->value;
 
@@ -1697,7 +1717,7 @@ void FloatingConstantPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::printIndent(indent);
   floating_constant->print(++indent);
 }
-IExpression::Value FloatingConstantPrimaryExpressionAST::codegen() {
+Value FloatingConstantPrimaryExpressionAST::codegen() {
   const FloatingType *type;
   switch (floating_constant->suffix) {
     case FloatingConstantAST::Suffix::None:type = &FloatingType::sDoubleType;
@@ -1718,7 +1738,7 @@ void CharacterConstantPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
   character_constant->print(++indent);
 }
-IExpression::Value CharacterConstantPrimaryExpressionAST::codegen() {
+Value CharacterConstantPrimaryExpressionAST::codegen() {
   const IntegerType *type = &IntegerType::sCharType;
   return Value(QualifiedType(type, {TypeQualifier::kCONST}),
                false,
@@ -1732,7 +1752,7 @@ void StringPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
   string->print(++indent);
 }
-IExpression::Value StringPrimaryExpressionAST::codegen() {
+Value StringPrimaryExpressionAST::codegen() {
   return Value(QualifiedType(string->mType.get(), {TypeQualifier::kCONST}),
                true,
                sBuilder.CreateGlobalStringPtr(string->mToken.getValue()));
@@ -1742,7 +1762,7 @@ void ExpressionPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
   expression->print(++indent);
 }
-IExpression::Value ExpressionPrimaryExpressionAST::codegen() {
+Value ExpressionPrimaryExpressionAST::codegen() {
   return expression->codegen();
 }
 ExpressionPrimaryExpressionAST::ExpressionPrimaryExpressionAST(nt<ExpressionAST> expression) : expression(std::move(
@@ -1751,7 +1771,7 @@ void SimplePostfixExpressionAST::print(int indent) {
   AST::print(indent);
   primary_expression->print(++indent);
 }
-IExpression::Value SimplePostfixExpressionAST::codegen() {
+Value SimplePostfixExpressionAST::codegen() {
   return primary_expression->codegen();
 }
 void ArrayPostfixExpressionAST::print(int indent) {
@@ -1760,7 +1780,7 @@ void ArrayPostfixExpressionAST::print(int indent) {
   postfix_expression->print(indent);
   expression->print(indent);
 }
-IExpression::Value ArrayPostfixExpressionAST::codegen() {
+Value ArrayPostfixExpressionAST::codegen() {
   // 6.5.2.1 Array subscripting
   Value lhs = postfix_expression->codegen();
   Value rhs = expression->codegen();
@@ -1812,7 +1832,7 @@ void FunctionPostfixExpressionAST::print(int indent) {
   postfix_expression->print(indent);
   argument_expression_list->print(indent);
 }
-IExpression::Value FunctionPostfixExpressionAST::codegen() {
+Value FunctionPostfixExpressionAST::codegen() {
   //6.5.2.2 Function calls
   Value lhs = postfix_expression->codegen();
   auto *p = dynamic_cast<const PointerType *>(lhs.qualifiedType.getType());
@@ -1861,7 +1881,7 @@ void MemberPostfixExpressionAST::print(int indent) {
   postfix_expression->print(indent);
   identifier->print(indent);
 }
-IExpression::Value MemberPostfixExpressionAST::codegen() {
+Value MemberPostfixExpressionAST::codegen() {
   //6.5.2.3 Structure and union members
   Value lhs = postfix_expression->codegen();
   const CompoundType *compoundTy;
@@ -1896,7 +1916,7 @@ void PointerMemberPostfixExpressionAST::print(int indent) {
   postfix_expression->print(indent);
   identifier->print(indent);
 }
-IExpression::Value PointerMemberPostfixExpressionAST::codegen() {
+Value PointerMemberPostfixExpressionAST::codegen() {
   //6.5.2.3 Structure and union members
   Value lhs = postfix_expression->codegen();
   const CompoundType *compoundTy;
@@ -1933,78 +1953,78 @@ void IncrementPostfixExpression::print(int indent) {
   AST::print(indent);
   postfix_expression->print(++indent);
 }
-IExpression::Value IncrementPostfixExpression::codegen() {
+Value IncrementPostfixExpression::codegen() {
   // 6.5.2.4 Postfix increment and decrement operators
-  Value lhs = postfix_expression->codegen();
-  if (!lhs.modifiable()) {
+  Value value = postfix_expression->codegen();
+  if (!value.modifiable()) {
     throw SemaException("oprand must be modifiable", postfix_expression->involvedTokens());
   }
-  const Type *type = lhs.qualifiedType.getType();
-  llvm::Value *result = sBuilder.CreateAlloca(lhs.qualifiedType.getType()->getLLVMType());
-  sBuilder.CreateStore(lhs.getValue(), result, lhs.qualifiedType.isVolatile());
+  const Type *type = value.qualifiedType.getType();
+  llvm::Value *result = sBuilder.CreateAlloca(value.qualifiedType.getType()->getLLVMType());
+  sBuilder.CreateStore(value.getValue(), result, value.qualifiedType.isVolatile());
   result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
   if (dynamic_cast<const IntegerType *>(type)) {
-    newVal = sBuilder.CreateAdd(lhs.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
   } else if (dynamic_cast<const FloatingType *>(type)) {
-    newVal = sBuilder.CreateFAdd(lhs.getValue(), llvm::ConstantFP::get(sContext, llvm::APFloat(1.0f)));
+    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(sContext, llvm::APFloat(1.0f)));
   } else if (dynamic_cast<const PointerType *>(type)) {
-    newVal = sBuilder.CreateGEP(lhs.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
   } else {
     throw SemaException(
         "The operand of the postfix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
         postfix_expression->involvedTokens());
   }
-  sBuilder.CreateStore(newVal, lhs.getValue(), lhs.qualifiedType.isVolatile());
-  if (lhs.qualifiedType.isConst() || !lhs.lvalue) {
+  sBuilder.CreateStore(newVal, value.getPtr(), value.qualifiedType.isVolatile());
+  if (value.qualifiedType.isConst() || !value.lvalue) {
     throw SemaException("The operand shall be a modifiable lvalue", postfix_expression->involvedTokens());
   }
-  return Value(lhs.qualifiedType, true, result);
+  return Value(value.qualifiedType, true, result);
 }
 void DecrementPostfixExpression::print(int indent) {
   AST::print(indent);
   postfix_expression->print(++indent);
 }
-IExpression::Value DecrementPostfixExpression::codegen() {
+Value DecrementPostfixExpression::codegen() {
   // 6.5.2.4 Postfix increment and decrement operators
-  Value lhs = postfix_expression->codegen();
-  if (!lhs.modifiable()) {
+  Value value = postfix_expression->codegen();
+  if (!value.modifiable()) {
     throw SemaException("oprand must be modifiable", postfix_expression->involvedTokens());
   }
-  const Type *type = lhs.qualifiedType.getType();
-  llvm::Value *result = sBuilder.CreateAlloca(lhs.qualifiedType.getType()->getLLVMType());
-  sBuilder.CreateStore(lhs.getValue(), result, lhs.qualifiedType.isVolatile());
+  const Type *type = value.qualifiedType.getType();
+  llvm::Value *result = sBuilder.CreateAlloca(value.qualifiedType.getType()->getLLVMType());
+  sBuilder.CreateStore(value.getValue(), result, value.qualifiedType.isVolatile());
   result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
   if (dynamic_cast<const IntegerType *>(type)) {
-    newVal = sBuilder.CreateSub(lhs.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
   } else if (dynamic_cast<const FloatingType *>(type)) {
-    newVal = sBuilder.CreateFSub(lhs.getValue(), llvm::ConstantFP::get(sContext, llvm::APFloat(1.0f)));
+    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(sContext, llvm::APFloat(1.0f)));
   } else if (dynamic_cast<const PointerType *>(type)) {
-    newVal = sBuilder.CreateGEP(lhs.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, -1, true)));
+    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, -1, true)));
   } else {
     throw SemaException(
         "The operand of the postfix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
         postfix_expression->involvedTokens());
   }
-  sBuilder.CreateStore(newVal, lhs.getValue(), lhs.qualifiedType.isVolatile());
-  if (lhs.qualifiedType.contains(TypeQualifier::kCONST) || !lhs.lvalue) {
+  sBuilder.CreateStore(newVal, value.getPtr(), value.qualifiedType.isVolatile());
+  if (value.qualifiedType.contains(TypeQualifier::kCONST) || !value.lvalue) {
     throw SemaException("The operand shall be a modifiable lvalue", postfix_expression->involvedTokens());
   }
-  return Value(lhs.qualifiedType, true, result);
+  return Value(value.qualifiedType, true, result);
 }
 void SimpleUnaryExpressionAST::print(int indent) {
   AST::print(indent);
   mPostfixExpression->print(++indent);
 }
-IExpression::Value SimpleUnaryExpressionAST::codegen() {
+Value SimpleUnaryExpressionAST::codegen() {
   return mPostfixExpression->codegen();
 }
 void PrefixIncrementExpressionAST::print(int indent) {
   AST::print(indent);
   mUnaryExpression->print(++indent);
 }
-IExpression::Value PrefixIncrementExpressionAST::codegen() {
+Value PrefixIncrementExpressionAST::codegen() {
   //6.5.3.1 Prefix increment and decrement operators
   Value value = mUnaryExpression->codegen();
   if (!value.modifiable()) {
@@ -2022,7 +2042,7 @@ IExpression::Value PrefixIncrementExpressionAST::codegen() {
         "The operand of the prefix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
         mUnaryExpression->involvedTokens());
   }
-  sBuilder.CreateStore(newVal, value.getValue(), value.qualifiedType.isVolatile());
+  sBuilder.CreateStore(newVal, value.getPtr(), value.qualifiedType.isVolatile());
   if (!value.qualifiedType.isConst() || !value.lvalue) {
     throw SemaException("The operand shall be a modifiable lvalue", mUnaryExpression->involvedTokens());
   }
@@ -2032,7 +2052,7 @@ void PrefixDecrementExpressionAST::print(int indent) {
   AST::print(indent);
   mUnaryExpression->print(++indent);
 }
-IExpression::Value PrefixDecrementExpressionAST::codegen() {
+Value PrefixDecrementExpressionAST::codegen() {
   //6.5.3.1 Prefix increment and decrement operators
   Value value = mUnaryExpression->codegen();
   if (!value.modifiable()) {
@@ -2050,7 +2070,7 @@ IExpression::Value PrefixDecrementExpressionAST::codegen() {
         "The operand of the prefix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
         mUnaryExpression->involvedTokens());
   }
-  sBuilder.CreateStore(newVal, value.getValue(), value.qualifiedType.isVolatile());
+  sBuilder.CreateStore(newVal, value.getPtr(), value.qualifiedType.isVolatile());
   if (!value.qualifiedType.isConst() || !value.lvalue) {
     throw SemaException("The operand shall be a modifiable lvalue", mUnaryExpression->involvedTokens());
   }
@@ -2062,7 +2082,7 @@ void UnaryOperatorExpressionAST::print(int indent) {
   mOp.print(indent);
   mUnaryExpression->print(indent);
 }
-IExpression::Value UnaryOperatorExpressionAST::codegen() {
+Value UnaryOperatorExpressionAST::codegen() {
   Value value = mUnaryExpression->codegen();
   const Type *type = value.qualifiedType.getType();
   llvm::Value *newVal = value.getValue();
@@ -2140,9 +2160,9 @@ IExpression::Value UnaryOperatorExpressionAST::codegen() {
       break;
   }
   return
-      IExpression::Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
+      Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
 }
-IExpression::Value SizeofUnaryExpressionAST::codegen() {
+Value SizeofUnaryExpressionAST::codegen() {
   auto value = mUnaryExpression->codegen();
   if (dynamic_cast<const FunctionType *>(value.qualifiedType.getType())) {
     throw SemaException("The sizeof operator shall not be applied to an expression that has function type",
@@ -2165,7 +2185,7 @@ void SimpleCastExpressionAST::print(int indent) {
   AST::print(indent);
   mUnaryExpression->print(++indent);
 }
-IExpression::Value SimpleCastExpressionAST::codegen() {
+Value SimpleCastExpressionAST::codegen() {
   return mUnaryExpression->codegen();
 }
 void RealCastExpressionAST::print(int indent) {
@@ -2174,7 +2194,7 @@ void RealCastExpressionAST::print(int indent) {
   mTypeName->print(indent);
   mCastExpression->print(indent);
 }
-IExpression::Value RealCastExpressionAST::codegen() {
+Value RealCastExpressionAST::codegen() {
   const Type *castType = mTypeName->codegen().getType();
 
   auto operand = mCastExpression->codegen();
@@ -2198,7 +2218,7 @@ void SimpleBinaryOperatorAST::print(int indent) {
   AST::print(indent);
   mCastExpression->print(++indent);
 }
-IExpression::Value SimpleBinaryOperatorAST::codegen() {
+Value SimpleBinaryOperatorAST::codegen() {
   return mCastExpression->codegen();
 }
 void BinaryOperatorAST::print(int indent) {
@@ -2208,7 +2228,7 @@ void BinaryOperatorAST::print(int indent) {
   mOp.print(indent);
   mRight->print(indent);
 }
-IExpression::Value BinaryOperatorAST::codegen() {
+Value BinaryOperatorAST::codegen() {
   auto lhs = mLeft->codegen();
   auto rhs = mRight->codegen();
   codegen(lhs, rhs, mOp.type, mLeft.get(), mRight.get());
@@ -2268,11 +2288,11 @@ BinaryOperatorAST::UsualArithmeticConversions(const Value &lhs,
   return {lType, lValue, rValue};
 
 }
-IExpression::Value BinaryOperatorAST::codegen(const IExpression::Value &lhs,
-                                              const IExpression::Value &rhs,
-                                              InfixOp op,
-                                              const AST *lAST,
-                                              const AST *rAST) {
+Value BinaryOperatorAST::codegen(const Value &lhs,
+                                 const Value &rhs,
+                                 InfixOp op,
+                                 const AST *lAST,
+                                 const AST *rAST) {
   const Type *type;
   llvm::Value *lValue = lhs.getValue();
   llvm::Value *rValue = rhs.getValue();
@@ -2556,7 +2576,7 @@ IExpression::Value BinaryOperatorAST::codegen(const IExpression::Value &lhs,
   }
   throw SemaException("invalid operands to binary expression", lAST->involvedTokens());
 }
-IExpression::Value LogicalBinaryOperatorAST::codegen() {
+Value LogicalBinaryOperatorAST::codegen() {
   auto *currentFunction = sBuilder.GetInsertBlock()->getParent();
   auto *thisBlock = sBuilder.GetInsertBlock();
   auto *otherBlock = llvm::BasicBlock::Create(sContext, "", currentFunction);

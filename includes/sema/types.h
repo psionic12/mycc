@@ -9,6 +9,7 @@
 #include "qualifiedType.h"
 #include "symbol_tables.h"
 #include "llvm/IR/IRBuilder.h"
+#include "ast.h"
 
 class AST;
 
@@ -19,17 +20,16 @@ class Type {
   virtual bool compatible(const Type *type) const;
   virtual bool complete() const;
   virtual llvm::Type *getLLVMType() const = 0;
+  virtual llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const;
 };
 
 class ObjectType : public Type {
  public:
   virtual unsigned int getSizeInBits() const = 0;
+  virtual llvm::Value* initializerCodegen(InitializerAST *initializer) = 0;
 };
 
-class ScalarType : public ObjectType {
- public:
-  virtual llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const = 0;
-};
+class ScalarType : public ObjectType {};
 class ArithmeticType : public ScalarType {};
 class AggregateType : public ObjectType {};
 
@@ -52,6 +52,7 @@ class IntegerType : public ArithmeticType {
   bool isSigned() const;
   llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const;
   std::pair<const IntegerType *, llvm::Value *> promote(llvm::Value *value) const;
+  llvm::Value *initializerCodegen(InitializerAST *initializer) override;
  private:
   unsigned int mSizeInBits;
   bool mSigned;

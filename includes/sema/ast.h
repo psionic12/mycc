@@ -16,6 +16,7 @@
 #include "llvm/IR/Value.h"
 #include "qualifiedType.h"
 #include "symbol_tables.h"
+#include "value.h"
 class SymbolTable;
 class SemaException : public std::exception {
  public:
@@ -168,54 +169,6 @@ class CompoundStatementAST;
 class StatementAST;
 class IExpression : public AST {
  public:
-  class Value {
-   public:
-    Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
-        : qualifiedType(std::move(qualifiedType)), lvalue(lvalue), mValue(value) {}
-    const QualifiedType qualifiedType;
-    const bool lvalue;
-    llvm::Value *getValue() const {
-      if (lvalue) {
-        return sBuilder.CreateLoad(mValue, qualifiedType.isVolatile());
-      } else {
-        return mValue;
-      }
-    }
-    llvm::Value * getAddr() const {
-      if (lvalue) {
-        return mValue;
-      } else {
-        throw std::runtime_error("WTF: get addr for rvalue");
-      }
-    }
-    bool modifiable() const {
-      if (lvalue) {
-        if (dynamic_cast<const ArrayType *>(qualifiedType.getType())) {
-          return false;
-        } else if (!qualifiedType.getType()->complete()) {
-          return false;
-        } else if (qualifiedType.isConst()) {
-          return false;
-        } else if (const auto *type = dynamic_cast<const CompoundType *>(qualifiedType.getType())) {
-          for (const auto &pair : type->mTable) {
-            const auto *symbol = pair.second;
-            if (const auto *obj = dynamic_cast<const ObjectSymbol *>(symbol)) {
-              if (obj->getQualifiedType().isConst()) {
-                return false;
-              }
-            }
-          }
-          return true;
-        } else {
-          return true;
-        }
-      } else {
-        return false;
-      }
-    }
-   private:
-    llvm::Value *mValue;
-  };
   IExpression(AST::Kind kind) : AST(kind) {}
   virtual Value codegen() = 0;
 };
@@ -408,7 +361,7 @@ class AssignmentExpressionAST : public IExpression {
   const nt<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
   Value codegen() override;
-  static llvm::Value * eqCodegen(const Value &lhs, const Value &rhs, AST *lhsAST, AST *rhsAST);
+  static llvm::Value *eqCodegen(const Value &lhs, const Value &rhs, AST *lhsAST, AST *rhsAST);
 };
 class PrimaryExpressionAST : public IExpression {
  public:
@@ -934,10 +887,11 @@ class TranslationUnitAST : public AST {
                      SymbolTable &objectTable,
                      SymbolTable &tagTable);
   const nts<ExternalDeclarationAST> external_declarations;
-  SymbolTable &mObjectTable;
-  SymbolTable &mTagTable;
   void print(int indent) override;
   void codegen();
   //TODO private members
+ private:
+  SymbolTable &mObjectTable;
+  SymbolTable &mTagTable;
 };
 #endif //MYCCPILER_AST_H
