@@ -167,7 +167,7 @@ void DeclarationAST::codegen() {
     if (auto *objSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
       const auto *type = objSymbol->getQualifiedType().getType();
       if (const auto *objtype = dynamic_cast<const ObjectType *>(type)) {
-        ast.second->codegen(objtype, objSymbol->getValue());
+        ast.second->codegen();
       } else {
         throw SemaException("only object types can be initialized", ast.first->involvedTokens());
       }
@@ -946,23 +946,13 @@ void InitializerAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
 }
-void InitializerAST::codegen(const ObjectType *type, llvm::Value *value) {
-  if (auto *assignmentExp = dynamic_cast<AssignmentExpressionAST *>(ast.get())) {
-    auto v = assignmentExp->codegen();
-    if (llvm::dyn_cast<llvm::GlobalVariable>(value)) {
-
-    } else {
-      // the same with stack variable assignment
-
-    }
-
-  }
+void InitializerAST::codegen() {
 }
 InitializerListAST::InitializerListAST(nts<InitializerAST> initializer)
-    : AST(AST::Kind::INITIALIZER_LIST), initializer(std::move(initializer)) {}
+    : AST(AST::Kind::INITIALIZER_LIST), initializers(std::move(initializer)) {}
 void InitializerListAST::print(int indent) {
   AST::print(indent);
-  initializer.print(++indent);
+  initializers.print(++indent);
 }
 StatementAST::StatementAST(nt<LabeledStatementAST>
                            ast) : AST(AST::Kind::STATEMENT, 0), ast(std::move(ast)) {}

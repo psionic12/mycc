@@ -44,7 +44,11 @@ bool IntegerType::isSigned() const {
 llvm::Value *IntegerType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
   auto &builder = AST::getBuilder();
   auto &module = AST::getModule();
-  if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+  if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
+    return llvm::ConstantInt::get(getLLVMType(), constantInt->getSExtValue());
+  } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
+    return llvm::ConstantInt::get(getLLVMType(), constantFp->getValueAPF().bitcastToAPInt());
+  } else if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
     if (mSizeInBits > integerType->mSizeInBits) {
       if (integerType->mSizeInBits) {
         return builder.CreateSExt(value, type->getLLVMType());
@@ -81,10 +85,8 @@ std::pair<const IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *
     return std::make_pair<const IntegerType *, llvm::Value *>(this, std::move(value));
   }
 }
-llvm::Value *IntegerType::initializerCodegen(InitializerAST *initializer) {
-  if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(initializer->ast.get())) {
-    auto v = exp->codegen();
-  }
+llvm::Constant *IntegerType::getDefaultValue() const {
+  return llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 0));
 }
 const FloatingType FloatingType::sFloatType(32);
 const FloatingType FloatingType::sDoubleType(64);
@@ -113,7 +115,11 @@ llvm::APFloat FloatingType::getAPFloat(long double n) const {
 llvm::Value *FloatingType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
   auto &builder = AST::getBuilder();
   auto &module = AST::getModule();
-  if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+  if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
+    return llvm::ConstantFP::get(getLLVMType(), constantInt->getSExtValue());
+  } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
+    return llvm::ConstantFP::get(getLLVMType(), constantFp->getValueAPF().convertToDouble());
+  } else if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
     if (integerType->isSigned()) {
       return builder.CreateFPToSI(value, type->getLLVMType());
     } else {
@@ -130,6 +136,9 @@ llvm::Value *FloatingType::cast(const Type *type, llvm::Value *value, const AST 
   } else {
     throw SemaException("cannot cast to float type", ast->involvedTokens());
   }
+}
+llvm::Constant *FloatingType::getDefaultValue() const {
+  return llvm::ConstantFP::get(getLLVMType(), 0.0);
 }
 FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg)
     : mReturnType(std::move(returnType)),
@@ -194,6 +203,56 @@ bool ArrayType::compatible(const Type *type) const {
 const QualifiedType &ArrayType::getReferencedQualifiedType() const {
   return mElementType;
 }
+llvm::Value *ArrayType::initializerCodegen(InitializerAST *ast) const {
+  llvm::Value *result = nullptr;
+  if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
+    const auto &initializers = list->initializers;
+    bool isAllConstant = true;
+    auto difference = mSize - initializers.size();
+    if (complete() && difference < 0) {
+      throw SemaException("excess elements", ast->involvedTokens());
+    }
+    std::vector<llvm::Value *> values;
+    for (const auto &initializer : initializers) {
+      auto *v = static_cast<const ObjectType *>(mElementType.getType())->initializerCodegen(initializer.get());
+      if (!llvm::dyn_cast<llvm::Constant>(v)) {
+        isAllConstant = false;
+      }
+      values.push_back(v);
+    }
+    auto *constInt0 = llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 0));
+    auto *constInt1 = llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 1));
+    if (isAllConstant) {
+      std::vector<llvm::Constant *> constants(values.begin(), values.end());
+      for (int i = 0; i < difference; ++i) {
+        constants.push_back(static_cast<const ObjectType *>(mElementType.getType())->getDefaultValue());
+      }
+      result = llvm::ConstantArray::get(llvm::ArrayType::get(mElementType.getType()->getLLVMType(), values.size()),
+                                        constants);
+    } else {
+      auto &builder = AST::getBuilder();
+      auto *type = llvm::ArrayType::get(mElementType.getType()->getLLVMType(), values.size());
+      auto *alloc = builder.CreateAlloca(type);
+      auto *ptr = builder.CreateGEP(type, alloc, {constInt0, constInt0});
+      for (auto *v :values) {
+        builder.CreateStore(v, ptr);
+        ptr = builder.CreateGEP(mElementType.getType()->getLLVMType(), ptr, constInt1);
+      }
+      result = alloc;
+    }
+  } else {
+    throw SemaException("array initializer must be an initializer list", ast->involvedTokens());
+  }
+  return result;
+}
+llvm::Constant *ArrayType::getDefaultValue() const {
+  if (!complete()) {
+    throw std::runtime_error("WTF: cannot set default values to imcompleted array");
+  }
+  std::vector<llvm::Constant *>
+      values(mSize, static_cast<const ObjectType *>(mElementType.getType())->getDefaultValue());
+  return llvm::ConstantArray::get(getLLVMType(), values);
+}
 const Type *PointerType::getReferencedType() const {
   return mReferencedQualifiedType.getType();
 }
@@ -235,6 +294,9 @@ llvm::Value *PointerType::cast(const Type *type, llvm::Value *value, const AST *
     throw SemaException("cannot cast to pointer type", ast->involvedTokens());
   }
 }
+llvm::Constant *PointerType::getDefaultValue() const {
+  return llvm::ConstantPointerNull::get(getLLVMType());
+}
 const VoidType VoidType::sVoidType;
 bool VoidType::complete() const {
   return false;
@@ -245,14 +307,14 @@ llvm::Type *VoidType::getLLVMType() const {
 unsigned int VoidType::getSizeInBits() const {
   return 0;
 }
+llvm::Value *VoidType::initializerCodegen(InitializerAST *ast) const {
+  throw std::runtime_error("WTF: initializer to a void type?!");
+}
+llvm::Constant *VoidType::getDefaultValue() const {
+  throw std::runtime_error("WTF: get default value for void type");
+}
 CompoundType::CompoundType()
     : mSizeInBits(0), mComplete(false), mTable(ScopeKind::TAG) {}
-bool CompoundType::complete() const {
-  return mComplete;
-}
-unsigned int CompoundType::getSizeInBits() const {
-  return mSizeInBits;
-}
 CompoundType::CompoundType(std::string tagName)
     : mSizeInBits(0), mComplete(false), mTable(ScopeKind::TAG), mTagName(std::move(tagName)) {}
 const std::string &CompoundType::getTagName() const {
@@ -272,6 +334,7 @@ void StructType::setBody(SymbolTable &&table) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
       if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
         fields[obj->getIndex()] = (obj->getQualifiedType().getType()->getLLVMType());
+        mOrderedFields[obj->getIndex()] = obj->getQualifiedType();
         mSizeInBits += type->getSizeInBits();
       }
     }
@@ -303,6 +366,62 @@ bool StructType::compatible(const Type *type) const {
     return true;
   }
 }
+llvm::Value *StructType::initializerCodegen(InitializerAST *ast) const {
+  llvm::Value *result = nullptr;
+  if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
+    const auto &initializers = list->initializers;
+    if (mOrderedFields.size() < initializers.size()) {
+      throw SemaException("excess elements", ast->involvedTokens());
+    }
+    bool isAllConstant = true;
+    std::vector<llvm::Value *> values;
+    auto iter = mOrderedFields.begin();
+    for (const auto &initializer : initializers) {
+      auto *v = static_cast<const ObjectType *>(iter->qualifiedType.getType())->initializerCodegen(initializer.get());
+      if (!llvm::dyn_cast<llvm::Constant>(v)) {
+        isAllConstant = false;
+      }
+      values.push_back(v);
+      ++iter;
+    }
+    if (isAllConstant) {
+      std::vector<llvm::Constant *> constants(values.begin(), values.end());
+      while (iter != mOrderedFields.end()) {
+        constants.push_back(static_cast<const ObjectType *>(iter->getType())->getDefaultValue());
+      }
+      result = llvm::ConstantStruct::get(getLLVMType(), constants);
+    } else {
+      auto &builder = AST::getBuilder();
+      auto *alloc = builder.CreateAlloca(getLLVMType());
+      auto *constInt0 = llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 0));
+      for (int i = 0; i < values.size(); ++i) {
+        auto
+            *ptr = builder.CreateGEP(alloc, {constInt0, llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, i))});
+        builder.CreateStore(values[i], ptr);
+      }
+      result = alloc;
+    }
+  } else {
+    throw SemaException("array initializer must be an initializer list", ast->involvedTokens());
+  }
+  return result;
+}
+bool StructType::complete() const {
+  return mComplete;
+}
+unsigned int StructType::getSizeInBits() const {
+  return mSizeInBits;
+}
+llvm::Constant *StructType::getDefaultValue() const {
+  if (!complete()) {
+    throw std::runtime_error("WTF: cannot set default values to imcompleted array");
+  }
+  std::vector<llvm::Constant *> values(mOrderedFields);
+  for (const auto &qualifiedType : mOrderedFields) {
+    values.push_back(static_cast<const ObjectType *>(qualifiedType.getType())->getDefaultValue());
+  }
+  llvm::ConstantStruct::get(getLLVMType(), values);
+}
 UnionType::UnionType(const std::string &tag)
     : mLLVMType(llvm::StructType::create(AST::getContext(), tag)), CompoundType(tag) {}
 
@@ -317,7 +436,10 @@ void UnionType::setBody(SymbolTable &&table) {
       if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
         fields.push_back(obj->getQualifiedType().getType()->getLLVMType());
         auto size = type->getSizeInBits();
-        mSizeInBits = mSizeInBits > size ? size : mSizeInBits;
+        if (size > mSizeInBits) {
+          mSizeInBits = size;
+          mBigestType = type;
+        }
       }
     }
   }
@@ -333,7 +455,7 @@ bool UnionType::compatible(const Type *type) const {
     auto ti = st->mTable.begin();
     while (si != mTable.end()) {
       if (auto *obj1 = dynamic_cast<ObjectSymbol *>(si->second)) {
-        if (auto *obj2 = dynamic_cast<ObjectSymbol *>(si->second)) {
+        if (auto *obj2 = dynamic_cast<ObjectSymbol *>(ti->second)) {
           if (si->first != ti->first
               || !obj1->getQualifiedType().getType()->compatible(obj2->getQualifiedType().getType())) {
             return false;
@@ -347,6 +469,31 @@ bool UnionType::compatible(const Type *type) const {
     return true;
   }
 }
+unsigned int UnionType::getSizeInBits() const {
+  return mSizeInBits;
+}
+llvm::Value *UnionType::initializerCodegen(InitializerAST *ast) const {
+  llvm::Value *result = nullptr;
+  if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
+    const auto &initializers = list->initializers;
+    if (initializers.size() == 1) {
+      result = mBigestType->initializerCodegen(initializers[0].get());
+    } else if (initializers.size() > 1) {
+      throw SemaException("excess elements", ast->involvedTokens());
+    } else {
+      result = llvm::ConstantStruct::get(getLLVMType(), {mBigestType->getDefaultValue()});
+    }
+  } else {
+    throw SemaException("union initializer must be an initializer list", ast->involvedTokens());
+  }
+  return result;
+}
+bool UnionType::complete() const {
+  return mComplete;
+}
+llvm::Constant *UnionType::getDefaultValue() const {
+  return llvm::ConstantStruct::get(getLLVMType(), {mBigestType->getDefaultValue()});
+}
 void EnumerationType::setBody(SymbolTable &&table) {
   mTable = std::move(table);
 }
@@ -354,5 +501,24 @@ EnumerationType::EnumerationType(const std::string &tag) : CompoundType(tag) {}
 llvm::Type *EnumerationType::getLLVMType() const {
   return nullptr;
 }
+bool EnumerationType::complete() const {
+  return mComplete;
+}
 
-
+llvm::Value *ScalarType::initializerCodegen(InitializerAST *ast) const {
+  llvm::Value *result = nullptr;
+  if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(ast->ast.get())) {
+    auto v = exp->codegen();
+    result = cast(v.qualifiedType.getType(), v.getValue(), ast);
+  } else {
+    const auto &initializers = static_cast<InitializerListAST *>(ast->ast.get())->initializers;
+    if (initializers.size() > 1) {
+      throw SemaException("excess elements", ast->involvedTokens());
+    } else if (initializers.size() == 1) {
+      result = initializerCodegen(initializers[0].get());
+    } else {
+      result = getDefaultValue();
+    };
+  }
+  return result;
+}

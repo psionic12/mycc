@@ -260,7 +260,7 @@ class StatementAST : public AST {
 class InitializerListAST : public AST {
  public:
   InitializerListAST(nts<InitializerAST> initializer);
-  const nts<InitializerAST> initializer;
+  const nts<InitializerAST> initializers;
   void print(int indent) override;
 
 };
@@ -270,7 +270,7 @@ class InitializerAST : public AST {
   InitializerAST(nt<InitializerListAST> initializer_list);
   const nt<AST> ast;
   void print(int indent) override;
-  void codegen(const ObjectType *type, llvm::Value *value);
+  void codegen();
 };
 
 typedef std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> InitDeclarators;
@@ -421,7 +421,7 @@ class ArgumentExpressionList : public AST {
   ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList);
   void print(int indent) override;
   const nts<AssignmentExpressionAST> argumentsList;
-  std::vector<IExpression::Value> codegen();
+  std::vector<Value> codegen();
 };
 class PostfixExpressionAST : public IExpression {
  public:

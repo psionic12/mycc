@@ -9,9 +9,9 @@
 #include "qualifiedType.h"
 #include "symbol_tables.h"
 #include "llvm/IR/IRBuilder.h"
-#include "ast.h"
 
 class AST;
+class InitializerAST;
 
 class Type {
  private:
@@ -26,10 +26,14 @@ class Type {
 class ObjectType : public Type {
  public:
   virtual unsigned int getSizeInBits() const = 0;
-  virtual llvm::Value* initializerCodegen(InitializerAST *initializer) = 0;
+  virtual llvm::Value *initializerCodegen(InitializerAST *ast) const = 0;
+  virtual llvm::Constant *getDefaultValue() const = 0;
 };
 
-class ScalarType : public ObjectType {};
+class ScalarType : public ObjectType {
+ public:
+  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+};
 class ArithmeticType : public ScalarType {};
 class AggregateType : public ObjectType {};
 
@@ -52,7 +56,7 @@ class IntegerType : public ArithmeticType {
   bool isSigned() const;
   llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const;
   std::pair<const IntegerType *, llvm::Value *> promote(llvm::Value *value) const;
-  llvm::Value *initializerCodegen(InitializerAST *initializer) override;
+  llvm::Constant *getDefaultValue() const override;
  private:
   unsigned int mSizeInBits;
   bool mSigned;
@@ -71,6 +75,7 @@ class FloatingType : public ArithmeticType {
   llvm::Value *cast(const Type *type,
                     llvm::Value *value,
                     const AST *ast) const;
+  llvm::Constant *getDefaultValue() const override;
  private:
   FloatingType(unsigned int mSizeInBits);
   unsigned int mSizeInBits;
@@ -82,6 +87,8 @@ class VoidType : public ObjectType {
   bool complete() const override;
   llvm::Type *getLLVMType() const override;
   unsigned int getSizeInBits() const override;
+  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  llvm::Constant *getDefaultValue() const override;
 };
 
 class PointerType : public ScalarType {
@@ -97,6 +104,7 @@ class PointerType : public ScalarType {
   bool complete() const override;
   bool compatible(const Type *type) const override;
   const static IntegerType *const sAddrType;
+  llvm::Constant *getDefaultValue() const override;
  protected:
   QualifiedType mReferencedQualifiedType;
 };
@@ -123,18 +131,18 @@ class ArrayType : public AggregateType {
   llvm::ArrayType *getLLVMType() const override;
   bool compatible(const Type *type) const override;
   const QualifiedType &getReferencedQualifiedType() const;
+  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  llvm::Constant *getDefaultValue() const override;
  private:
   int64_t mSize = 0; // same with llvm
   const QualifiedType mElementType;
   PointerType mPointerType;
 };
 
-class CompoundType : public ObjectType {
+class CompoundType {
  public:
   CompoundType();
   CompoundType(std::string tagName);
-  bool complete() const override;
-  unsigned int getSizeInBits() const override;
   SymbolTable mTable;
   virtual void setBody(SymbolTable &&table) = 0;
   const std::string &getTagName() const;
@@ -151,27 +159,38 @@ class StructType : public CompoundType, public AggregateType {
   llvm::StructType *getLLVMType() const override;
   void setBody(SymbolTable &&table) override;
   bool compatible(const Type *type) const override;
+  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  bool complete() const override;
+  unsigned int getSizeInBits() const override;
+  llvm::Constant *getDefaultValue() const override;
  private:
   llvm::StructType *mLLVMType;
+  std::vector<QualifiedType> mOrderedFields;
 };
 
-class UnionType : public CompoundType {
+class UnionType : public CompoundType, public ObjectType {
  public:
   UnionType() = default;
   UnionType(const std::string &tag);
   llvm::StructType *getLLVMType() const override;
   void setBody(SymbolTable &&table) override;
   bool compatible(const Type *type) const override;
+  unsigned int getSizeInBits() const override;
+  bool complete() const override;
+  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  llvm::Constant *getDefaultValue() const override;
  private:
   llvm::StructType *mLLVMType;
+  const ObjectType *mBigestType;
 };
 
-class EnumerationType : public CompoundType {
+class EnumerationType : public CompoundType, public Type {
  public:
   EnumerationType() = default;
   EnumerationType(const std::string &tag);
   void setBody(SymbolTable &&table) override;
   llvm::Type *getLLVMType() const override;
+  bool complete() const override;
 };
 
 class EnumerationMemberType : public IntegerType {
