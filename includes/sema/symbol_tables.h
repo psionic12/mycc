@@ -1,5 +1,3 @@
-#include <utility>
-
 #ifndef MYCCPILER_SYMBOL_TABLES_H
 #define MYCCPILER_SYMBOL_TABLES_H
 #include <map>
@@ -157,6 +155,9 @@ class TypedefSymbol : public ISymbol {
   void setType(QualifiedType qualifiedType) {
     mQualifiedType = qualifiedType;
   }
+  llvm::Value *getValue() override {
+    throw std::runtime_error("WTF: get value from type def");
+  }
  private:
   QualifiedType mQualifiedType;
 };
@@ -207,12 +208,6 @@ class SymbolTable : public std::map<std::string, ISymbol *> {
   SymbolTable *mFather;
   int mAnonymousId = 0;
 };
-void ISymbol::setLinkage(Linkage linkage) {
-  ISymbol::linkage = linkage;
-}
-Linkage ISymbol::getLinkage() const {
-  return linkage;
-}
 
 class SymbolTables {
  public:

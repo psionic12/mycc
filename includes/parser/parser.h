@@ -73,8 +73,7 @@ class Parser {
   AssignmentOp parseAssignmentOperator();
   Terminal<UnaryOp> parseUnaryOperator();
   nt<TypeNameAST> parseTypeName();
-  nt<ParameterTypeListAST> parseParameterTypeList();
-  nt<ParameterListAST> parseParameterList();
+  nt<ParameterListAST> parseParameterLists();
   nt<ParameterDeclarationAST> parseParameterDeclaration();
   nt<EnumSpecifierAST> parseEnumSpecifier();
   nt<EnumeratorListAST> parseEnumeratorList();

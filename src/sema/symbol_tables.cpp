@@ -39,3 +39,10 @@ SymbolTable *SymbolTables::createTable(ScopeKind kind) {
   tables.emplace_back(kind);
   return &tables.back();
 }
+
+void ISymbol::setLinkage(Linkage linkage) {
+  ISymbol::linkage = linkage;
+}
+Linkage ISymbol::getLinkage() const {
+  return linkage;
+}

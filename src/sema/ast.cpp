@@ -162,17 +162,36 @@ void DeclarationAST::codegen() {
   const auto &pair = declaration_specifiers->codegen();
   const auto &storageSpecifier = pair.first;
   const auto &qualifiers = pair.second;
-  for (auto &ast : init_declarators) {
-    ISymbol *symbol = ast.first->codegen(storageSpecifier.type, qualifiers);
+  for (auto &initPair : init_declarators) {
+    ISymbol *symbol = initPair.first->codegen(storageSpecifier.type, qualifiers);
     if (auto *objSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
       const auto *type = objSymbol->getQualifiedType().getType();
+      auto *value = objSymbol->getValue();
       if (const auto *objtype = dynamic_cast<const ObjectType *>(type)) {
-        ast.second->codegen();
+        auto *initValue = objtype->initializerCodegen(initPair.second.get());
+        if (auto *constantInitValue = llvm::dyn_cast<llvm::Constant>(initValue)) {
+          if (auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+            global->setInitializer(constantInitValue);
+          } else {
+            sBuilder.CreateMemCpy(value,
+                                  initValue,
+                                  objtype->getSizeInBits() / 8,
+                                  0,
+                                  objSymbol->getQualifiedType().isVolatile());
+          }
+        } else {
+          if (llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+            throw SemaException("initializer element is not a compile-time constant",
+                                initPair.second->involvedTokens());
+          } else {
+            sBuilder.CreateStore(value, initValue);
+          }
+        }
       } else {
-        throw SemaException("only object types can be initialized", ast.first->involvedTokens());
+        throw SemaException("only object types can be initialized", initPair.first->involvedTokens());
       }
-    } else if (ast.second != nullptr) {
-      throw SemaException("not assignable: ", ast.first->involvedTokens());
+    } else if (initPair.second != nullptr) {
+      throw SemaException("not assignable: ", initPair.first->involvedTokens());
     }
 
   }
@@ -221,7 +240,7 @@ std::pair<const Terminal<StorageSpecifier> &, QualifiedType> DeclarationSpecifie
   const auto &storageSpecifier = storage_specifiers.back();
   std::set<TypeQualifier> qualifiers;
   for (const auto &qualifier : type_qualifiers) {
-    qualifiers.emplace(qualifier);
+    qualifiers.emplace(qualifier->op.type);
   }
   //TODO If an aggregate or union object is declared with a storage-class specifier other than typedef, the properties resulting from the storage-class specifier, except with respect to linkage, also apply to the members of the object, and so on recursively for any aggregate or union member objects.
   //TODO At least one type specifier shall be given in the declaration specifiers in each declaration,  and in the specifier-qualifier list in each struct declaration and type name.
@@ -243,9 +262,6 @@ const Token *DeclaratorAST::getIdentifier() const {
 }
 ISymbol *DeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
   return direct_declarator->codegen(storageSpecifier, pointer->codegen(derivedType));
-}
-bool DeclaratorAST::isAbstract() const {
-  return direct_declarator->isAbstract();
 }
 StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier)
     : AST(AST::Kind::STORAGE_CLASS_SPECIFIER), storage_speicifier(storage_speicifier) {}
@@ -310,19 +326,19 @@ CompoundType *StructOrUnionSpecifierAST::codegen() {
   if (bStruct == StructOrUnion::kSTRUCT) {
     if (id) {
       const auto &token = id->token;
-      mSymbol = std::make_unique<TagSymbol>(std::make_unique<StructType>(token.getValue(), sModule), &token);
+      mSymbol = std::make_unique<TagSymbol>(std::make_unique<StructType>(token.getValue()), &token);
       sTagTable->insert(token, mSymbol.get());
     } else {
-      mSymbol = std::make_unique<TagSymbol>(std::make_unique<StructType>(sModule), nullptr);
+      mSymbol = std::make_unique<TagSymbol>(std::make_unique<StructType>(), nullptr);
       sTagTable->insert(mSymbol.get());
     }
   } else {
     if (id) {
       const auto &token = id->token;
-      mSymbol = std::make_unique<TagSymbol>(std::make_unique<UnionType>(token.getValue(), sModule), &token);
+      mSymbol = std::make_unique<TagSymbol>(std::make_unique<UnionType>(token.getValue()), &token);
       sTagTable->insert(token, mSymbol.get());
     } else {
-      mSymbol = std::make_unique<TagSymbol>(std::make_unique<UnionType>(sModule), nullptr);
+      mSymbol = std::make_unique<TagSymbol>(std::make_unique<UnionType>(), nullptr);
       sTagTable->insert(mSymbol.get());
     }
   }
@@ -462,14 +478,6 @@ const QualifiedType PointerAST::codegen(const QualifiedType &derivedType) {
     mPointerType = std::make_unique<PointerType>(derivedType);
   }
   return QualifiedType(mPointerType.get(), std::move(qualifiers));
-}
-ParameterTypeListAST::ParameterTypeListAST(nt<ParameterListAST>
-                                           parameter_list, bool
-                                           hasMultiple)
-    : AST(AST::Kind::PARAMETER_TYPE_LIST, hasMultiple ? 1 : 0), parameter_list(std::move(parameter_list)) {}
-void ParameterTypeListAST::print(int indent) {
-  AST::print(indent);
-  parameter_list->print(++indent);
 }
 ConditionalExpressionAST::ConditionalExpressionAST(nt<IBinaryOperationAST>
                                                    logical_or_expression)
@@ -826,9 +834,13 @@ void FloatingConstantAST::print(int indent) {
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST>
                                                id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
-ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST>
-                                   parameter_declaration, SymbolTable &table)
-    : AST(AST::Kind::PARAMETER_LIST), parameter_declaration(std::move(parameter_declaration)), mObjectTable(table) {}
+ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration,
+                                   bool hasMultiple,
+                                   SymbolTable &table)
+    : AST(AST::Kind::PARAMETER_LIST),
+      parameter_declaration(std::move(parameter_declaration)),
+      mObjectTable(table),
+      mMultiple(hasMultiple) {}
 void ParameterListAST::print(int indent) {
   AST::print(indent);
   parameter_declaration.print(++indent);
@@ -853,6 +865,9 @@ std::vector<QualifiedType> ParameterListAST::codegen() {
     }
   }
   return parameters;
+}
+bool ParameterListAST::hasMultiple() const {
+  return mMultiple;
 }
 ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST>
                                                  declaration_specifiers,
@@ -945,8 +960,6 @@ InitializerAST::InitializerAST(nt<InitializerListAST> initializer_list)
 void InitializerAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
-}
-void InitializerAST::codegen() {
 }
 InitializerListAST::InitializerListAST(nts<InitializerAST> initializer)
     : AST(AST::Kind::INITIALIZER_LIST), initializers(std::move(initializer)) {}
@@ -1128,7 +1141,7 @@ void IdentifierAST::print(int indent) {
 }
 StringAST::StringAST(
     const Token &token) : AST(AST::Kind::STRING), mToken(token) {
-  mType = std::make_unique<ArrayType>(&IntegerType::sCharType, mToken.getValue().size());
+  mType = std::make_unique<ArrayType>(QualifiedType(&IntegerType::sCharType, {}), mToken.getValue().size());
 }
 llvm::LLVMContext AST::sContext;
 llvm::Module AST::sModule("top", sContext);
@@ -1405,7 +1418,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
       if (!identifier) {
         throw SemaException("typedef must have an identifier in declarator", involvedTokens());
       }
-      mSymbol = std::make_unique<TypedefSymbol>(derivedType, identifier->token);
+      mSymbol = std::make_unique<TypedefSymbol>(derivedType, &identifier->token);
       sObjectTable->insert(identifier->token, mSymbol.get());
       return mSymbol.get();
     }
@@ -1507,9 +1520,6 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
   mSymbol = std::make_unique<ObjectSymbol>(derivedType, value, token);
   return mSymbol.get();
 }
-bool SimpleDirectDeclaratorAST::isAbstract() const {
-  return identifier == nullptr;
-}
 ParenthesedDirectDeclaratorAST::ParenthesedDirectDeclaratorAST(nt<DeclaratorAST> declarator)
     : declarator(std::move(declarator)) {}
 void ParenthesedDirectDeclaratorAST::print(int indent) {
@@ -1518,9 +1528,6 @@ void ParenthesedDirectDeclaratorAST::print(int indent) {
 }
 const Token *ParenthesedDirectDeclaratorAST::getIdentifier() {
   return declarator->getIdentifier();
-}
-bool ParenthesedDirectDeclaratorAST::isAbstract() const {
-  return declarator->isAbstract();
 }
 ISymbol *ParenthesedDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
   return declarator->codegen(storageSpecifier, derivedType);
@@ -1581,7 +1588,7 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const
         std::string("function ") + getIdentifier()->getValue() + "cannot be array type or function type",
         involvedTokens());
   }
-  mFunctionType = std::make_unique<FunctionType>(derivedType, parameterList->codegen());
+  mFunctionType = std::make_unique<FunctionType>(derivedType, parameterList->codegen(), parameterList->hasMultiple());
   QualifiedType qualifiedType(mFunctionType.get(), {});
   return directDeclarator->codegen(storageSpecifier, qualifiedType);
 }
@@ -2070,10 +2077,10 @@ void UnaryOperatorExpressionAST::print(int indent) {
   AST::print(indent);
   ++indent;
   mOp.print(indent);
-  mUnaryExpression->print(indent);
+  mCastExpression->print(indent);
 }
 Value UnaryOperatorExpressionAST::codegen() {
-  Value value = mUnaryExpression->codegen();
+  Value value = mCastExpression->codegen();
   const Type *type = value.qualifiedType.getType();
   llvm::Value *newVal = value.getValue();
   switch (mOp.type) {
@@ -2101,7 +2108,7 @@ Value UnaryOperatorExpressionAST::codegen() {
       } else if (dynamic_cast<const FloatingType *>(type)) {
       } else
         throw SemaException("The operand of the unary + or - operator shall have arithmetic type",
-                            mUnaryExpression->involvedTokens());
+                            mCastExpression->involvedTokens());
       return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
     case UnaryOp::SUB:
       if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
@@ -2116,7 +2123,7 @@ Value UnaryOperatorExpressionAST::codegen() {
             newVal);
       } else
         throw SemaException("The operand of the unary + or - operator shall have arithmetic type",
-                            mUnaryExpression->involvedTokens());
+                            mCastExpression->involvedTokens());
       return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
     case UnaryOp::TILDE:
       if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
@@ -2124,7 +2131,7 @@ Value UnaryOperatorExpressionAST::codegen() {
         newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(sContext, llvm::APInt(32, -1, true)));
       } else {
         throw SemaException("The operand of the unary ~ operator shall have integer type",
-                            mUnaryExpression->involvedTokens());
+                            mCastExpression->involvedTokens());
       }
       return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
     case UnaryOp::BANG:
@@ -2145,7 +2152,7 @@ Value UnaryOperatorExpressionAST::codegen() {
         newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType());
       } else {
         throw SemaException("The operand of the unary ! operator shall have scalar type",
-                            mUnaryExpression->involvedTokens());
+                            mCastExpression->involvedTokens());
       }
       break;
   }
@@ -2221,11 +2228,11 @@ void BinaryOperatorAST::print(int indent) {
 Value BinaryOperatorAST::codegen() {
   auto lhs = mLeft->codegen();
   auto rhs = mRight->codegen();
-  codegen(lhs, rhs, mOp.type, mLeft.get(), mRight.get());
+  return codegen(lhs, rhs, mOp.type, mLeft.get(), mRight.get());
 }
 std::tuple<const Type *,
-           const llvm::Value *,
-           const llvm::Value *>
+           llvm::Value *,
+           llvm::Value *>
 BinaryOperatorAST::UsualArithmeticConversions(const Value &lhs,
                                               const Value &rhs,
                                               const AST *ast) {

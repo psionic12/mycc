@@ -270,7 +270,6 @@ class InitializerAST : public AST {
   InitializerAST(nt<InitializerListAST> initializer_list);
   const nt<AST> ast;
   void print(int indent) override;
-  void codegen();
 };
 
 typedef std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> InitDeclarators;
@@ -302,11 +301,16 @@ class ParameterDeclarationAST : public AST {
 };
 class ParameterListAST : public AST {
  public:
-  ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration, SymbolTable &table);
+  ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration,
+                     bool hasMultiple,
+                     SymbolTable &table);
   const nts<ParameterDeclarationAST> parameter_declaration;
   SymbolTable &mObjectTable;
   void print(int indent) override;
   std::vector<QualifiedType> codegen();
+  bool hasMultiple() const;
+ private:
+  bool mMultiple;
 };
 class EnumerationConstantAST : public AST {
  public:
@@ -539,13 +543,13 @@ class PrefixDecrementExpressionAST : public UnaryExpressionAST {
 
 class UnaryOperatorExpressionAST : public UnaryExpressionAST {
  public:
-  UnaryOperatorExpressionAST(Terminal<UnaryOp> op, nt<UnaryExpressionAST> unaryExpressionAST)
-      : mOp(op), mUnaryExpression(std::move(unaryExpressionAST)) {}
+  UnaryOperatorExpressionAST(Terminal<UnaryOp> op, nt<CastExpressionAST> castExpressionAST)
+      : mOp(op), mCastExpression(std::move(castExpressionAST)) {}
   void print(int indent) override;
   Value codegen() override;
  private:
   Terminal<UnaryOp> mOp;
-  nt<UnaryExpressionAST> mUnaryExpression;
+  nt<CastExpressionAST> mCastExpression;
   std::unique_ptr<PointerType> mPointerType;
 };
 
@@ -620,8 +624,8 @@ class BinaryOperatorAST : public IBinaryOperationAST {
   Value codegen() override;
   static Value codegen(const Value &lhs, const Value &rhs, InfixOp op, const AST *lAST, const AST *rAST);
   static std::tuple<const Type *,
-                    const llvm::Value *,
-                    const llvm::Value *> UsualArithmeticConversions(const Value &lhs,
+                    llvm::Value *,
+                    llvm::Value *> UsualArithmeticConversions(const Value &lhs,
                                                                     const Value &rhs,
                                                                     const AST *ast);
  protected:
@@ -647,18 +651,11 @@ class ConditionalExpressionAST : public IExpression {
   void print(int indent) override;
   Value codegen() override;
 };
-class ParameterTypeListAST : public AST {
- public:
-  ParameterTypeListAST(nt<ParameterListAST> parameter_list, bool hasMultiple);
-  const nt<ParameterListAST> parameter_list;
-  void print(int indent) override;
-};
 class DirectDeclaratorAST : public AST {
  public:
   DirectDeclaratorAST();
   virtual const Token *getIdentifier() = 0;
   virtual ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) = 0;
-  virtual bool isAbstract() const = 0;
 };
 
 class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
@@ -668,7 +665,6 @@ class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
   void print(int indent) override;
   const Token *getIdentifier() override;
   ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
-  bool isAbstract() const override;
  private:
   std::unique_ptr<ISymbol> mSymbol;
 };
@@ -679,7 +675,6 @@ class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
   const nt<DeclaratorAST> declarator;
   void print(int indent) override;
   const Token *getIdentifier() override;
-  bool isAbstract() const override;
   ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
 };
 
@@ -697,7 +692,8 @@ class ArrayDeclaratorAST : public DirectDeclaratorAST {
 
 class FunctionDeclaratorAST : public DirectDeclaratorAST {
  public:
-  FunctionDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator, nt<ParameterListAST> parameterList);
+  FunctionDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
+                          nt<ParameterListAST> parameterList);
   const nt<DirectDeclaratorAST> directDeclarator;
   const nt<ParameterListAST> parameterList;
   void print(int indent) override;
@@ -820,7 +816,6 @@ class DeclaratorAST : public AST {
   const nt<DirectDeclaratorAST> direct_declarator;
   void print(int indent) override;
   const Token *getIdentifier() const;
-  bool isAbstract() const;
   ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType);
 };
 class DeclarationSpecifiersAST : public AST {

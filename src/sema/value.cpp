@@ -1,4 +1,5 @@
 #include <sema/value.h>
+#include <sema/ast.h>
 Value::Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
     : qualifiedType(std::move(qualifiedType)), lvalue(lvalue), mValue(value) {}
 llvm::Value *Value::getValue() const {

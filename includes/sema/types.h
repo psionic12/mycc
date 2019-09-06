@@ -35,7 +35,7 @@ class ScalarType : public ObjectType {
   llvm::Value *initializerCodegen(InitializerAST *ast) const override;
 };
 class ArithmeticType : public ScalarType {};
-class AggregateType : public ObjectType {};
+class AggregateType : virtual public ObjectType {};
 
 class IntegerType : public ArithmeticType {
  public:
@@ -133,13 +133,14 @@ class ArrayType : public AggregateType {
   const QualifiedType &getReferencedQualifiedType() const;
   llvm::Value *initializerCodegen(InitializerAST *ast) const override;
   llvm::Constant *getDefaultValue() const override;
+  unsigned int getSizeInBits() const override;
  private:
   int64_t mSize = 0; // same with llvm
   const QualifiedType mElementType;
   PointerType mPointerType;
 };
 
-class CompoundType {
+class CompoundType :virtual public ObjectType {
  public:
   CompoundType();
   CompoundType(std::string tagName);
@@ -152,7 +153,7 @@ class CompoundType {
   std::string mTagName;
 };
 
-class StructType : public CompoundType, public AggregateType {
+class StructType : virtual public CompoundType, virtual public AggregateType {
  public:
   StructType() = default;
   StructType(const std::string &tag);
@@ -168,7 +169,7 @@ class StructType : public CompoundType, public AggregateType {
   std::vector<QualifiedType> mOrderedFields;
 };
 
-class UnionType : public CompoundType, public ObjectType {
+class UnionType : public CompoundType {
  public:
   UnionType() = default;
   UnionType(const std::string &tag);
@@ -184,13 +185,16 @@ class UnionType : public CompoundType, public ObjectType {
   const ObjectType *mBigestType;
 };
 
-class EnumerationType : public CompoundType, public Type {
+class EnumerationType : public CompoundType {
  public:
   EnumerationType() = default;
   EnumerationType(const std::string &tag);
   void setBody(SymbolTable &&table) override;
   llvm::Type *getLLVMType() const override;
   bool complete() const override;
+  unsigned int getSizeInBits() const override;
+  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  llvm::Constant *getDefaultValue() const override;
 };
 
 class EnumerationMemberType : public IntegerType {

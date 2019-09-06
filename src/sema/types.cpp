@@ -223,7 +223,10 @@ llvm::Value *ArrayType::initializerCodegen(InitializerAST *ast) const {
     auto *constInt0 = llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 0));
     auto *constInt1 = llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 1));
     if (isAllConstant) {
-      std::vector<llvm::Constant *> constants(values.begin(), values.end());
+      std::vector<llvm::Constant *> constants(values.size());
+      for (auto *value : values) {
+        constants.push_back(static_cast<llvm::Constant *>(value));
+      }
       for (int i = 0; i < difference; ++i) {
         constants.push_back(static_cast<const ObjectType *>(mElementType.getType())->getDefaultValue());
       }
@@ -252,6 +255,9 @@ llvm::Constant *ArrayType::getDefaultValue() const {
   std::vector<llvm::Constant *>
       values(mSize, static_cast<const ObjectType *>(mElementType.getType())->getDefaultValue());
   return llvm::ConstantArray::get(getLLVMType(), values);
+}
+unsigned int ArrayType::getSizeInBits() const {
+  return mSize * static_cast<const ObjectType *>(mElementType.getType())->getSizeInBits();
 }
 const Type *PointerType::getReferencedType() const {
   return mReferencedQualifiedType.getType();
@@ -377,7 +383,7 @@ llvm::Value *StructType::initializerCodegen(InitializerAST *ast) const {
     std::vector<llvm::Value *> values;
     auto iter = mOrderedFields.begin();
     for (const auto &initializer : initializers) {
-      auto *v = static_cast<const ObjectType *>(iter->qualifiedType.getType())->initializerCodegen(initializer.get());
+      auto *v = static_cast<const ObjectType *>(iter->getType())->initializerCodegen(initializer.get());
       if (!llvm::dyn_cast<llvm::Constant>(v)) {
         isAllConstant = false;
       }
@@ -385,7 +391,10 @@ llvm::Value *StructType::initializerCodegen(InitializerAST *ast) const {
       ++iter;
     }
     if (isAllConstant) {
-      std::vector<llvm::Constant *> constants(values.begin(), values.end());
+      std::vector<llvm::Constant *> constants(values.size());
+      for (auto *value : values) {
+        constants.push_back(static_cast<llvm::Constant *>(value));
+      }
       while (iter != mOrderedFields.end()) {
         constants.push_back(static_cast<const ObjectType *>(iter->getType())->getDefaultValue());
       }
@@ -416,7 +425,7 @@ llvm::Constant *StructType::getDefaultValue() const {
   if (!complete()) {
     throw std::runtime_error("WTF: cannot set default values to imcompleted array");
   }
-  std::vector<llvm::Constant *> values(mOrderedFields);
+  std::vector<llvm::Constant *> values(mOrderedFields.size());
   for (const auto &qualifiedType : mOrderedFields) {
     values.push_back(static_cast<const ObjectType *>(qualifiedType.getType())->getDefaultValue());
   }
@@ -503,6 +512,15 @@ llvm::Type *EnumerationType::getLLVMType() const {
 }
 bool EnumerationType::complete() const {
   return mComplete;
+}
+unsigned int EnumerationType::getSizeInBits() const {
+  throw std::runtime_error("WTF: get size in bits of enumeration type");
+}
+llvm::Value *EnumerationType::initializerCodegen(InitializerAST *ast) const {
+  throw std::runtime_error("WTF: initializerCodegen of enumeration type");
+}
+llvm::Constant *EnumerationType::getDefaultValue() const {
+  throw std::runtime_error("WTF: getDefaultValue of enumeration type");
 }
 
 llvm::Value *ScalarType::initializerCodegen(InitializerAST *ast) const {

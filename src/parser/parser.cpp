@@ -686,7 +686,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator(DeclaratorKind kind) {
         case TokenKind::TOKEN_VOID:
         case TokenKind::TOKEN_VOLATILE:
           function = make_ast<FunctionDeclaratorAST>(std::move(direct_declarator),
-                                                     parseParameterTypeList());
+                                                     parseParameterLists());
           break;
         case TokenKind::TOKEN_IDENTIFIER:
 //          if (table->isTypedef(lex.peek())) {
@@ -713,34 +713,26 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator(DeclaratorKind kind) {
   }
 }
 
-///<parameter-type-list> ::= <parameter-list>
-///                        | <parameter-list> , ...
-nt<ParameterTypeListAST> Parser::parseParameterTypeList() {
-  mStartToken = &lex.peek();
-  auto para_list = parseParameterList();
-  bool has_multiple = false;
-  if (expect(TokenKind::TOKEN_COMMA)) {
-    accept(TokenKind::TOKEN_ELLIPSIS);
-    has_multiple = true;
-  }
-  return make_ast<ParameterTypeListAST>(std::move(para_list), has_multiple);
-}
-
 ///<parameter-list> ::= <parameter-declaration>
 ///                   | <parameter-list> , <parameter-declaration>
-nt<ParameterListAST> Parser::parseParameterList() {
+nt<ParameterListAST> Parser::parseParameterLists() {
   mStartToken = &lex.peek();
   SymbolScope s(table, symbolTables.createTable(ScopeKind::FUNCTION_PROTOTYPE));
   nts<ParameterDeclarationAST> decls;
+  bool hasMutiple = false;
   do {
-    decls.emplace_back(parseParameterDeclaration());
-    if (lex.peek() != TokenKind::TOKEN_COMMA || lex.peek(1) == TokenKind::TOKEN_ELLIPSIS) {
+    if (lex.peek() == TokenKind::TOKEN_ELLIPSIS) {
+      hasMutiple = true;
+      lex.consumeToken();
+      break;
+    }
+    if (lex.peek() != TokenKind::TOKEN_COMMA) {
       break;
     } else {
-      lex.consumeToken();
+      decls.emplace_back(parseParameterDeclaration());
     }
   } while (true);
-  return make_ast<ParameterListAST>(std::move(decls), *table);
+  return make_ast<ParameterListAST>(std::move(decls), hasMutiple, *table);
 }
 
 ///<parameter-declaration> ::= {<declaration-specifier>}+ <declarator>
@@ -1173,12 +1165,12 @@ nt<CastExpressionAST> Parser::parseCastExpression() {
         accept(TokenKind::TOKEN_LPAREN);
         auto type_name = parseTypeName();
         accept(TokenKind::TOKEN_RPAREN);
-        return make_ast<CastExpressionAST>(std::move(type_name), parseCastExpression());
+        return make_ast<RealCastExpressionAST>(std::move(type_name), parseCastExpression());
       }
       default:break;
     }
   }
-  return make_ast<CastExpressionAST>(parseUnaryExpression());
+  return make_ast<SimpleCastExpressionAST>(parseUnaryExpression());
 }
 
 ///<unary-expression> ::= <postfix-expression>
@@ -1204,7 +1196,7 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
     auto uo = parseUnaryOperator();
     return make_ast<UnaryOperatorExpressionAST>(uo, parseCastExpression());
   } else {
-    return make_ast<UnaryExpressionAST>(parsePostfixExpression());
+    return make_ast<SimpleUnaryExpressionAST>(parsePostfixExpression());
   }
 }
 
@@ -1217,7 +1209,7 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
 ///                       | <postfix-expression> --
 nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
   mStartToken = &lex.peek();
-  auto p = make_ast<PostfixExpressionAST>(parsePrimaryExpression());
+  nt<PostfixExpressionAST> p = make_ast<SimplePostfixExpressionAST>(parsePrimaryExpression());
   while (true) {
     switch (lex.peek().getKind()) {
       case TokenKind::TOKEN_LBRACKET:lex.consumeToken();
