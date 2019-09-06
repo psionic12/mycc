@@ -162,7 +162,6 @@ class ConditionalExpressionAST;
 class UnaryExpressionAST;
 class PointerAST;
 class DeclarationSpecifiersAST;
-class ParameterTypeListAST;
 class AssignmentExpressionAST;
 class InitializerAST;
 class CompoundStatementAST;
@@ -198,7 +197,26 @@ class TypeQualifierAST : public AST {
   void print(int indent) override;
   TypeQualifier codegen();
 };
-class JumpStatementAST : public AST {
+
+class StatementAST : public AST {
+ public:
+  StatementAST(Kind kind) : AST(kind) {}
+  virtual llvm::BasicBlock *codegen(llvm::Function *function) = 0;
+};
+
+class LabeledStatementAST : public StatementAST {
+ public:
+  LabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement);
+  LabeledStatementAST(nt<ConstantExpressionAST> constant_expression, nt<StatementAST> statement);
+  LabeledStatementAST(nt<StatementAST> statement);
+  const nt<IdentifierAST> id;
+  const nt<StatementAST> statement;
+  const nt<ConstantExpressionAST> constant_expression;
+  void print(int indent) override;
+  llvm::BasicBlock *codegen(llvm::Function *function) override;
+};
+
+class JumpStatementAST : public StatementAST {
  public:
   JumpStatementAST(nt<IdentifierAST> id);
   JumpStatementAST(bool is_continue);
@@ -207,7 +225,7 @@ class JumpStatementAST : public AST {
   const nt<ExpressionAST> expression;
   void print(int indent) override;
 };
-class IterationStatementAST : public AST {
+class IterationStatementAST : public StatementAST {
  public:
   IterationStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement);
   IterationStatementAST(nt<StatementAST> statement, nt<ExpressionAST> expression);
@@ -221,42 +239,40 @@ class IterationStatementAST : public AST {
   const nt<ExpressionAST> step_expression;
   void print(int indent) override;
 };
-class SelectionStatementAST : public AST {
+class SelectionStatementAST : public StatementAST {
  public:
-  SelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement, bool is_if);
-  SelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement, nt<StatementAST> else_statement);
-  const nt<ExpressionAST> expression;
-  const nt<StatementAST> statement;
-  const nt<StatementAST> else_statement;
-  void print(int indent) override;
+  SelectionStatementAST();
 };
-class ExpressionStatementAST : public AST {
+
+class IfSelectionStatementAST : public SelectionStatementAST {
+ public:
+  IfSelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement, nt<StatementAST> elseStatement);
+  void print(int indent) override;
+  llvm::BasicBlock *codegen(llvm::Function *function) override;
+ private:
+  const nt<ExpressionAST> mExpression;
+  const nt<StatementAST> mStatement;
+  const nt<StatementAST> mElseStatement;
+};
+
+class SwitchSelectionStatementAST : public SelectionStatementAST {
+ public:
+  SwitchSelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement);
+  void print(int indent) override;
+  llvm::BasicBlock *codegen(llvm::Function *function) override;
+ private:
+  const nt<ExpressionAST> mExpression;
+  const nt<StatementAST> mStatement;
+};
+
+class ExpressionStatementAST : public StatementAST {
  public:
   ExpressionStatementAST(nt<ExpressionAST> expression);
   const nt<ExpressionAST> expression;
   void print(int indent) override;
+  llvm::BasicBlock *codegen(llvm::Function *function) override;
 };
-class LabeledStatementAST : public AST {
- public:
-  LabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement);
-  LabeledStatementAST(nt<ConstantExpressionAST> constant_expression, nt<StatementAST> statement);
-  LabeledStatementAST(nt<StatementAST> statement);
-  const nt<IdentifierAST> id;
-  const nt<StatementAST> statement;
-  const nt<ConstantExpressionAST> constant_expression;
-  void print(int indent) override;
-};
-class StatementAST : public AST {
- public:
-  StatementAST(nt<LabeledStatementAST>);
-  StatementAST(nt<ExpressionStatementAST>);
-  StatementAST(nt<CompoundStatementAST>);
-  StatementAST(nt<SelectionStatementAST>);
-  StatementAST(nt<IterationStatementAST>);
-  StatementAST(nt<JumpStatementAST>);
-  const nt<AST> ast;
-  void print(int indent) override;
-};
+
 class InitializerListAST : public AST {
  public:
   InitializerListAST(nts<InitializerAST> initializer);
@@ -302,8 +318,8 @@ class ParameterDeclarationAST : public AST {
 class ParameterListAST : public AST {
  public:
   ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration,
-                     bool hasMultiple,
-                     SymbolTable &table);
+                   bool hasMultiple,
+                   SymbolTable &table);
   const nts<ParameterDeclarationAST> parameter_declaration;
   SymbolTable &mObjectTable;
   void print(int indent) override;
@@ -626,8 +642,8 @@ class BinaryOperatorAST : public IBinaryOperationAST {
   static std::tuple<const Type *,
                     llvm::Value *,
                     llvm::Value *> UsualArithmeticConversions(const Value &lhs,
-                                                                    const Value &rhs,
-                                                                    const AST *ast);
+                                                              const Value &rhs,
+                                                              const AST *ast);
  protected:
   nt<IBinaryOperationAST> mLeft;
   Terminal<InfixOp> mOp;
@@ -693,7 +709,7 @@ class ArrayDeclaratorAST : public DirectDeclaratorAST {
 class FunctionDeclaratorAST : public DirectDeclaratorAST {
  public:
   FunctionDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
-                          nt<ParameterListAST> parameterList);
+                        nt<ParameterListAST> parameterList);
   const nt<DirectDeclaratorAST> directDeclarator;
   const nt<ParameterListAST> parameterList;
   void print(int indent) override;
@@ -765,7 +781,7 @@ class StructOrUnionSpecifierAST : public AST {
   const nts<StructDeclarationAST> declarations;
   void print(int indent) override;
   const ObjectType *type;
-  const ObjectType * codegen();
+  const ObjectType *codegen();
  private:
   std::unique_ptr<TagSymbol> mSymbol;
 };
@@ -840,18 +856,18 @@ class DeclarationAST : public AST {
   void print(int indent) override;
   void codegen();
 };
-class CompoundStatementAST : public AST {
+class CompoundStatementAST : public StatementAST {
  public:
-  CompoundStatementAST(nts<DeclarationAST> declarations,
-                       nts<StatementAST> statements,
+  CompoundStatementAST(nts<AST> asts,
                        SymbolTable &objectTable,
                        SymbolTable &tagTable);
-  const nts<DeclarationAST> declarations;
-  const nts<StatementAST> statements;
+  friend class FunctionDefinitionAST;
+ private:
+  nts<AST> mASTs;
   SymbolTable &mObjectTable;
   SymbolTable &mTagTable;
   void print(int indent) override;
-  llvm::Value *codegen();
+  llvm::BasicBlock *codegen(llvm::Function *function) override;
 };
 class FunctionDefinitionAST : public AST {
  public:

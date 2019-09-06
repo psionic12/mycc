@@ -111,28 +111,47 @@ llvm::Value *FunctionDefinitionAST::codegen() {
       throw SemaException("declaration specifiers shall be either extern or static", specifier.token);
     }
   }
+  const auto &pair = declaration_spcifiers->codegen();
+  auto *symbol = declarator->codegen(pair.first.type, pair.second);
+  if (auto *objectSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
+    if (auto *theFunction = llvm::dyn_cast<llvm::Function>(objectSymbol->getValue())) {
+      if (theFunction->empty()) {
+        compound_statement->codegen(theFunction);
+      } else {
+        throw SemaException("Function cannot redifined", declarator->involvedTokens());
+      }
+    } else {
+      throw std::runtime_error("WTF: function definition is not a function type");
+    }
+  } else {
+    throw std::runtime_error("WTF: function definition is not a function type");
+  }
   sLabelTable = nullptr;
   //TODO After adjustment, the parameters in a parameter type list in a function declarator that is part of a definition of that function shall not have incomplete type.
   return nullptr;
 }
-CompoundStatementAST::CompoundStatementAST(nts<DeclarationAST> declarations,
-                                           nts<StatementAST> statements,
-                                           SymbolTable &objectTable,
-                                           SymbolTable &tagTable)
-    : AST(AST::Kind::COMPOUND_STATEMENT),
-      declarations(std::move(declarations)),
-      statements(std::move(statements)), mObjectTable(objectTable), mTagTable(tagTable) {}
 void CompoundStatementAST::print(int indent) {
   AST::print(indent);
   ++indent;
-  declarations.print(indent);
-  statements.print(indent);
+  mASTs.print(indent);
 }
-llvm::Value *CompoundStatementAST::codegen() {
+llvm::BasicBlock *CompoundStatementAST::codegen(llvm::Function *function) {
   SymbolScope s1(sObjectTable, &mObjectTable);
   SymbolScope s2(sTagTable, &mTagTable);
-  //TODO create basic block and assign it to symbol table;
+  auto *BB = llvm::BasicBlock::Create(sContext, "entry", function);
+  sBuilder.SetInsertPoint(BB);
+  for (auto &ast : mASTs) {
+    if (auto *decl = dynamic_cast<DeclarationAST *>(ast.get())) {
+      decl->codegen();
+    } else if (auto *statement = dynamic_cast<StatementAST *>(ast.get())) {
+      statement->codegen(nullptr);
+    }
+  }
+  return BB;
 }
+CompoundStatementAST::CompoundStatementAST(nts<AST> asts, SymbolTable &objectTable, SymbolTable &tagTable)
+    : AST(AST::Kind::COMPOUND_STATEMENT),
+      mASTs(std::move(asts)), mObjectTable(objectTable), mTagTable(tagTable) {}
 DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                                InitDeclarators init_declarators,
                                SymbolTable &table)
@@ -324,7 +343,7 @@ void StructOrUnionSpecifierAST::print(int indent) {
   if (id != nullptr) id->print(indent);
   declarations.print(indent);
 }
-const ObjectType * StructOrUnionSpecifierAST::codegen() {
+const ObjectType *StructOrUnionSpecifierAST::codegen() {
   CompoundType *tagType;
   //TODO A struct-declaration that does not declare an anonymous structure or anonymous union shall contain a struct-declarator-list.
   if (bStruct == StructOrUnion::kSTRUCT) {
@@ -971,35 +990,19 @@ void InitializerListAST::print(int indent) {
   AST::print(indent);
   initializers.print(++indent);
 }
-StatementAST::StatementAST(nt<LabeledStatementAST>
-                           ast) : AST(AST::Kind::STATEMENT, 0), ast(std::move(ast)) {}
-StatementAST::StatementAST(nt<ExpressionStatementAST>
-                           ast) : AST(AST::Kind::STATEMENT, 1), ast(std::move(ast)) {}
-StatementAST::StatementAST(nt<CompoundStatementAST>
-                           ast) : AST(AST::Kind::STATEMENT, 2), ast(std::move(ast)) {}
-StatementAST::StatementAST(nt<SelectionStatementAST>
-                           ast) : AST(AST::Kind::STATEMENT, 3), ast(std::move(ast)) {}
-StatementAST::StatementAST(nt<IterationStatementAST>
-                           ast) : AST(AST::Kind::STATEMENT, 4), ast(std::move(ast)) {}
-StatementAST::StatementAST(nt<JumpStatementAST>
-                           ast) : AST(AST::Kind::STATEMENT, 5), ast(std::move(ast)) {}
-void StatementAST::print(int indent) {
-  AST::print(indent);
-  ast->print(++indent);
-}
 LabeledStatementAST::LabeledStatementAST(nt<IdentifierAST>
                                          id, nt<StatementAST>
                                          statement)
-    : AST(AST::Kind::LABELED_STATEMENT, 0), id(std::move(id)), statement(std::move(statement)) {}
+    : StatementAST(AST::Kind::LABELED_STATEMENT), id(std::move(id)), statement(std::move(statement)) {}
 LabeledStatementAST::LabeledStatementAST(nt<ConstantExpressionAST>
                                          constant_expression, nt<StatementAST>
                                          statement)
-    : AST(AST::Kind::LABELED_STATEMENT, 1),
+    : StatementAST(AST::Kind::LABELED_STATEMENT),
       constant_expression(std::move(constant_expression)),
       statement(std::move(statement)) {}
 LabeledStatementAST::LabeledStatementAST(nt<StatementAST>
                                          statement)
-    : AST(AST::Kind::LABELED_STATEMENT, 2), statement(std::move(statement)) {}
+    : StatementAST(AST::Kind::LABELED_STATEMENT), statement(std::move(statement)) {}
 void LabeledStatementAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -1010,49 +1013,31 @@ void LabeledStatementAST::print(int indent) {
   }
   statement->print(indent);
 }
+llvm::BasicBlock *LabeledStatementAST::codegen(llvm::Function *function) {
+
+}
 ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST>
                                                expression)
-    : AST(AST::Kind::EXPRESSION_STATEMENT), expression(std::move(expression)) {}
+    : StatementAST(AST::Kind::EXPRESSION_STATEMENT), expression(std::move(expression)) {}
 void ExpressionStatementAST::print(int indent) {
   AST::print(indent);
   expression->print(++indent);
 }
-SelectionStatementAST::SelectionStatementAST(nt<ExpressionAST>
-                                             expression,
-                                             nt<StatementAST>
-                                             statement,
-                                             bool
-                                             is_if)
-    : AST(AST::Kind::SELECTION_STATEMENT, is_if ? 0 : 2),
-      expression(std::move(expression)),
-      statement(std::move(statement)) {}
-SelectionStatementAST::SelectionStatementAST(nt<ExpressionAST>
-                                             expression,
-                                             nt<StatementAST>
-                                             statement,
-                                             nt<StatementAST>
-                                             else_statement)
-    : AST(AST::Kind::SELECTION_STATEMENT, 1), expression(std::move(expression)), statement(std::move(statement)),
-      else_statement(std::move(else_statement)) {}
-void SelectionStatementAST::print(int indent) {
-  AST::print(indent);
-  ++indent;
-  expression->print(indent);
-  statement->print(indent);
-  if (else_statement) {
-    else_statement->print(indent);
-  }
+llvm::BasicBlock *ExpressionStatementAST::codegen(llvm::Function *function) {
+  expression->codegen();
+  return nullptr;
 }
+SelectionStatementAST::SelectionStatementAST() : StatementAST(AST::Kind::SELECTION_STATEMENT) {}
 IterationStatementAST::IterationStatementAST(nt<ExpressionAST>
                                              expression, nt<StatementAST>
                                              statement)
-    : AST(AST::Kind::ITERATION_STATEMENT, 0),
+    : StatementAST(AST::Kind::ITERATION_STATEMENT),
       expression(std::move(expression)),
       statement(std::move(statement)) {}
 IterationStatementAST::IterationStatementAST(nt<StatementAST>
                                              statement, nt<ExpressionAST>
                                              expression)
-    : AST(AST::Kind::ITERATION_STATEMENT, 1),
+    : StatementAST(AST::Kind::ITERATION_STATEMENT),
       statement(std::move(statement)),
       expression(std::move(expression)) {}
 IterationStatementAST::IterationStatementAST(nt<ExpressionAST>
@@ -1063,7 +1048,7 @@ IterationStatementAST::IterationStatementAST(nt<ExpressionAST>
                                              step_expression,
                                              nt<StatementAST>
                                              statement)
-    : AST(AST::Kind::ITERATION_STATEMENT, 2),
+    : StatementAST(AST::Kind::ITERATION_STATEMENT),
       expression(std::move(expression)),
       condition_expression(std::move(condition_expression)),
       step_expression(std::move(step_expression)),
@@ -1085,11 +1070,11 @@ void IterationStatementAST::print(int indent) {
   }
 }
 JumpStatementAST::JumpStatementAST(nt<IdentifierAST>
-                                   id) : AST(AST::Kind::JUMP_STATEMENT, 0), id(std::move(id)) {}
+                                   id) : StatementAST(AST::Kind::JUMP_STATEMENT), id(std::move(id)) {}
 JumpStatementAST::JumpStatementAST(bool
                                    is_continue) : AST(AST::Kind::JUMP_STATEMENT, is_continue ? 1 : 2) {}
 JumpStatementAST::JumpStatementAST(nt<ExpressionAST>
-                                   expression) : AST(AST::Kind::JUMP_STATEMENT, 3),
+                                   expression) : StatementAST(AST::Kind::JUMP_STATEMENT),
                                                  expression(std::move(expression)) {}
 void JumpStatementAST::print(int indent) {
   AST::print(indent);
@@ -1507,10 +1492,14 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
     switch (sObjectTable->getScopeKind()) {
       case ScopeKind::FILE:
       case ScopeKind::BLOCK: {
-        llvm::Function::Create(functionType->getLLVMType(),
-                               llvm::Function::ExternalLinkage,
-                               identifier->token.getValue(),
-                               &sModule);
+        value = sModule.getFunction(identifier->token.getValue());
+        if (!value) {
+          value = llvm::Function::Create(functionType->getLLVMType(),
+                                         llvm::Function::ExternalLinkage,
+                                         identifier->token.getValue(),
+                                         &sModule);
+        }
+        break;
       }
       case ScopeKind::LABEL:throw std::runtime_error("WTF: how could a function type declared in a label/proto symbol");
       case ScopeKind::FUNCTION_PROTOTYPE:break;
@@ -1518,10 +1507,10 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
     }
   }
   mSymbol->setLinkage(linkage);
-  sObjectTable->insert(identifier->token, mSymbol.get());
 
   const Token *token = identifier ? &identifier->token : nullptr;
   mSymbol = std::make_unique<ObjectSymbol>(derivedType, value, token);
+  sObjectTable->insert(*token, mSymbol.get());
   return mSymbol.get();
 }
 ParenthesedDirectDeclaratorAST::ParenthesedDirectDeclaratorAST(nt<DeclaratorAST> declarator)
@@ -2626,4 +2615,66 @@ Value LogicalBinaryOperatorAST::codegen() {
   auto *result =
       IntegerType::sOneBitBoolIntType.cast(&IntegerType::sIntType, phi, mRight.get());
   return Value(QualifiedType(&IntegerType::sIntType, {}), false, result);
+}
+IfSelectionStatementAST::IfSelectionStatementAST(nt<ExpressionAST> expression,
+                                                 nt<StatementAST> statement,
+                                                 nt<StatementAST> elseStatement)
+    : mExpression(std::move(expression)), mStatement(std::move(statement)),
+      mElseStatement(std::move(elseStatement)) {}
+void IfSelectionStatementAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  mExpression->print(indent);
+  mStatement->print(indent);
+  if (mElseStatement) {
+    mElseStatement->print(indent);
+  }
+}
+llvm::BasicBlock *IfSelectionStatementAST::codegen(llvm::Function *function) {
+  auto exp = mExpression->codegen();
+  llvm::Value *cond;
+  if (auto *integerTy = dynamic_cast<const IntegerType *>(exp.qualifiedType.getType())) {
+    cond = sBuilder.CreateICmpNE(exp.getValue(), integerTy->getDefaultValue());
+  } else if (auto *floatTy = dynamic_cast<const FloatingType *>(exp.qualifiedType.getType())) {
+    cond = sBuilder.CreateFCmpONE(exp.getValue(), floatTy->getDefaultValue());
+  } else if (auto *pointerTy = dynamic_cast<const PointerType *>(exp.qualifiedType.getType())) {
+    cond = sBuilder.CreateICmpNE(exp.getValue(), pointerTy->getDefaultValue());
+  } else {
+    throw SemaException("The controlling expression of an if statement shall have scalar type.",
+                        mExpression->involvedTokens());
+  }
+  auto *trueBB = llvm::BasicBlock::Create(sContext, "", function);
+  auto *endBB = llvm::BasicBlock::Create(sContext, "", function);
+  // ture BB
+  sBuilder.SetInsertPoint(trueBB);
+  mStatement->codegen(function);
+  sBuilder.CreateBr(endBB);
+  if (mElseStatement) {
+    auto *falseBB = llvm::BasicBlock::Create(sContext, "", function);
+    sBuilder.CreateCondBr(cond, trueBB, falseBB);
+    // false BB
+    sBuilder.SetInsertPoint(falseBB);
+    sBuilder.CreateBr(endBB);
+  } else {
+    sBuilder.CreateCondBr(cond, trueBB, endBB);
+    // endBB
+    sBuilder.SetInsertPoint(endBB);
+  }
+}
+SwitchSelectionStatementAST::SwitchSelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement)
+    : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
+void SwitchSelectionStatementAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  mExpression->print(indent);
+  mStatement->print(indent);
+}
+llvm::BasicBlock *SwitchSelectionStatementAST::codegen(llvm::Function *function) {
+  auto exp = mExpression->codegen();
+  if (auto *integerTy = dynamic_cast<const IntegerType * >(exp.qualifiedType.getType())) {
+
+  } else {
+    throw SemaException("The controlling expression of a switch statement shall have integer type.",
+                        mExpression->involvedTokens());
+  }
 }

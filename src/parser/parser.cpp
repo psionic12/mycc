@@ -961,19 +961,97 @@ nt<InitializerListAST> Parser::parseInitializerList() {
 //}
 
 ///<compound-statement> ::= { {<declaration>}* {<statement>}* }
+///          compound-statement:
+//                { block-item-listopt }
+//          block-item-list:
+//                  block-item
+//                  block-item-list block-item
+//          block-item:
+//                  declaration
+//                  statement
 nt<CompoundStatementAST> Parser::parseCompoundStatement() {
   mStartToken = &lex.peek();
   SymbolScope s(table, symbolTables.createTable(ScopeKind::BLOCK));
   accept(TokenKind::TOKEN_LBRACE);
-  auto declarations = parseDeclarations();
-
-  nts<StatementAST> statements{};
-  while (lex.peek() != TokenKind::TOKEN_RBRACE) {
-    statements.push_back(parseStatement());
+//  auto declarations = parseDeclarations();
+//
+//  nts<StatementAST> statements{};
+//  while (lex.peek() != TokenKind::TOKEN_RBRACE) {
+//    statements.push_back(parseStatement());
+//  }
+  nts<AST> asts;
+  while (true) {
+    switch (lex.peek().getKind()) {
+      case TokenKind::TOKEN_AUTO:
+      case TokenKind::TOKEN_CHAR:
+      case TokenKind::TOKEN_CONST:
+      case TokenKind::TOKEN_DOUBLE:
+      case TokenKind::TOKEN_ENUM:
+      case TokenKind::TOKEN_EXTERN:
+      case TokenKind::TOKEN_FLOAT:
+      case TokenKind::TOKEN_INT:
+      case TokenKind::TOKEN_LONG:
+      case TokenKind::TOKEN_REGISTER:
+      case TokenKind::TOKEN_SHORT:
+      case TokenKind::TOKEN_SIGNED:
+      case TokenKind::TOKEN_STATIC:
+      case TokenKind::TOKEN_STRUCT:
+      case TokenKind::TOKEN_TYPEDEF:
+      case TokenKind::TOKEN_UNION:
+      case TokenKind::TOKEN_UNSIGNED:
+      case TokenKind::TOKEN_VOID:
+      case TokenKind::TOKEN_VOLATILE: {
+        auto declarations = parseDeclarations();
+        asts.insert(asts.end(),
+                    std::make_move_iterator(declarations.begin()),
+                    std::make_move_iterator(declarations.end()));
+        continue;
+      }
+      case TokenKind::TOKEN_BANG:
+      case TokenKind::TOKEN_AMP:
+      case TokenKind::TOKEN_LPAREN:
+      case TokenKind::TOKEN_STAR:
+      case TokenKind::TOKEN_PLUS:
+      case TokenKind::TOKEN_PLUSPLUS:
+      case TokenKind::TOKEN_SUB:
+      case TokenKind::TOKEN_SUBSUB:
+      case TokenKind::TOKEN_SEMI:
+      case TokenKind::TOKEN_BREAK:
+      case TokenKind::TOKEN_CASE:
+      case TokenKind::TOKEN_CHARLITERAL:
+      case TokenKind::TOKEN_FLOAT_CONSTANT:
+      case TokenKind::TOKEN_INT_CONSTANT:
+      case TokenKind::TOKEN_CONTINUE:
+      case TokenKind::TOKEN_DEFAULT:
+      case TokenKind::TOKEN_DO:
+      case TokenKind::TOKEN_FOR:
+      case TokenKind::TOKEN_GOTO:
+      case TokenKind::TOKEN_IF:
+      case TokenKind::TOKEN_RETURN:
+      case TokenKind::TOKEN_SIZEOF:
+      case TokenKind::TOKEN_STRINGLITERAL:
+      case TokenKind::TOKEN_SWITCH:
+      case TokenKind::TOKEN_WHILE:
+      case TokenKind::TOKEN_LBRACE:
+      case TokenKind::TOKEN_TILDE:asts.push_back(parseStatement());
+        continue;
+      case TokenKind::TOKEN_IDENTIFIER:
+        if (table->isTypedef(lex.peek())) {
+          auto declarations = parseDeclarations();
+          asts.insert(asts.end(),
+                      std::make_move_iterator(declarations.begin()),
+                      std::make_move_iterator(declarations.end()));
+        } else {
+          asts.push_back(parseStatement());
+        }
+        continue;
+      default:break;
+    }
+    break;
   }
   accept(TokenKind::TOKEN_RBRACE);
   auto *tagTable = symbolTables.createTable(ScopeKind::BLOCK);
-  return make_ast<CompoundStatementAST>(std::move(declarations), std::move(statements), *table, *tagTable);
+  return make_ast<CompoundStatementAST>(std::move(asts), *table, *tagTable);
 }
 
 ///<statement> ::= <labeled-statement>
@@ -989,21 +1067,21 @@ nt<StatementAST> Parser::parseStatement() {
     case TokenKind::TOKEN_DEFAULT:
     case TokenKind::TOKEN_IDENTIFIER:
       if (lex.peek(1).getKind() == TokenKind::TOKEN_COLON) {
-        return make_ast<StatementAST>(parseLabeledStatement());
+        return parseLabeledStatement();
       } else {
-        return make_ast<StatementAST>(parseExpressionStatement());
+        return parseExpressionStatement();
       }
-    case TokenKind::TOKEN_LBRACE:return make_ast<StatementAST>(parseCompoundStatement());
+    case TokenKind::TOKEN_LBRACE:return parseCompoundStatement();
     case TokenKind::TOKEN_IF:
-    case TokenKind::TOKEN_SWITCH:return make_ast<StatementAST>(parseSelectionStatement());
+    case TokenKind::TOKEN_SWITCH:return parseSelectionStatement();
     case TokenKind::TOKEN_DO:
     case TokenKind::TOKEN_FOR:
-    case TokenKind::TOKEN_WHILE:return make_ast<StatementAST>(parseIterationStatement());
+    case TokenKind::TOKEN_WHILE:return parseIterationStatement();
     case TokenKind::TOKEN_BREAK:
     case TokenKind::TOKEN_CONTINUE:
     case TokenKind::TOKEN_GOTO:
-    case TokenKind::TOKEN_RETURN:return make_ast<StatementAST>(parseJumpStatement());
-    default:return make_ast<StatementAST>(parseExpressionStatement());
+    case TokenKind::TOKEN_RETURN:return parseJumpStatement();
+    default:return parseExpressionStatement();
   }
 }
 
