@@ -765,7 +765,7 @@ class StructOrUnionSpecifierAST : public AST {
   const nts<StructDeclarationAST> declarations;
   void print(int indent) override;
   const ObjectType *type;
-  CompoundType *codegen();
+  const ObjectType * codegen();
  private:
   std::unique_ptr<TagSymbol> mSymbol;
 };

@@ -125,19 +125,19 @@ class FunctionSymbol : public ISymbol {
 
 class TagSymbol : public ISymbol {
  public:
-  TagSymbol(std::unique_ptr<CompoundType> &&compoundType, const Token *token)
+  TagSymbol(std::unique_ptr<ObjectType> &&compoundType, const Token *token)
       : ISymbol(token), mCompoundType(std::move(compoundType)) {}
   SymbolKind getKind() const override {
     return SymbolKind::TAG;
   }
-  CompoundType *getTagType() {
+  ObjectType *getTagType() {
     return mCompoundType.get();
   }
   llvm::Value *getValue() override {
     return nullptr;
   }
  private:
-  std::unique_ptr<CompoundType> mCompoundType;
+  std::unique_ptr<ObjectType> mCompoundType;
 };
 
 class TypedefSymbol : public ISymbol {

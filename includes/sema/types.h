@@ -35,7 +35,7 @@ class ScalarType : public ObjectType {
   llvm::Value *initializerCodegen(InitializerAST *ast) const override;
 };
 class ArithmeticType : public ScalarType {};
-class AggregateType : virtual public ObjectType {};
+class AggregateType : public ObjectType {};
 
 class IntegerType : public ArithmeticType {
  public:
@@ -140,7 +140,7 @@ class ArrayType : public AggregateType {
   PointerType mPointerType;
 };
 
-class CompoundType :virtual public ObjectType {
+class CompoundType {
  public:
   CompoundType();
   CompoundType(std::string tagName);
@@ -153,7 +153,7 @@ class CompoundType :virtual public ObjectType {
   std::string mTagName;
 };
 
-class StructType : virtual public CompoundType, virtual public AggregateType {
+class StructType : public CompoundType, public AggregateType {
  public:
   StructType() = default;
   StructType(const std::string &tag);
@@ -169,7 +169,7 @@ class StructType : virtual public CompoundType, virtual public AggregateType {
   std::vector<QualifiedType> mOrderedFields;
 };
 
-class UnionType : public CompoundType {
+class UnionType : public CompoundType, public ObjectType {
  public:
   UnionType() = default;
   UnionType(const std::string &tag);
@@ -185,7 +185,7 @@ class UnionType : public CompoundType {
   const ObjectType *mBigestType;
 };
 
-class EnumerationType : public CompoundType {
+class EnumerationType : public CompoundType, public ObjectType {
  public:
   EnumerationType() = default;
   EnumerationType(const std::string &tag);

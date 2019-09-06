@@ -186,7 +186,11 @@ bool ArrayType::complete() const {
   return mSize > 0;
 }
 void ArrayType::setSize(unsigned int size) {
-  mSize = size;
+  if (!complete()) {
+    mSize = size;
+  } else {
+    throw std::runtime_error("WTF: set size to complete array");
+  }
 }
 llvm::ArrayType *ArrayType::getLLVMType() const {
   return llvm::ArrayType::get(mElementType.getType()->getLLVMType(), mSize);

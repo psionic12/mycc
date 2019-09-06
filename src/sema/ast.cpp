@@ -169,6 +169,10 @@ void DeclarationAST::codegen() {
       auto *value = objSymbol->getValue();
       if (const auto *objtype = dynamic_cast<const ObjectType *>(type)) {
         auto *initValue = objtype->initializerCodegen(initPair.second.get());
+        // if the initializer is array type, the declaration is not imcomplete any more
+        if (auto *arrayTy = llvm::dyn_cast<llvm::ArrayType>(initValue->getType())) {
+          const_cast<ArrayType *>(static_cast<const ArrayType *>(objtype))->setSize(arrayTy->getArrayNumElements());
+        }
         if (auto *constantInitValue = llvm::dyn_cast<llvm::Constant>(initValue)) {
           if (auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
             global->setInitializer(constantInitValue);
@@ -320,7 +324,7 @@ void StructOrUnionSpecifierAST::print(int indent) {
   if (id != nullptr) id->print(indent);
   declarations.print(indent);
 }
-CompoundType *StructOrUnionSpecifierAST::codegen() {
+const ObjectType * StructOrUnionSpecifierAST::codegen() {
   CompoundType *tagType;
   //TODO A struct-declaration that does not declare an anonymous structure or anonymous union shall contain a struct-declarator-list.
   if (bStruct == StructOrUnion::kSTRUCT) {
@@ -342,7 +346,7 @@ CompoundType *StructOrUnionSpecifierAST::codegen() {
       sTagTable->insert(mSymbol.get());
     }
   }
-  tagType = mSymbol->getTagType();
+  tagType = dynamic_cast<CompoundType *>(mSymbol->getTagType());
   SymbolTable table(ScopeKind::TAG);
   int index = 0;
   for (const auto &declaration :declarations) {
@@ -358,7 +362,7 @@ CompoundType *StructOrUnionSpecifierAST::codegen() {
     }
   }
   tagType->setBody(std::move(table));
-  return tagType;
+  return mSymbol->getTagType();
 }
 EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier,
                                    nt<EnumeratorListAST> enumeratorList)
@@ -381,7 +385,7 @@ EnumerationType *EnumSpecifierAST::codegen() {
   for (auto *symbol : enum_list->codegen(enumType)) {
     table.insert(*symbol->getToken(), symbol);
   }
-  mSymbol->getTagType()->setBody(std::move(table));
+  dynamic_cast<CompoundType *>(mSymbol->getTagType())->setBody(std::move(table));
   return static_cast<EnumerationType *> (mSymbol->getTagType());
 }
 StructDeclarationAST::StructDeclarationAST(nt<SpecifierQualifierAST> specifier_qualifier,
