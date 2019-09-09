@@ -116,7 +116,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
   if (auto *objectSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
     if (auto *theFunction = llvm::dyn_cast<llvm::Function>(objectSymbol->getValue())) {
       if (theFunction->empty()) {
-        compound_statement->codegen(theFunction);
+        compound_statement->codegen(theFunction, nullptr);
       } else {
         throw SemaException("Function cannot redifined", declarator->involvedTokens());
       }
@@ -135,22 +135,22 @@ void CompoundStatementAST::print(int indent) {
   ++indent;
   mASTs.print(indent);
 }
-llvm::BasicBlock *CompoundStatementAST::codegen(llvm::Function *function) {
+llvm::BasicBlock *CompoundStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
   SymbolScope s1(sObjectTable, &mObjectTable);
   SymbolScope s2(sTagTable, &mTagTable);
-  auto *BB = llvm::BasicBlock::Create(sContext, "entry", function);
+  auto *BB = llvm::BasicBlock::Create(sContext, "", function);
   sBuilder.SetInsertPoint(BB);
   for (auto &ast : mASTs) {
     if (auto *decl = dynamic_cast<DeclarationAST *>(ast.get())) {
       decl->codegen();
     } else if (auto *statement = dynamic_cast<StatementAST *>(ast.get())) {
-      statement->codegen(nullptr);
+      statement->codegen(function, nullptr);
     }
   }
   return BB;
 }
 CompoundStatementAST::CompoundStatementAST(nts<AST> asts, SymbolTable &objectTable, SymbolTable &tagTable)
-    : AST(AST::Kind::COMPOUND_STATEMENT),
+    : StatementAST(AST::Kind::COMPOUND_STATEMENT),
       mASTs(std::move(asts)), mObjectTable(objectTable), mTagTable(tagTable) {}
 DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                                InitDeclarators init_declarators,
@@ -990,31 +990,13 @@ void InitializerListAST::print(int indent) {
   AST::print(indent);
   initializers.print(++indent);
 }
-LabeledStatementAST::LabeledStatementAST(nt<IdentifierAST>
-                                         id, nt<StatementAST>
-                                         statement)
-    : StatementAST(AST::Kind::LABELED_STATEMENT), id(std::move(id)), statement(std::move(statement)) {}
-LabeledStatementAST::LabeledStatementAST(nt<ConstantExpressionAST>
-                                         constant_expression, nt<StatementAST>
-                                         statement)
-    : StatementAST(AST::Kind::LABELED_STATEMENT),
-      constant_expression(std::move(constant_expression)),
-      statement(std::move(statement)) {}
-LabeledStatementAST::LabeledStatementAST(nt<StatementAST>
-                                         statement)
-    : StatementAST(AST::Kind::LABELED_STATEMENT), statement(std::move(statement)) {}
-void LabeledStatementAST::print(int indent) {
-  AST::print(indent);
-  ++indent;
-  if (getProduction() == 0) {
-    id->print(indent);
-  } else if (getProduction() == 1) {
-    constant_expression->print(indent);
-  }
-  statement->print(indent);
-}
-llvm::BasicBlock *LabeledStatementAST::codegen(llvm::Function *function) {
-
+LabeledStatementAST::LabeledStatementAST(nt<StatementAST> statement)
+    : StatementAST(AST::Kind::LABELED_STATEMENT), mStatement(std::move(statement)) {}
+llvm::BasicBlock *LabeledStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+  auto *BB = llvm::BasicBlock::Create(sContext, "", function);
+  sBuilder.SetInsertPoint(BB);
+  mStatement->codegen(function, container);
+  return BB;
 }
 ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST>
                                                expression)
@@ -1023,7 +1005,7 @@ void ExpressionStatementAST::print(int indent) {
   AST::print(indent);
   expression->print(++indent);
 }
-llvm::BasicBlock *ExpressionStatementAST::codegen(llvm::Function *function) {
+llvm::BasicBlock *ExpressionStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
   expression->codegen();
   return nullptr;
 }
@@ -1069,28 +1051,7 @@ void IterationStatementAST::print(int indent) {
     statement->print(indent);
   }
 }
-JumpStatementAST::JumpStatementAST(nt<IdentifierAST>
-                                   id) : StatementAST(AST::Kind::JUMP_STATEMENT), id(std::move(id)) {}
-JumpStatementAST::JumpStatementAST(bool
-                                   is_continue) : AST(AST::Kind::JUMP_STATEMENT, is_continue ? 1 : 2) {}
-JumpStatementAST::JumpStatementAST(nt<ExpressionAST>
-                                   expression) : StatementAST(AST::Kind::JUMP_STATEMENT),
-                                                 expression(std::move(expression)) {}
-void JumpStatementAST::print(int indent) {
-  AST::print(indent);
-  ++indent;
-  if (getProduction() == 0) {
-    id->print(indent);
-  } else if (getProduction() == 1) {
-    AST::printIndent(indent);
-    std::cout << "continue\n";
-  } else if (getProduction() == 2) {
-    AST::printIndent(indent);
-    std::cout << "break\n";
-  } else {
-    expression->print(indent);
-  }
-}
+JumpStatementAST::JumpStatementAST() : StatementAST(AST::Kind::JUMP_STATEMENT) {}
 TypeQualifierAST::TypeQualifierAST(Terminal<TypeQualifier>
                                    op) : AST(AST::Kind::TYPE_QUALIFIER), op(op) {}
 void TypeQualifierAST::print(int indent) {
@@ -2097,7 +2058,7 @@ Value UnaryOperatorExpressionAST::codegen() {
       }
     case UnaryOp::PLUS:
       if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
-        std::tie(type, newVal) = integerType->promote(value.getValue());
+        std::tie(type, newVal) = integerType->promote(value.getValue(), mCastExpression.get());
       } else if (dynamic_cast<const FloatingType *>(type)) {
       } else
         throw SemaException("The operand of the unary + or - operator shall have arithmetic type",
@@ -2105,7 +2066,7 @@ Value UnaryOperatorExpressionAST::codegen() {
       return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
     case UnaryOp::SUB:
       if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
-        std::tie(type, newVal) = integerType->promote(value.getValue());
+        std::tie(type, newVal) = integerType->promote(value.getValue(), mCastExpression.get());
         newVal = sBuilder.CreateSub(
             llvm::ConstantInt::get(sContext, llvm::APInt(32, 0)),
             newVal);
@@ -2120,7 +2081,7 @@ Value UnaryOperatorExpressionAST::codegen() {
       return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
     case UnaryOp::TILDE:
       if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
-        std::tie(type, newVal) = integerType->promote(value.getValue());
+        std::tie(type, newVal) = integerType->promote(value.getValue(), mCastExpression.get());
         newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(sContext, llvm::APInt(32, -1, true)));
       } else {
         throw SemaException("The operand of the unary ~ operator shall have integer type",
@@ -2630,7 +2591,7 @@ void IfSelectionStatementAST::print(int indent) {
     mElseStatement->print(indent);
   }
 }
-llvm::BasicBlock *IfSelectionStatementAST::codegen(llvm::Function *function) {
+llvm::BasicBlock *IfSelectionStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
   auto exp = mExpression->codegen();
   llvm::Value *cond;
   if (auto *integerTy = dynamic_cast<const IntegerType *>(exp.qualifiedType.getType())) {
@@ -2647,7 +2608,7 @@ llvm::BasicBlock *IfSelectionStatementAST::codegen(llvm::Function *function) {
   auto *endBB = llvm::BasicBlock::Create(sContext, "", function);
   // ture BB
   sBuilder.SetInsertPoint(trueBB);
-  mStatement->codegen(function);
+  mStatement->codegen(function, container);
   sBuilder.CreateBr(endBB);
   if (mElseStatement) {
     auto *falseBB = llvm::BasicBlock::Create(sContext, "", function);
@@ -2669,12 +2630,96 @@ void SwitchSelectionStatementAST::print(int indent) {
   mExpression->print(indent);
   mStatement->print(indent);
 }
-llvm::BasicBlock *SwitchSelectionStatementAST::codegen(llvm::Function *function) {
+llvm::BasicBlock *SwitchSelectionStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
   auto exp = mExpression->codegen();
-  if (auto *integerTy = dynamic_cast<const IntegerType * >(exp.qualifiedType.getType())) {
-
+  if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(exp.getValue())) {
+    sBuilder.CreateSwitch(constInt, nullptr);
   } else {
     throw SemaException("The controlling expression of a switch statement shall have integer type.",
                         mExpression->involvedTokens());
   }
 }
+void IdentifierLabeledStatementAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  mIdentifier->print(indent);
+  mStatement->print(indent);
+}
+IdentifierLabeledStatementAST::IdentifierLabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement)
+    : LabeledStatementAST(std::move(statement)) {}
+llvm::BasicBlock *IdentifierLabeledStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+  if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
+    if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
+      if (label->isDefinedByGoto()) {
+        auto *BB = label->getBasicBlock();
+        sBuilder.SetInsertPoint(BB);
+        mStatement->codegen(function, container);
+        return BB;
+      } else {
+        throw SemaException("WTF: redifined label", mIdentifier->involvedTokens());
+      }
+    } else {
+      throw std::runtime_error("WTF: label table has other symbol type");
+    }
+  } else {
+    auto* BB = LabeledStatementAST::codegen(function, container);
+    mLabelSymbol = std::make_unique<LabelSymbol>(mIdentifier->token, BB, false);
+    sLabelTable->insert(mIdentifier->token, mLabelSymbol.get());
+    return BB;
+  }
+}
+void CaseLabeledStatementAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  mConstantExpression->print(indent);
+  mStatement->print(indent);
+}
+CaseLabeledStatementAST::CaseLabeledStatementAST(nt<ConstantExpressionAST> constantExpression,
+                                                 nt<StatementAST> statement)
+    : LabeledStatementAST(std::move(statement)) {}
+llvm::BasicBlock *CaseLabeledStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+  if (auto *switchInst = llvm::dyn_cast<llvm::SwitchInst>(container)) {
+    auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(mConstantExpression->codegen().getValue()); // no need to promote
+    if (!constInt)
+      throw SemaException("The expression of each case label shall be an integer constant expression",
+                          mConstantExpression->involvedTokens());
+    if (switchInst->findCaseValue(constInt) == switchInst->case_default()) {
+      switchInst->addCase(constInt, LabeledStatementAST::codegen(function, nullptr));
+    } else {
+      throw SemaException(
+          "no two of the case constant expressions in the same switch statement shall have the same value",
+          mConstantExpression->involvedTokens());
+    }
+    return nullptr;
+  } else {
+    throw SemaException("A case or default label shall appear only in a switch statement.", involvedTokens());
+  }
+}
+void DefaultLabeledStatementAST::print(int indent) {
+  AST::print(indent);
+  ++indent;
+  mStatement->print(indent);
+}
+llvm::BasicBlock *DefaultLabeledStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+  if (auto *switchInst = llvm::dyn_cast<llvm::SwitchInst>(container)) {
+    if (!switchInst->getOperand(1)) {
+      switchInst->setDefaultDest(LabeledStatementAST::codegen(function, nullptr));
+    } else {
+      throw SemaException(
+          "There may be at most one default label in a switch statement", involvedTokens());
+    }
+    return nullptr;
+  } else {
+    throw SemaException("A case or default label shall appear only in a switch statement.", involvedTokens());
+  }
+}
+void GotoJumpStatementAST::print(int indent) {
+  AST::print(indent);
+  mIdentifier->print(++indent);
+}
+GotoJumpStatementAST::GotoJumpStatementAST(nt<IdentifierAST> identifier) : mIdentifier(std::move(identifier)) {}
+void ReturnJumpStatementAST::print(int indent) {
+  AST::print(indent);
+  mExpression->print(++indent);
+}
+ReturnJumpStatementAST::ReturnJumpStatementAST(nt<ExpressionAST> expression) : mExpression(std::move(expression)) {}

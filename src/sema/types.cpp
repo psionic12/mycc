@@ -76,11 +76,9 @@ llvm::Value *IntegerType::cast(const Type *type, llvm::Value *value, const AST *
     throw SemaException("cannot cast to integer type", ast->involvedTokens());
   }
 }
-std::pair<const IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *value) const {
+std::pair<const IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *value, AST *ast) const {
   if (mSizeInBits < sIntType.mSizeInBits) {
-    return std::make_pair<const IntegerType *, llvm::Value *>(this,
-                                                              AST::getBuilder().CreateSExt(value,
-                                                                                           sIntType.getLLVMType()));
+    return std::make_pair<const IntegerType *, llvm::Value *>(this, cast(&IntegerType::sIntType, value, ast));
   } else {
     return std::make_pair<const IntegerType *, llvm::Value *>(this, std::move(value));
   }

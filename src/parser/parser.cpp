@@ -1064,7 +1064,7 @@ nt<StatementAST> Parser::parseStatement() {
   mStartToken = &lex.peek();
   switch (lex.peek().getKind()) {
     case TokenKind::TOKEN_CASE:
-    case TokenKind::TOKEN_DEFAULT:
+    case TokenKind::TOKEN_DEFAULT:return parseLabeledStatement();
     case TokenKind::TOKEN_IDENTIFIER:
       if (lex.peek(1).getKind() == TokenKind::TOKEN_COLON) {
         return parseLabeledStatement();
@@ -1093,14 +1093,14 @@ nt<LabeledStatementAST> Parser::parseLabeledStatement() {
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     auto id = parseIdentifier();
     accept(TokenKind::TOKEN_COLON);
-    return make_ast<LabeledStatementAST>(std::move(id), parseStatement());
+    return make_ast<IdentifierLabeledStatementAST>(std::move(id), parseStatement());
   } else if (expect(TokenKind::TOKEN_CASE)) {
     auto exp = parseConstantExpression();
     accept(TokenKind::TOKEN_COLON);
-    return make_ast<LabeledStatementAST>(std::move(exp), parseStatement());
+    return make_ast<CaseLabeledStatementAST>(std::move(exp), parseStatement());
   } else if (expect(TokenKind::TOKEN_DEFAULT)) {
     accept(TokenKind::TOKEN_COLON);
-    return make_ast<LabeledStatementAST>(parseStatement());
+    return make_ast<DefaultLabeledStatementAST>(parseStatement());
   } else {
     throw parseError(R"(labeled statement expects "case", "default" or an identifer)");
   }
@@ -1128,16 +1128,16 @@ nt<SelectionStatementAST> Parser::parseSelectionStatement() {
     accept(TokenKind::TOKEN_RPAREN);
     auto if_statement = parseStatement();
     if (expect(TokenKind::TOKEN_ELSE)) {
-      return make_ast<SelectionStatementAST>(std::move(condition), std::move(if_statement), parseStatement());
+      return make_ast<IfSelectionStatementAST>(std::move(condition), std::move(if_statement), parseStatement());
     } else {
-      return make_ast<SelectionStatementAST>(std::move(condition), std::move(if_statement), true);
+      return make_ast<IfSelectionStatementAST>(std::move(condition), std::move(if_statement));
     }
   } else {
     accept(TokenKind::TOKEN_SWITCH);
     accept(TokenKind::TOKEN_LPAREN);
     auto exp = parseExpression();
     accept(TokenKind::TOKEN_RPAREN);
-    return make_ast<SelectionStatementAST>(std::move(exp), parseStatement(), false);
+    return make_ast<SwitchSelectionStatementAST>(std::move(exp), parseStatement());
   }
 }
 
@@ -1193,23 +1193,21 @@ nt<JumpStatementAST> Parser::parseJumpStatement() {
   if (expect(TokenKind::TOKEN_GOTO)) {
     auto id = parseIdentifier();
     accept(TokenKind::TOKEN_SEMI);
-    return make_ast<JumpStatementAST>(std::move(id));
+    return make_ast<GotoJumpStatementAST>(std::move(id));
   } else if (expect(TokenKind::TOKEN_RETURN)) {
     nt<ExpressionAST> exp = nullptr;
     if (!expect(TokenKind::TOKEN_SEMI)) {
       exp = parseExpression();
       accept(TokenKind::TOKEN_SEMI);
     }
-    return make_ast<JumpStatementAST>(std::move(exp));
+    return make_ast<ReturnJumpStatementAST>(std::move(exp));
   } else {
-    bool is_continue;
     if (expect(TokenKind::TOKEN_CONTINUE)) {
-      is_continue = true;
+      return make_ast<ContinueJumpStatementAST>();
     } else {
       accept(TokenKind::TOKEN_BREAK);
-      is_continue = false;
+      return make_ast<BreakJumpStatementAST>();
     }
-    return make_ast<JumpStatementAST>(is_continue);
   }
 }
 

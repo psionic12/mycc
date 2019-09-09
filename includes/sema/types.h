@@ -55,7 +55,7 @@ class IntegerType : public ArithmeticType {
   llvm::APInt getAPInt(uint64_t value) const;
   bool isSigned() const;
   llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const;
-  std::pair<const IntegerType *, llvm::Value *> promote(llvm::Value *value) const;
+  std::pair<const IntegerType *, llvm::Value *> promote(llvm::Value *value, AST *ast) const;
   llvm::Constant *getDefaultValue() const override;
  private:
   unsigned int mSizeInBits;

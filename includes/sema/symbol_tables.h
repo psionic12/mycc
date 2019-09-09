@@ -164,10 +164,20 @@ class TypedefSymbol : public ISymbol {
 
 class LabelSymbol : public ISymbol {
  public:
-  LabelSymbol(const Token *token) : ISymbol(token) {}
+  LabelSymbol(const Token *token, llvm::BasicBlock *bb, bool definedByGoto)
+      : ISymbol(token), mDefinedByGoto(definedByGoto), mBasicBlock(bb) {}
   SymbolKind getKind() const override {
     return SymbolKind::LABEL;
   }
+  bool isDefinedByGoto() const {
+    return mDefinedByGoto;
+  }
+  llvm::BasicBlock *getBasicBlock() const {
+    return mBasicBlock;
+  }
+ private:
+  llvm::BasicBlock *mBasicBlock;
+  bool mDefinedByGoto;
 };
 
 class EnumConstSymbol : public ISymbol {
