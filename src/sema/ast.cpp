@@ -113,7 +113,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
     }
   }
   const auto &pair = declaration_spcifiers->codegen();
-  auto *symbol = declarator->codegen(pair.first.type, pair.second);
+  auto *symbol = declarator->codegen(pair.first, pair.second);
   if (auto *objectSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
     if (auto *theFunction = llvm::dyn_cast<llvm::Function>(objectSymbol->getValue())) {
       if (theFunction->empty()) {
@@ -203,7 +203,7 @@ void DeclarationAST::codegen() {
   const auto &storageSpecifier = pair.first;
   const auto &qualifiers = pair.second;
   for (auto &initPair : init_declarators) {
-    ISymbol *symbol = initPair.first->codegen(storageSpecifier.type, qualifiers);
+    ISymbol *symbol = initPair.first->codegen(storageSpecifier, qualifiers);
     if (auto *objSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
       const auto *type = objSymbol->getQualifiedType().getType();
       auto *value = objSymbol->getValue();
@@ -278,13 +278,18 @@ void DeclarationSpecifiersAST::print(int indent) {
 bool DeclarationSpecifiersAST::empty() {
   return storage_specifiers.empty() && type_qualifiers.empty() && type_specifiers->empty();
 }
-std::pair<const Terminal<StorageSpecifier> &, QualifiedType> DeclarationSpecifiersAST::codegen() {
+std::pair<StorageSpecifier, QualifiedType> DeclarationSpecifiersAST::codegen() {
   if (storage_specifiers.size() > 1) {
     throw SemaException(
         "At most, one storage-class specifier may be given in the declaration specifiers in a declaration",
         storage_specifiers.back().token);
   }
-  const auto &storageSpecifier = storage_specifiers.back();
+  StorageSpecifier storageSpecifier;
+  if (storage_specifiers.empty()) {
+    storageSpecifier = StorageSpecifier::kNone;
+  } else {
+    storageSpecifier = storage_specifiers.back().type;
+  }
   std::set<TypeQualifier> qualifiers;
   for (const auto &qualifier : type_qualifiers) {
     qualifiers.emplace(qualifier->op.type);
@@ -293,8 +298,7 @@ std::pair<const Terminal<StorageSpecifier> &, QualifiedType> DeclarationSpecifie
   //TODO At least one type specifier shall be given in the declaration specifiers in each declaration,  and in the specifier-qualifier list in each struct declaration and type name.
   QualifiedType qualifiedType = type_specifiers->codegen();
   qualifiedType.addQualifiers(qualifiers);
-  return std::make_pair<const Terminal<StorageSpecifier> &, QualifiedType>(storageSpecifier,
-                                                                           std::move(qualifiedType));
+  return {storageSpecifier, qualifiedType};
 }
 DeclaratorAST::DeclaratorAST(nt<PointerAST>
                              pointer,
@@ -311,7 +315,7 @@ const Token *DeclaratorAST::getIdentifier() const {
   return direct_declarator->getIdentifier();
 }
 ISymbol *DeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
-  return direct_declarator->codegen(storageSpecifier, pointer->codegen(derivedType));
+  return direct_declarator->codegen(storageSpecifier, pointer ? pointer->codegen(derivedType) : derivedType);
 }
 StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier>
                                                    storage_speicifier)
@@ -544,7 +548,7 @@ void PointerAST::print(int indent) {
 }
 const QualifiedType PointerAST::codegen(const QualifiedType &derivedType) {
   std::set<TypeQualifier> qualifiers;
-  for (auto &qualifier : type_qualifiers) {
+  for (const auto &qualifier : type_qualifiers) {
     qualifiers.insert(qualifier->codegen());
   }
   if (pointer) {
@@ -965,7 +969,7 @@ ISymbol *ParameterDeclarationAST::codegen() {
     declarator = std::make_unique<DeclaratorAST>(nullptr, std::make_unique<SimpleDirectDeclaratorAST>(nullptr));
   }
   const auto &pair = declaration_specifiers->codegen();
-  const StorageSpecifier &storageSpecifier = pair.first.type;
+  const StorageSpecifier storageSpecifier = pair.first;
   if (storageSpecifier != StorageSpecifier::kREGISTER && storageSpecifier != StorageSpecifier::kNone) {
     throw SemaException("The only storage-class specifier that shall occur in a parameter declaration is register.",
                         involvedTokens());
@@ -1112,9 +1116,11 @@ StringAST::StringAST(
 llvm::LLVMContext AST::sContext;
 llvm::Module AST::sModule("top", sContext);
 llvm::IRBuilder<> AST::sBuilder(sContext);
-AST::AST(AST::Kind
-         kind, int
-         id) : mKind(kind), mProductionId(id) {}
+SymbolTable *AST::sObjectTable = nullptr;
+SymbolTable *AST::sTagTable = nullptr;
+SymbolTable *AST::sLabelTable = nullptr;
+SymbolTables AST::mTables;
+AST::AST(AST::Kind kind, int id) : mKind(kind), mProductionId(id) {}
 const char *AST::toString() {
   switch (mKind) {
     case AST::Kind::TRANSLATION_UNIT:return "TRANSLATION_UNIT";
@@ -1194,6 +1200,9 @@ llvm::Module &AST::getModule() {
 }
 llvm::IRBuilder<> &AST::getBuilder() {
   return sBuilder;
+}
+SymbolTables & AST::getTables() {
+  return mTables;
 }
 IntegerConstantAST::IntegerConstantAST(
     const Token &token)
@@ -1376,9 +1385,6 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
   llvm::Value *value = nullptr;
 
   ISymbol *priorDeclartion = sObjectTable->lookup(identifier->token);
-  if (!priorDeclartion) {
-    throw SemaException(identifier->token.getValue() + " is not declared", identifier->token);
-  }
 
   switch (storageSpecifier) {
     case StorageSpecifier::kTYPEDEF: {
@@ -1484,10 +1490,9 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
       case ScopeKind::TAG:throw SemaException("cannot declare funciton in a tag", involvedTokens());
     }
   }
-  mSymbol->setLinkage(linkage);
-
-  const Token *token = identifier ? &identifier->token : nullptr;
+    const Token *token = identifier ? &identifier->token : nullptr;
   mSymbol = std::make_unique<ObjectSymbol>(derivedType, value, token);
+  mSymbol->setLinkage(linkage);
   sObjectTable->insert(*token, mSymbol.get());
   return mSymbol.get();
 }
@@ -1565,7 +1570,11 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const
         std::string("function ") + getIdentifier()->getValue() + "cannot be array type or function type",
         involvedTokens());
   }
-  mFunctionType = std::make_unique<FunctionType>(derivedType, parameterList->codegen(), parameterList->hasMultiple());
+  if (parameterList) {
+    mFunctionType = std::make_unique<FunctionType>(derivedType, parameterList->codegen(), parameterList->hasMultiple());
+  } else {
+    mFunctionType = std::make_unique<FunctionType>(derivedType, std::move(std::vector<QualifiedType>()), false);
+  }
   QualifiedType qualifiedType(mFunctionType.get(), {});
   return directDeclarator->codegen(storageSpecifier, qualifiedType);
 }

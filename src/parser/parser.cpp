@@ -2,8 +2,8 @@
 #include <parser/parser.h>
 #include <tokens/token.h>
 #include <tokens/specifier_combination.h>
-Parser::Parser(std::ifstream &ifstream, SymbolTables &symbolTables)
-    : in(ifstream), lex(ifstream), symbolTables(symbolTables) {
+Parser::Parser(std::ifstream &ifstream)
+    : in(ifstream), lex(ifstream), symbolTables(AST::getTables()) {
   table = symbolTables.createTable(ScopeKind::FILE);
 }
 bool Parser::expect(TokenKind kind) {

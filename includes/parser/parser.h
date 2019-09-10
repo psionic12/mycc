@@ -20,7 +20,7 @@ class ParserException : public std::exception {
 
 class Parser {
  public:
-  Parser(std::ifstream &ifstream, SymbolTables &symbolTables);
+  Parser(std::ifstream &ifstream);
   nt<TranslationUnitAST> parseTranslationUnit();
  private:
   std::ifstream &in;

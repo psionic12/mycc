@@ -103,6 +103,7 @@ class AST {
   static llvm::LLVMContext &getContext();
   static llvm::Module &getModule();
   static llvm::IRBuilder<> &getBuilder();
+  static SymbolTables & getTables();
  private:
   const Kind mKind;
   //the id of which production
@@ -111,9 +112,10 @@ class AST {
   static llvm::LLVMContext sContext;
   static llvm::Module sModule;
   static llvm::IRBuilder<> sBuilder;
-  SymbolTable *sObjectTable;
-  SymbolTable *sTagTable;
-  SymbolTable *sLabelTable;
+  static SymbolTable *sObjectTable;
+  static SymbolTable *sTagTable;
+  static SymbolTable *sLabelTable;
+  static SymbolTables mTables;
   const Token *mLeftMost;
   const Token *mRightMost;
 };
@@ -918,7 +920,7 @@ class DeclarationSpecifiersAST : public AST {
   const nts<TypeQualifierAST> type_qualifiers;
   bool empty();
   void print(int indent) override;
-  std::pair<const Terminal<StorageSpecifier> &, QualifiedType> codegen();
+  std::pair<StorageSpecifier, QualifiedType> codegen();
 };
 class DeclarationAST : public AST {
  public:
