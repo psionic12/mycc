@@ -164,6 +164,9 @@ class TypedefSymbol : public ISymbol {
 
 class LabelSymbol : public ISymbol {
  public:
+  llvm::Value *getValue() override {
+    return mBasicBlock;
+  }
   LabelSymbol(const Token *token, llvm::BasicBlock *bb, bool definedByGoto)
       : ISymbol(token), mDefinedByGoto(definedByGoto), mBasicBlock(bb) {}
   SymbolKind getKind() const override {

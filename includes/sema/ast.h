@@ -17,6 +17,7 @@
 #include "qualifiedType.h"
 #include "symbol_tables.h"
 #include "value.h"
+#include "statement_context.h"
 class SymbolTable;
 class SemaException : public std::exception {
  public:
@@ -153,6 +154,8 @@ class nts : public std::vector<std::unique_ptr<T>> {
   }
 };
 
+class StatementContext;
+
 class SpecifierQualifierAST;
 class DeclaratorAST;
 class ConstantExpressionAST;
@@ -201,13 +204,12 @@ class TypeQualifierAST : public AST {
 class StatementAST : public AST {
  public:
   StatementAST(Kind kind) : AST(kind) {}
-  virtual llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) = 0;
+  virtual llvm::BasicBlock *codegen(StatementContexts &contexts) = 0;
 };
 
 class LabeledStatementAST : public StatementAST {
  public:
   LabeledStatementAST(nt<StatementAST> statement);
-  llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) override;
  protected:
   nt<StatementAST> mStatement;
 };
@@ -216,7 +218,7 @@ class IdentifierLabeledStatementAST : public LabeledStatementAST {
  public:
   IdentifierLabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement);
   void print(int indent) override;
-  llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
  private:
   nt<IdentifierAST> mIdentifier;
   std::unique_ptr<LabelSymbol> mLabelSymbol;
@@ -225,14 +227,14 @@ class CaseLabeledStatementAST : public LabeledStatementAST {
  public:
   CaseLabeledStatementAST(nt<ConstantExpressionAST> constantExpression, nt<StatementAST> statement);
   void print(int indent) override;
-  llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
  private:
   nt<ConstantExpressionAST> mConstantExpression;
 };
 class DefaultLabeledStatementAST : public LabeledStatementAST {
  public:
   DefaultLabeledStatementAST(nt<StatementAST> statement) : LabeledStatementAST(std::move(statement)) {}
-  llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
   void print(int indent) override;
 };
 
@@ -245,36 +247,72 @@ class GotoJumpStatementAST : public JumpStatementAST {
  public:
   GotoJumpStatementAST(nt<IdentifierAST> identifier);
   void print(int indent) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
  private:
   nt<IdentifierAST> mIdentifier;
 };
 
-class ContinueJumpStatementAST : public JumpStatementAST {};
+class ContinueJumpStatementAST : public JumpStatementAST {
+ public:
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
+};
 
-class BreakJumpStatementAST : public JumpStatementAST {};
+class BreakJumpStatementAST : public JumpStatementAST {
+ public:
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
+};
 
 class ReturnJumpStatementAST : public JumpStatementAST {
  public:
   ReturnJumpStatementAST(nt<ExpressionAST> expression);
   void print(int indent) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
  private:
   nt<ExpressionAST> mExpression;
 };
 
 class IterationStatementAST : public StatementAST {
  public:
-  IterationStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement);
-  IterationStatementAST(nt<StatementAST> statement, nt<ExpressionAST> expression);
-  IterationStatementAST(nt<ExpressionAST> expression,
-                        nt<ExpressionAST> condition_expression,
-                        nt<ExpressionAST> step_expression,
-                        nt<StatementAST> statement);
-  const nt<ExpressionAST> expression;
-  const nt<StatementAST> statement;
-  const nt<ExpressionAST> condition_expression;
-  const nt<ExpressionAST> step_expression;
-  void print(int indent) override;
+  IterationStatementAST();
 };
+
+class WhileIterationStatementAST : public IterationStatementAST {
+ public:
+  WhileIterationStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement);
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
+ private:
+  nt<ExpressionAST> mExpression;
+  nt<StatementAST> mStatement;
+};
+
+class DoIterationStatementAST : public IterationStatementAST {
+ public:
+  DoIterationStatementAST(nt<StatementAST> statement, nt<ExpressionAST> expression)
+      : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
+ private:
+  nt<ExpressionAST> mExpression;
+  nt<StatementAST> mStatement;
+};
+
+class ForIterationStatementAST : public IterationStatementAST {
+ public:
+  ForIterationStatementAST(nt<ExpressionAST> expression,
+                           nt<ExpressionAST> condition_expression,
+                           nt<ExpressionAST> step_expression,
+                           nt<StatementAST> statement)
+      : mExpression(std::move(expression)),
+        mConditionExpression(std::move(condition_expression)),
+        mStepExpression(std::move(step_expression)),
+        mStatement(std::move(statement)) {}
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
+ private:
+  nt<ExpressionAST> mExpression;
+  nt<ExpressionAST> mConditionExpression;
+  nt<ExpressionAST> mStepExpression;
+  nt<StatementAST> mStatement;
+};
+
 class SelectionStatementAST : public StatementAST {
  public:
   SelectionStatementAST();
@@ -284,7 +322,7 @@ class IfSelectionStatementAST : public SelectionStatementAST {
  public:
   IfSelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement, nt<StatementAST> elseStatement);
   void print(int indent) override;
-  llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
  private:
   const nt<ExpressionAST> mExpression;
   const nt<StatementAST> mStatement;
@@ -295,7 +333,7 @@ class SwitchSelectionStatementAST : public SelectionStatementAST {
  public:
   SwitchSelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement);
   void print(int indent) override;
-  llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
  private:
   const nt<ExpressionAST> mExpression;
   const nt<StatementAST> mStatement;
@@ -306,7 +344,7 @@ class ExpressionStatementAST : public StatementAST {
   ExpressionStatementAST(nt<ExpressionAST> expression);
   const nt<ExpressionAST> expression;
   void print(int indent) override;
-  llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
 };
 
 class InitializerListAST : public AST {
@@ -903,7 +941,7 @@ class CompoundStatementAST : public StatementAST {
   SymbolTable &mObjectTable;
   SymbolTable &mTagTable;
   void print(int indent) override;
-  llvm::BasicBlock *codegen(llvm::Function *function, llvm::Value *container) override;
+  llvm::BasicBlock *codegen(StatementContexts &contexts) override;
 };
 class FunctionDefinitionAST : public AST {
  public:
@@ -911,7 +949,7 @@ class FunctionDefinitionAST : public AST {
                         nt<DeclaratorAST> declarator,
                         nts<DeclarationAST> declarations,
                         nt<CompoundStatementAST> compound_statement,
-                        SymbolTable &lableTable);
+                        SymbolTable &labelTable);
   const nt<DeclarationSpecifiersAST> declaration_spcifiers;
   const nt<DeclaratorAST> declarator;
   const nts<DeclarationAST> declarations;

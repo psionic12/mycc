@@ -3,6 +3,7 @@
 #include <sema/symbol_tables.h>
 #include "llvm/IR/Constants.h"
 #include <llvm/IR/IRBuilder.h>
+#include <sema/statement_context.h>
 SemaException::SemaException(std::string error, const Token &token) : error(std::move(error)) {
   this->error.append("\n").append(token.getTokenInLine());
 }
@@ -82,13 +83,13 @@ FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declar
                                              nt<DeclaratorAST> declarator,
                                              nts<DeclarationAST> declarations,
                                              nt<CompoundStatementAST> compound_statement,
-                                             SymbolTable &lableTable)
+                                             SymbolTable &labelTable)
     : AST(AST::Kind::FUNCTION_DEFINITION),
       declaration_spcifiers(std::move(declaration_spcifiers)),
       declarator(std::move(declarator)),
       declarations(std::move(declarations)),
       compound_statement(std::move(compound_statement)),
-      mLabelTable(lableTable) {
+      mLabelTable(labelTable) {
   if (auto *functionDeclarator = dynamic_cast<FunctionDeclaratorAST *>(this->declarator->direct_declarator.get())) {
     if (functionDeclarator->parameterList) {
       auto table = functionDeclarator->parameterList->mObjectTable;
@@ -116,7 +117,24 @@ llvm::Value *FunctionDefinitionAST::codegen() {
   if (auto *objectSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
     if (auto *theFunction = llvm::dyn_cast<llvm::Function>(objectSymbol->getValue())) {
       if (theFunction->empty()) {
-        compound_statement->codegen(theFunction, nullptr);
+        StatementContexts contexts(theFunction);
+        const auto *functionTy = dynamic_cast<const FunctionType *>(objectSymbol->getQualifiedType().getType());
+        if (!functionTy) {
+          throw std::runtime_error("WTF: function definition is not a function type");
+        }
+        contexts.add(std::make_unique<FunctionContext>(functionTy));
+        auto *endBB = compound_statement->codegen(contexts);
+        if (auto *inst = endBB->getTerminator()) {
+          if (!llvm::dyn_cast<llvm::ReturnInst>(inst)) {
+            throw std::runtime_error("WTF: function end with out a ReturnInst");
+          }
+        } else {
+          if (functionTy->getReturnType().getType() == &VoidType::sVoidType) {
+            sBuilder.CreateRetVoid();
+          } else {
+            throw SemaException("function missing return statement", *mRightMost);
+          }
+        }
       } else {
         throw SemaException("Function cannot redifined", declarator->involvedTokens());
       }
@@ -135,25 +153,28 @@ void CompoundStatementAST::print(int indent) {
   ++indent;
   mASTs.print(indent);
 }
-llvm::BasicBlock *CompoundStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+llvm::BasicBlock *CompoundStatementAST::codegen(StatementContexts &contexts) {
   SymbolScope s1(sObjectTable, &mObjectTable);
   SymbolScope s2(sTagTable, &mTagTable);
-  auto *BB = llvm::BasicBlock::Create(sContext, "", function);
+  auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
   sBuilder.SetInsertPoint(BB);
   for (auto &ast : mASTs) {
     if (auto *decl = dynamic_cast<DeclarationAST *>(ast.get())) {
       decl->codegen();
     } else if (auto *statement = dynamic_cast<StatementAST *>(ast.get())) {
-      statement->codegen(function, nullptr);
+      statement->codegen(contexts);
     }
   }
   return BB;
 }
-CompoundStatementAST::CompoundStatementAST(nts<AST> asts, SymbolTable &objectTable, SymbolTable &tagTable)
+CompoundStatementAST::CompoundStatementAST(nts<AST>
+                                           asts, SymbolTable &objectTable, SymbolTable &tagTable)
     : StatementAST(AST::Kind::COMPOUND_STATEMENT),
       mASTs(std::move(asts)), mObjectTable(objectTable), mTagTable(tagTable) {}
-DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
-                               InitDeclarators init_declarators,
+DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST>
+                               declaration_specifiers,
+                               InitDeclarators
+                               init_declarators,
                                SymbolTable &table)
     : AST(AST::Kind::DECLARATION),
       declaration_specifiers(std::move(declaration_specifiers)),
@@ -237,9 +258,12 @@ void DeclarationAST::codegen() {
   }
   //TODO 6.7.3
 }
-DeclarationSpecifiersAST::DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
-                                                   nt<TypeSpecifiersAST> type_specifiers,
-                                                   nts<TypeQualifierAST> type_qualifiers)
+DeclarationSpecifiersAST::DeclarationSpecifiersAST(ts<StorageSpecifier>
+                                                   storage_specifiers,
+                                                   nt<TypeSpecifiersAST>
+                                                   type_specifiers,
+                                                   nts<TypeQualifierAST>
+                                                   type_qualifiers)
     : AST(AST::Kind::DECLARATION_SPECIFIER),
       storage_specifiers(std::move(storage_specifiers)),
       type_specifiers(std::move(type_specifiers)),
@@ -269,10 +293,13 @@ std::pair<const Terminal<StorageSpecifier> &, QualifiedType> DeclarationSpecifie
   //TODO At least one type specifier shall be given in the declaration specifiers in each declaration,  and in the specifier-qualifier list in each struct declaration and type name.
   QualifiedType qualifiedType = type_specifiers->codegen();
   qualifiedType.addQualifiers(qualifiers);
-  return std::make_pair<const Terminal<StorageSpecifier> &, QualifiedType>(storageSpecifier, std::move(qualifiedType));
+  return std::make_pair<const Terminal<StorageSpecifier> &, QualifiedType>(storageSpecifier,
+                                                                           std::move(qualifiedType));
 }
-DeclaratorAST::DeclaratorAST(nt<PointerAST> pointer,
-                             nt<DirectDeclaratorAST> direct_declarator)
+DeclaratorAST::DeclaratorAST(nt<PointerAST>
+                             pointer,
+                             nt<DirectDeclaratorAST>
+                             direct_declarator)
     : AST(AST::Kind::DECLARATOR), pointer(std::move(pointer)), direct_declarator(std::move(direct_declarator)) {}
 void DeclaratorAST::print(int indent) {
   AST::print(indent);
@@ -286,7 +313,8 @@ const Token *DeclaratorAST::getIdentifier() const {
 ISymbol *DeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
   return direct_declarator->codegen(storageSpecifier, pointer->codegen(derivedType));
 }
-StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier)
+StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier>
+                                                   storage_speicifier)
     : AST(AST::Kind::STORAGE_CLASS_SPECIFIER), storage_speicifier(storage_speicifier) {}
 void StorageClassSpecifierAST::print(int indent) {
   AST::print(indent);
@@ -298,7 +326,9 @@ void SpecifierQualifierAST::print(int indent) {
   if (types) types->print(indent);
   qualifiers.print(indent);
 }
-SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeSpecifiersAST> types, nts<TypeQualifierAST> qualifiers)
+SpecifierQualifierAST::SpecifierQualifierAST(nt<TypeSpecifiersAST>
+                                             types, nts<TypeQualifierAST>
+                                             qualifiers)
     : AST(AST::Kind::SPECIFIER_QUALIFIER), types(std::move(types)), qualifiers(std::move(qualifiers)) {
 
 }
@@ -309,28 +339,36 @@ QualifiedType SpecifierQualifierAST::codegen() {
   }
   return qualifiedType;
 }
-ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifierOp> specifier)
+ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifierOp>
+                                             specifier)
     : AST(AST::Kind::PROTO_TYPE_SPECIFIER), Terminal<ProtoTypeSpecifierOp>(specifier), specifier(specifier) {}
 void ProtoTypeSpecifierAST::print(int indent) {
   AST::print(indent);
   specifier.print(++indent);
 }
-TypeSpecifierAST::TypeSpecifierAST(Terminal<ProtoTypeSpecifierOp> specifier)
+TypeSpecifierAST::TypeSpecifierAST(Terminal<ProtoTypeSpecifierOp>
+                                   specifier)
     : AST(AST::Kind::TYPE_SPECIFIER, static_cast<int>(specifier.type)),
       specifier(std::make_unique<ProtoTypeSpecifierAST>(specifier)) {}
-TypeSpecifierAST::TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier)
+TypeSpecifierAST::TypeSpecifierAST(nt<StructOrUnionSpecifierAST>
+                                   specifier)
     : AST(AST::Kind::TYPE_SPECIFIER, 9), specifier(std::move(specifier)) {}
-TypeSpecifierAST::TypeSpecifierAST(nt<EnumSpecifierAST> specifier)
+TypeSpecifierAST::TypeSpecifierAST(nt<EnumSpecifierAST>
+                                   specifier)
     : AST(AST::Kind::TYPE_SPECIFIER, 10), specifier(std::move(specifier)) {}
-TypeSpecifierAST::TypeSpecifierAST(nt<TypedefNameAST> specifier)
+TypeSpecifierAST::TypeSpecifierAST(nt<TypedefNameAST>
+                                   specifier)
     : AST(AST::Kind::TYPE_SPECIFIER, 11), specifier(std::move(specifier)) {}
 void TypeSpecifierAST::print(int indent) {
   AST::print(indent);
   specifier->print(++indent);
 }
-StructOrUnionSpecifierAST::StructOrUnionSpecifierAST(StructOrUnion type,
-                                                     nt<IdentifierAST> id,
-                                                     nts<StructDeclarationAST> declarations)
+StructOrUnionSpecifierAST::StructOrUnionSpecifierAST(StructOrUnion
+                                                     type,
+                                                     nt<IdentifierAST>
+                                                     id,
+                                                     nts<StructDeclarationAST>
+                                                     declarations)
     : AST(AST::Kind::STRUCT_OR_UNION_SPECIFIER),
       bStruct(type),
       id(std::move(id)),
@@ -383,12 +421,16 @@ const ObjectType *StructOrUnionSpecifierAST::codegen() {
   tagType->setBody(std::move(table));
   return mSymbol->getTagType();
 }
-EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier,
-                                   nt<EnumeratorListAST> enumeratorList)
+EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST>
+                                   identifier,
+                                   nt<EnumeratorListAST>
+                                   enumeratorList)
     : AST(AST::Kind::ENUM_SPECIFIER), id(std::move(identifier)), enum_list(std::move(enumeratorList)) {}
-EnumSpecifierAST::EnumSpecifierAST(nt<EnumeratorListAST> enumeratorList)
+EnumSpecifierAST::EnumSpecifierAST(nt<EnumeratorListAST>
+                                   enumeratorList)
     : AST(AST::Kind::ENUM_SPECIFIER), id(nullptr), enum_list(std::move(enumeratorList)) {}
-EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST> identifier)
+EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST>
+                                   identifier)
     : AST(AST::Kind::ENUM_SPECIFIER), id(std::move(identifier)), enum_list() {}
 void EnumSpecifierAST::print(int indent) {
   AST::print(indent);
@@ -407,8 +449,10 @@ EnumerationType *EnumSpecifierAST::codegen() {
   dynamic_cast<CompoundType *>(mSymbol->getTagType())->setBody(std::move(table));
   return static_cast<EnumerationType *> (mSymbol->getTagType());
 }
-StructDeclarationAST::StructDeclarationAST(nt<SpecifierQualifierAST> specifier_qualifier,
-                                           nt<StructDeclaratorListAST> struct_declarator_list)
+StructDeclarationAST::StructDeclarationAST(nt<SpecifierQualifierAST>
+                                           specifier_qualifier,
+                                           nt<StructDeclaratorListAST>
+                                           struct_declarator_list)
     : AST(AST::Kind::STRUCT_DECLARATION),
       specifier_qualifier(std::move(specifier_qualifier)),
       struct_declarator_list(std::move(struct_declarator_list)) {}
@@ -438,22 +482,27 @@ std::vector<ObjectSymbol *> StructDeclarationAST::codegen() {
   }
   return symbols;
 }
-StructDeclaratorListAST::StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators) : AST(
+StructDeclaratorListAST::StructDeclaratorListAST(nts<StructDeclaratorAST>
+                                                 struct_declarators) : AST(
     AST::Kind::STRUCT_DECLARATOR_LIST), struct_declarators(std::move(struct_declarators)) {}
 void StructDeclaratorListAST::print(int indent) {
   AST::print(indent);
   struct_declarators.print(++indent);
 }
-StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST> declarator)
+StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST>
+                                         declarator)
     : AST(AST::Kind::STRUCT_DECLARATOR, 0),
       declarator(std::move(declarator)),
       constant_expression(nullptr) {}
-StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST> declarator,
-                                         nt<ConstantExpressionAST> constant_expression)
+StructDeclaratorAST::StructDeclaratorAST(nt<DeclaratorAST>
+                                         declarator,
+                                         nt<ConstantExpressionAST>
+                                         constant_expression)
     : AST(AST::Kind::STRUCT_DECLARATOR, 1),
       declarator(std::move(declarator)),
       constant_expression(nullptr) {}
-StructDeclaratorAST::StructDeclaratorAST(nt<ConstantExpressionAST> constant_expression)
+StructDeclaratorAST::StructDeclaratorAST(nt<ConstantExpressionAST>
+                                         constant_expression)
     : AST(AST::Kind::STRUCT_DECLARATOR, 2),
       declarator(nullptr),
       constant_expression(std::move(constant_expression)) {}
@@ -468,7 +517,8 @@ ISymbol *StructDeclaratorAST::codegen(const QualifiedType &derivedType) {
   //TODO bit fields
 }
 
-ConstantExpressionAST::ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression)
+ConstantExpressionAST::ConstantExpressionAST(nt<ConditionalExpressionAST>
+                                             conditional_expression)
     : IExpression(AST::Kind::CONSTANT_EXPRESSION), conditional_expression(std::move(conditional_expression)) {}
 void ConstantExpressionAST::print(int indent) {
   AST::print(indent);
@@ -482,7 +532,9 @@ Value ConstantExpressionAST::codegen() {
   }
   return result;
 }
-PointerAST::PointerAST(nts<TypeQualifierAST> type_qualifiers, nt<PointerAST> pointer)
+PointerAST::PointerAST(nts<TypeQualifierAST>
+                       type_qualifiers, nt<PointerAST>
+                       pointer)
     : AST(AST::Kind::POINTER), type_qualifiers(std::move(type_qualifiers)), pointer(std::move(pointer)) {}
 void PointerAST::print(int indent) {
   AST::print(indent);
@@ -648,7 +700,9 @@ AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>
                                                  nt<AssignmentExpressionAST>
                                                  assignment_expression)
     : IExpression(AST::Kind::ASSIGNMENT_EXPRESSION), conditional_expression(std::move(conditional_expression)),
-      op(std::make_unique<Terminal<AssignmentOp >>(op)), assignment_expression(std::move(assignment_expression)) {}
+      op(std::make_unique<Terminal<AssignmentOp >>
+             (op)),
+      assignment_expression(std::move(assignment_expression)) {}
 void AssignmentExpressionAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -857,8 +911,10 @@ void FloatingConstantAST::print(int indent) {
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST>
                                                id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
-ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration,
-                                   bool hasMultiple,
+ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST>
+                                   parameter_declaration,
+                                   bool
+                                   hasMultiple,
                                    SymbolTable &table)
     : AST(AST::Kind::PARAMETER_LIST),
       parameter_declaration(std::move(parameter_declaration)),
@@ -945,8 +1001,10 @@ std::vector<EnumConstSymbol *> EnumeratorListAST::codegen(const EnumerationType 
   }
   return members;
 }
-EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id) : AST(AST::Kind::ENUMERATOR, 0), id(std::move(id)) {}
-EnumeratorAST::EnumeratorAST(nt<IdentifierAST> id,
+EnumeratorAST::EnumeratorAST(nt<IdentifierAST>
+                             id) : AST(AST::Kind::ENUMERATOR, 0), id(std::move(id)) {}
+EnumeratorAST::EnumeratorAST(nt<IdentifierAST>
+                             id,
                              nt<ConstantExpressionAST>
                              constant_expression)
     : AST(AST::Kind::ENUMERATOR, 1), id(std::move(id)), constant_expression(std::move(constant_expression)) {}
@@ -976,28 +1034,26 @@ EnumConstSymbol *EnumeratorAST::codegen(const EnumerationType *enumerationType, 
   sObjectTable->insert(mSymbol.get());
   return mSymbol.get();
 }
-InitializerAST::InitializerAST(nt<AssignmentExpressionAST> assignment_expression)
+InitializerAST::InitializerAST(nt<AssignmentExpressionAST>
+                               assignment_expression)
     : AST(AST::Kind::INITIALIZER, 0), ast(std::move(assignment_expression)) {}
-InitializerAST::InitializerAST(nt<InitializerListAST> initializer_list)
+InitializerAST::InitializerAST(nt<InitializerListAST>
+                               initializer_list)
     : AST(AST::Kind::INITIALIZER, 1), ast(std::move(initializer_list)) {}
 void InitializerAST::print(int indent) {
   AST::print(indent);
   ast->print(++indent);
 }
-InitializerListAST::InitializerListAST(nts<InitializerAST> initializer)
+InitializerListAST::InitializerListAST(nts<InitializerAST>
+                                       initializer)
     : AST(AST::Kind::INITIALIZER_LIST), initializers(std::move(initializer)) {}
 void InitializerListAST::print(int indent) {
   AST::print(indent);
   initializers.print(++indent);
 }
-LabeledStatementAST::LabeledStatementAST(nt<StatementAST> statement)
+LabeledStatementAST::LabeledStatementAST(nt<StatementAST>
+                                         statement)
     : StatementAST(AST::Kind::LABELED_STATEMENT), mStatement(std::move(statement)) {}
-llvm::BasicBlock *LabeledStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
-  auto *BB = llvm::BasicBlock::Create(sContext, "", function);
-  sBuilder.SetInsertPoint(BB);
-  mStatement->codegen(function, container);
-  return BB;
-}
 ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST>
                                                expression)
     : StatementAST(AST::Kind::EXPRESSION_STATEMENT), expression(std::move(expression)) {}
@@ -1005,52 +1061,12 @@ void ExpressionStatementAST::print(int indent) {
   AST::print(indent);
   expression->print(++indent);
 }
-llvm::BasicBlock *ExpressionStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+llvm::BasicBlock *ExpressionStatementAST::codegen(StatementContexts &contexts) {
   expression->codegen();
   return nullptr;
 }
 SelectionStatementAST::SelectionStatementAST() : StatementAST(AST::Kind::SELECTION_STATEMENT) {}
-IterationStatementAST::IterationStatementAST(nt<ExpressionAST>
-                                             expression, nt<StatementAST>
-                                             statement)
-    : StatementAST(AST::Kind::ITERATION_STATEMENT),
-      expression(std::move(expression)),
-      statement(std::move(statement)) {}
-IterationStatementAST::IterationStatementAST(nt<StatementAST>
-                                             statement, nt<ExpressionAST>
-                                             expression)
-    : StatementAST(AST::Kind::ITERATION_STATEMENT),
-      statement(std::move(statement)),
-      expression(std::move(expression)) {}
-IterationStatementAST::IterationStatementAST(nt<ExpressionAST>
-                                             expression,
-                                             nt<ExpressionAST>
-                                             condition_expression,
-                                             nt<ExpressionAST>
-                                             step_expression,
-                                             nt<StatementAST>
-                                             statement)
-    : StatementAST(AST::Kind::ITERATION_STATEMENT),
-      expression(std::move(expression)),
-      condition_expression(std::move(condition_expression)),
-      step_expression(std::move(step_expression)),
-      statement(std::move(statement)) {}
-void IterationStatementAST::print(int indent) {
-  AST::print(indent);
-  ++indent;
-  if (getProduction() == 0) {
-    expression->print(indent);
-    statement->print(indent);
-  } else if (getProduction() == 1) {
-    statement->print(indent);
-    expression->print(indent);
-  } else {
-    expression->print(indent);
-    condition_expression->print(indent);
-    step_expression->print(indent);
-    statement->print(indent);
-  }
-}
+IterationStatementAST::IterationStatementAST() : StatementAST(AST::Kind::ITERATION_STATEMENT) {}
 JumpStatementAST::JumpStatementAST() : StatementAST(AST::Kind::JUMP_STATEMENT) {}
 TypeQualifierAST::TypeQualifierAST(Terminal<TypeQualifier>
                                    op) : AST(AST::Kind::TYPE_QUALIFIER), op(op) {}
@@ -1344,7 +1360,8 @@ QualifiedType TypeSpecifiersAST::codegen() {
   return QualifiedType(type, {});
 }
 DirectDeclaratorAST::DirectDeclaratorAST() : AST(Kind::DIRECT_DECLARATOR) {}
-SimpleDirectDeclaratorAST::SimpleDirectDeclaratorAST(nt<IdentifierAST> identifier)
+SimpleDirectDeclaratorAST::SimpleDirectDeclaratorAST(nt<IdentifierAST>
+                                                     identifier)
     : identifier(std::move(identifier)) {}
 void SimpleDirectDeclaratorAST::print(int indent) {
   AST::print(indent);
@@ -1474,7 +1491,8 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
   sObjectTable->insert(*token, mSymbol.get());
   return mSymbol.get();
 }
-ParenthesedDirectDeclaratorAST::ParenthesedDirectDeclaratorAST(nt<DeclaratorAST> declarator)
+ParenthesedDirectDeclaratorAST::ParenthesedDirectDeclaratorAST(nt<DeclaratorAST>
+                                                               declarator)
     : declarator(std::move(declarator)) {}
 void ParenthesedDirectDeclaratorAST::print(int indent) {
   AST::print(indent);
@@ -1483,11 +1501,14 @@ void ParenthesedDirectDeclaratorAST::print(int indent) {
 const Token *ParenthesedDirectDeclaratorAST::getIdentifier() {
   return declarator->getIdentifier();
 }
-ISymbol *ParenthesedDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
+ISymbol *ParenthesedDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier,
+                                                 const QualifiedType &derivedType) {
   return declarator->codegen(storageSpecifier, derivedType);
 }
-ArrayDeclaratorAST::ArrayDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
-                                       nt<ConstantExpressionAST> constantExpression)
+ArrayDeclaratorAST::ArrayDeclaratorAST(nt<DirectDeclaratorAST>
+                                       directDeclarator,
+                                       nt<ConstantExpressionAST>
+                                       constantExpression)
     : directDeclarator(std::move(directDeclarator)), constantExpression(std::move(constantExpression)) {}
 void ArrayDeclaratorAST::print(int indent) {
   AST::print(indent);
@@ -1529,8 +1550,10 @@ void FunctionDeclaratorAST::print(int indent) {
   directDeclarator->print(indent);
   if (parameterList) parameterList->print(indent);
 }
-FunctionDeclaratorAST::FunctionDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
-                                             nt<ParameterListAST> parameterList)
+FunctionDeclaratorAST::FunctionDeclaratorAST(nt<DirectDeclaratorAST>
+                                             directDeclarator,
+                                             nt<ParameterListAST>
+                                             parameterList)
     : directDeclarator(std::move(directDeclarator)), parameterList(std::move(parameterList)) {}
 const Token *FunctionDeclaratorAST::getIdentifier() {
   return directDeclarator->getIdentifier();
@@ -1571,7 +1594,8 @@ Value IdentifierPrimaryExpressionAST::codegen() {
   }
   return Value(qualifiedType, lvalue, value);
 }
-IdentifierPrimaryExpressionAST::IdentifierPrimaryExpressionAST(nt<IdentifierAST> identifier) : identifier(std::move(
+IdentifierPrimaryExpressionAST::IdentifierPrimaryExpressionAST(nt<IdentifierAST>
+                                                               identifier) : identifier(std::move(
     identifier)) {}
 void IntegerConstantPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::printIndent(indent);
@@ -1661,7 +1685,8 @@ Value IntegerConstantPrimaryExpressionAST::codegen() {
                false,
                llvm::ConstantInt::get(type->getLLVMType(), type->getAPInt(n)));
 }
-IntegerConstantPrimaryExpressionAST::IntegerConstantPrimaryExpressionAST(nt<IntegerConstantAST> integer_constant)
+IntegerConstantPrimaryExpressionAST::IntegerConstantPrimaryExpressionAST(nt<IntegerConstantAST>
+                                                                         integer_constant)
     : integer_constant(std::move(
     integer_constant)) {}
 void FloatingConstantPrimaryExpressionAST::print(int indent) {
@@ -1682,7 +1707,8 @@ Value FloatingConstantPrimaryExpressionAST::codegen() {
                false,
                llvm::ConstantFP::get(sModule.getContext(), type->getAPFloat(floating_constant->value)));
 }
-FloatingConstantPrimaryExpressionAST::FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST> floating_constant)
+FloatingConstantPrimaryExpressionAST::FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST>
+                                                                           floating_constant)
     : floating_constant(std::move(
     floating_constant)) {}
 void CharacterConstantPrimaryExpressionAST::print(int indent) {
@@ -1696,7 +1722,8 @@ Value CharacterConstantPrimaryExpressionAST::codegen() {
                llvm::ConstantInt::get(type->getLLVMType(),
                                       type->getAPInt(static_cast<uint64_t>(character_constant->c))));
 }
-CharacterConstantPrimaryExpressionAST::CharacterConstantPrimaryExpressionAST(nt<CharacterConstantAST> character_constant)
+CharacterConstantPrimaryExpressionAST::CharacterConstantPrimaryExpressionAST(nt<CharacterConstantAST>
+                                                                             character_constant)
     : character_constant(std::move(
     character_constant)) {}
 void StringPrimaryExpressionAST::print(int indent) {
@@ -1708,7 +1735,8 @@ Value StringPrimaryExpressionAST::codegen() {
                true,
                sBuilder.CreateGlobalStringPtr(string->mToken.getValue()));
 }
-StringPrimaryExpressionAST::StringPrimaryExpressionAST(nt<StringAST> string) : string(std::move(string)) {}
+StringPrimaryExpressionAST::StringPrimaryExpressionAST(nt<StringAST>
+                                                       string) : string(std::move(string)) {}
 void ExpressionPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
   expression->print(++indent);
@@ -1716,7 +1744,8 @@ void ExpressionPrimaryExpressionAST::print(int indent) {
 Value ExpressionPrimaryExpressionAST::codegen() {
   return expression->codegen();
 }
-ExpressionPrimaryExpressionAST::ExpressionPrimaryExpressionAST(nt<ExpressionAST> expression) : expression(std::move(
+ExpressionPrimaryExpressionAST::ExpressionPrimaryExpressionAST(nt<ExpressionAST>
+                                                               expression) : expression(std::move(
     expression)) {}
 void SimplePostfixExpressionAST::print(int indent) {
   AST::print(indent);
@@ -2577,9 +2606,12 @@ Value LogicalBinaryOperatorAST::codegen() {
       IntegerType::sOneBitBoolIntType.cast(&IntegerType::sIntType, phi, mRight.get());
   return Value(QualifiedType(&IntegerType::sIntType, {}), false, result);
 }
-IfSelectionStatementAST::IfSelectionStatementAST(nt<ExpressionAST> expression,
-                                                 nt<StatementAST> statement,
-                                                 nt<StatementAST> elseStatement)
+IfSelectionStatementAST::IfSelectionStatementAST(nt<ExpressionAST>
+                                                 expression,
+                                                 nt<StatementAST>
+                                                 statement,
+                                                 nt<StatementAST>
+                                                 elseStatement)
     : mExpression(std::move(expression)), mStatement(std::move(statement)),
       mElseStatement(std::move(elseStatement)) {}
 void IfSelectionStatementAST::print(int indent) {
@@ -2591,7 +2623,7 @@ void IfSelectionStatementAST::print(int indent) {
     mElseStatement->print(indent);
   }
 }
-llvm::BasicBlock *IfSelectionStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+llvm::BasicBlock *IfSelectionStatementAST::codegen(StatementContexts &contexts) {
   auto exp = mExpression->codegen();
   llvm::Value *cond;
   if (auto *integerTy = dynamic_cast<const IntegerType *>(exp.qualifiedType.getType())) {
@@ -2604,11 +2636,12 @@ llvm::BasicBlock *IfSelectionStatementAST::codegen(llvm::Function *function, llv
     throw SemaException("The controlling expression of an if statement shall have scalar type.",
                         mExpression->involvedTokens());
   }
+  auto *function = contexts.getContainingFunction();
   auto *trueBB = llvm::BasicBlock::Create(sContext, "", function);
   auto *endBB = llvm::BasicBlock::Create(sContext, "", function);
   // ture BB
   sBuilder.SetInsertPoint(trueBB);
-  mStatement->codegen(function, container);
+  mStatement->codegen(contexts);
   sBuilder.CreateBr(endBB);
   if (mElseStatement) {
     auto *falseBB = llvm::BasicBlock::Create(sContext, "", function);
@@ -2621,8 +2654,11 @@ llvm::BasicBlock *IfSelectionStatementAST::codegen(llvm::Function *function, llv
     // endBB
     sBuilder.SetInsertPoint(endBB);
   }
+  return endBB;
 }
-SwitchSelectionStatementAST::SwitchSelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement)
+SwitchSelectionStatementAST::SwitchSelectionStatementAST(nt<ExpressionAST>
+                                                         expression, nt<StatementAST>
+                                                         statement)
     : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
 void SwitchSelectionStatementAST::print(int indent) {
   AST::print(indent);
@@ -2630,10 +2666,15 @@ void SwitchSelectionStatementAST::print(int indent) {
   mExpression->print(indent);
   mStatement->print(indent);
 }
-llvm::BasicBlock *SwitchSelectionStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+llvm::BasicBlock *SwitchSelectionStatementAST::codegen(StatementContexts &contexts) {
   auto exp = mExpression->codegen();
   if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(exp.getValue())) {
-    sBuilder.CreateSwitch(constInt, nullptr);
+    auto *switchInst = sBuilder.CreateSwitch(constInt, nullptr);
+    auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+    contexts.add(std::make_unique<SwitchContext>(switchInst, endBB));
+    mStatement->codegen(contexts);
+    sBuilder.SetInsertPoint(endBB);
+    return endBB;
   } else {
     throw SemaException("The controlling expression of a switch statement shall have integer type.",
                         mExpression->involvedTokens());
@@ -2645,15 +2686,17 @@ void IdentifierLabeledStatementAST::print(int indent) {
   mIdentifier->print(indent);
   mStatement->print(indent);
 }
-IdentifierLabeledStatementAST::IdentifierLabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement)
+IdentifierLabeledStatementAST::IdentifierLabeledStatementAST(nt<IdentifierAST>
+                                                             id, nt<StatementAST>
+                                                             statement)
     : LabeledStatementAST(std::move(statement)) {}
-llvm::BasicBlock *IdentifierLabeledStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
+llvm::BasicBlock *IdentifierLabeledStatementAST::codegen(StatementContexts &contexts) {
   if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
     if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
       if (label->isDefinedByGoto()) {
         auto *BB = label->getBasicBlock();
         sBuilder.SetInsertPoint(BB);
-        mStatement->codegen(function, container);
+        mStatement->codegen(contexts);
         return BB;
       } else {
         throw SemaException("WTF: redifined label", mIdentifier->involvedTokens());
@@ -2662,8 +2705,10 @@ llvm::BasicBlock *IdentifierLabeledStatementAST::codegen(llvm::Function *functio
       throw std::runtime_error("WTF: label table has other symbol type");
     }
   } else {
-    auto* BB = LabeledStatementAST::codegen(function, container);
-    mLabelSymbol = std::make_unique<LabelSymbol>(mIdentifier->token, BB, false);
+    auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+    sBuilder.SetInsertPoint(BB);
+    mStatement->codegen(contexts);
+    mLabelSymbol = std::make_unique<LabelSymbol>(&mIdentifier->token, BB, false);
     sLabelTable->insert(mIdentifier->token, mLabelSymbol.get());
     return BB;
   }
@@ -2674,17 +2719,29 @@ void CaseLabeledStatementAST::print(int indent) {
   mConstantExpression->print(indent);
   mStatement->print(indent);
 }
-CaseLabeledStatementAST::CaseLabeledStatementAST(nt<ConstantExpressionAST> constantExpression,
-                                                 nt<StatementAST> statement)
+CaseLabeledStatementAST::CaseLabeledStatementAST(nt<ConstantExpressionAST>
+                                                 constantExpression,
+                                                 nt<StatementAST>
+                                                 statement)
     : LabeledStatementAST(std::move(statement)) {}
-llvm::BasicBlock *CaseLabeledStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
-  if (auto *switchInst = llvm::dyn_cast<llvm::SwitchInst>(container)) {
-    auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(mConstantExpression->codegen().getValue()); // no need to promote
+llvm::BasicBlock *CaseLabeledStatementAST::codegen(StatementContexts &contexts) {
+  auto *switchContext = contexts.getLastContext<SwitchContext>();
+  if (switchContext) {
+    auto *switchInst = switchContext->getSwitchInst();
+    auto *constInt =
+        llvm::dyn_cast<llvm::ConstantInt>(mConstantExpression->codegen().getValue()); // no need to promote
     if (!constInt)
       throw SemaException("The expression of each case label shall be an integer constant expression",
                           mConstantExpression->involvedTokens());
+    auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+    // check if last case fall through to this case
+    if (switchInst->getNumCases() != 0 && !(--switchInst->case_end())->getCaseSuccessor()->getTerminator()) {
+      sBuilder.CreateBr(BB);
+    }
+    sBuilder.SetInsertPoint(BB);
+    mStatement->codegen(contexts);
     if (switchInst->findCaseValue(constInt) == switchInst->case_default()) {
-      switchInst->addCase(constInt, LabeledStatementAST::codegen(function, nullptr));
+      switchInst->addCase(constInt, BB);
     } else {
       throw SemaException(
           "no two of the case constant expressions in the same switch statement shall have the same value",
@@ -2700,10 +2757,19 @@ void DefaultLabeledStatementAST::print(int indent) {
   ++indent;
   mStatement->print(indent);
 }
-llvm::BasicBlock *DefaultLabeledStatementAST::codegen(llvm::Function *function, llvm::Value *container) {
-  if (auto *switchInst = llvm::dyn_cast<llvm::SwitchInst>(container)) {
+llvm::BasicBlock *DefaultLabeledStatementAST::codegen(StatementContexts &contexts) {
+  auto *switchContext = contexts.getLastContext<SwitchContext>();
+  if (switchContext) {
+    auto *switchInst = switchContext->getSwitchInst();
     if (!switchInst->getOperand(1)) {
-      switchInst->setDefaultDest(LabeledStatementAST::codegen(function, nullptr));
+      auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+      // check if last case fall through to this case
+      if (switchInst->getNumCases() != 0 && !(--switchInst->case_end())->getCaseSuccessor()->getTerminator()) {
+        sBuilder.CreateBr(BB);
+      }
+      sBuilder.SetInsertPoint(BB);
+      mStatement->codegen(contexts);
+      switchInst->setDefaultDest(BB);
     } else {
       throw SemaException(
           "There may be at most one default label in a switch statement", involvedTokens());
@@ -2717,9 +2783,166 @@ void GotoJumpStatementAST::print(int indent) {
   AST::print(indent);
   mIdentifier->print(++indent);
 }
-GotoJumpStatementAST::GotoJumpStatementAST(nt<IdentifierAST> identifier) : mIdentifier(std::move(identifier)) {}
+GotoJumpStatementAST::GotoJumpStatementAST(nt<IdentifierAST>
+                                           identifier) : mIdentifier(std::move(identifier)) {}
+llvm::BasicBlock *GotoJumpStatementAST::codegen(StatementContexts &contexts) {
+  llvm::BasicBlock *BB;
+  if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
+    if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
+      BB = label->getBasicBlock();
+    } else {
+      throw std::runtime_error("WTF: label table has other symbol type");
+    }
+  } else {
+    BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  }
+  sBuilder.SetInsertPoint(BB);
+  sBuilder.CreateBr(BB);
+  return BB;
+}
 void ReturnJumpStatementAST::print(int indent) {
   AST::print(indent);
   mExpression->print(++indent);
 }
-ReturnJumpStatementAST::ReturnJumpStatementAST(nt<ExpressionAST> expression) : mExpression(std::move(expression)) {}
+ReturnJumpStatementAST::ReturnJumpStatementAST(nt<ExpressionAST>
+                                               expression) : mExpression(std::move(expression)) {}
+llvm::BasicBlock *ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
+  auto *funtion = contexts.getLastContext<FunctionContext>();
+  if (!funtion) {
+    throw SemaException("return statement should only appear in functions", involvedTokens());
+  }
+  auto *type = funtion->getFunctionType()->getReturnType().getType();
+  if (!mExpression) {
+    if (type == &VoidType::sVoidType) {
+      sBuilder.CreateRetVoid();
+      return nullptr;
+    } else {
+      throw SemaException(
+          "A return statement without an expression shall only appear in a function whose return type is void",
+          involvedTokens());
+    }
+  } else {
+    if (type == &VoidType::sVoidType) {
+      throw SemaException(
+          "A return statement with an expression shall not appear in a function whose return type is void",
+          involvedTokens());
+    } else {
+      auto v = mExpression->codegen();
+      sBuilder.CreateRet(v.qualifiedType.getType()->cast(type, v.getValue(), this));
+      return nullptr;
+    }
+  }
+}
+WhileIterationStatementAST::WhileIterationStatementAST(nt<ExpressionAST>
+                                                       expression, nt<StatementAST>
+                                                       statement)
+    : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
+llvm::BasicBlock *WhileIterationStatementAST::codegen(StatementContexts &contexts) {
+  auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  sBuilder.CreateBr(conditionBB);
+  //condition bb
+  sBuilder.SetInsertPoint(conditionBB);
+  auto value = mExpression->codegen();
+  llvm::Value *cond;
+  if (auto *integerTy = dynamic_cast<const IntegerType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateICmpNE(value.getValue(), integerTy->getDefaultValue());
+  } else if (auto *floatTy = dynamic_cast<const FloatingType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateFCmpONE(value.getValue(), floatTy->getDefaultValue());
+  } else if (auto *pointerTy = dynamic_cast<const PointerType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateICmpNE(value.getValue(), pointerTy->getDefaultValue());
+  } else {
+    throw SemaException("The controlling expression of an iteration statement shall have scalar type.",
+                        mExpression->involvedTokens());
+  }
+  sBuilder.CreateCondBr(cond, loopBB, endBB);
+  contexts.add(std::make_unique<LoopContext>(conditionBB, endBB));
+  // loop body
+  sBuilder.SetInsertPoint(loopBB);
+  mStatement->codegen(contexts);
+  sBuilder.CreateBr(conditionBB);
+  // end body
+  sBuilder.SetInsertPoint(endBB);
+  return endBB;
+}
+llvm::BasicBlock *DoIterationStatementAST::codegen(StatementContexts &contexts) {
+  auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  sBuilder.CreateBr(loopBB);
+  // loop body
+  sBuilder.SetInsertPoint(loopBB);
+  mStatement->codegen(contexts);
+  sBuilder.CreateBr(conditionBB);
+  //condition bb
+  sBuilder.SetInsertPoint(conditionBB);
+  auto value = mExpression->codegen();
+  llvm::Value *cond;
+  if (auto *integerTy = dynamic_cast<const IntegerType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateICmpNE(value.getValue(), integerTy->getDefaultValue());
+  } else if (auto *floatTy = dynamic_cast<const FloatingType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateFCmpONE(value.getValue(), floatTy->getDefaultValue());
+  } else if (auto *pointerTy = dynamic_cast<const PointerType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateICmpNE(value.getValue(), pointerTy->getDefaultValue());
+  } else {
+    throw SemaException("The controlling expression of an iteration statement shall have scalar type.",
+                        mExpression->involvedTokens());
+  }
+  sBuilder.CreateCondBr(cond, loopBB, endBB);
+  contexts.add(std::make_unique<LoopContext>(conditionBB, endBB));
+  // end body
+  sBuilder.SetInsertPoint(endBB);
+  return endBB;
+}
+llvm::BasicBlock *ForIterationStatementAST::codegen(StatementContexts &contexts) {
+  if (mExpression) {
+    mExpression->codegen();
+  }
+  auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *afterLoopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  sBuilder.CreateBr(conditionBB);
+  //condition bb
+  sBuilder.SetInsertPoint(conditionBB);
+  auto value = mExpression->codegen();
+  llvm::Value *cond;
+  if (auto *integerTy = dynamic_cast<const IntegerType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateICmpNE(value.getValue(), integerTy->getDefaultValue());
+  } else if (auto *floatTy = dynamic_cast<const FloatingType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateFCmpONE(value.getValue(), floatTy->getDefaultValue());
+  } else if (auto *pointerTy = dynamic_cast<const PointerType *>(value.qualifiedType.getType())) {
+    cond = sBuilder.CreateICmpNE(value.getValue(), pointerTy->getDefaultValue());
+  } else {
+    throw SemaException("The controlling expression of an iteration statement shall have scalar type.",
+                        mExpression->involvedTokens());
+  }
+  sBuilder.CreateCondBr(cond, loopBB, endBB);
+  contexts.add(std::make_unique<LoopContext>(conditionBB, endBB));
+  // loop body
+  sBuilder.SetInsertPoint(loopBB);
+  mStatement->codegen(contexts);
+  sBuilder.CreateBr(afterLoopBB);
+  //after loop
+  sBuilder.SetInsertPoint(afterLoopBB);
+  mStepExpression->codegen();
+  sBuilder.CreateBr(conditionBB);
+  // end body
+  sBuilder.SetInsertPoint(endBB);
+  return endBB;
+}
+llvm::BasicBlock *ContinueJumpStatementAST::codegen(StatementContexts &contexts) {
+  if (auto *context = contexts.getLastContext<LoopContext>()) {
+    sBuilder.CreateBr(context->getContinueBB());
+  }
+  return sBuilder.GetInsertBlock();
+}
+llvm::BasicBlock *BreakJumpStatementAST::codegen(StatementContexts &contexts) {
+  if (auto *context = contexts.getLastContext<LoopContext>()) {
+    sBuilder.CreateBr(context->getBreakBB());
+  } else if (auto *context = contexts.getLastContext<SwitchContext>()) {
+    sBuilder.CreateBr(context->getBreakBB());
+  }
+  return sBuilder.GetInsertBlock();
+}

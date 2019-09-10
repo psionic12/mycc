@@ -1130,7 +1130,7 @@ nt<SelectionStatementAST> Parser::parseSelectionStatement() {
     if (expect(TokenKind::TOKEN_ELSE)) {
       return make_ast<IfSelectionStatementAST>(std::move(condition), std::move(if_statement), parseStatement());
     } else {
-      return make_ast<IfSelectionStatementAST>(std::move(condition), std::move(if_statement));
+      return make_ast<IfSelectionStatementAST>(std::move(condition), std::move(if_statement), nullptr);
     }
   } else {
     accept(TokenKind::TOKEN_SWITCH);
@@ -1150,7 +1150,7 @@ nt<IterationStatementAST> Parser::parseIterationStatement() {
     accept(TokenKind::TOKEN_LPAREN);
     auto exp = parseExpression();
     accept(TokenKind::TOKEN_RPAREN);
-    return make_ast<IterationStatementAST>(std::move(exp), parseStatement());
+    return make_ast<WhileIterationStatementAST>(std::move(exp), parseStatement());
   } else if (expect(TokenKind::TOKEN_DO)) {
     auto statement = parseStatement();
     accept(TokenKind::TOKEN_WHILE);
@@ -1158,7 +1158,7 @@ nt<IterationStatementAST> Parser::parseIterationStatement() {
     auto exp = parseExpression();
     accept(TokenKind::TOKEN_RPAREN);
     accept(TokenKind::TOKEN_SEMI);
-    return make_ast<IterationStatementAST>(std::move(statement), std::move(exp));
+    return make_ast<DoIterationStatementAST>(std::move(statement), std::move(exp));
   } else {
     accept(TokenKind::TOKEN_FOR);
     accept(TokenKind::TOKEN_LPAREN);
@@ -1177,10 +1177,7 @@ nt<IterationStatementAST> Parser::parseIterationStatement() {
       term3 = parseExpression();
       accept(TokenKind::TOKEN_RPAREN);
     }
-    return make_ast<IterationStatementAST>(std::move(term1),
-                                           std::move(term2),
-                                           std::move(term3),
-                                           parseStatement());
+    return make_ast<ForIterationStatementAST>(std::move(term1), std::move(term2), std::move(term3), parseStatement());
   }
 }
 
