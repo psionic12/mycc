@@ -193,17 +193,17 @@ void Lex::getToken() {
           return makeToken(TokenKind::TOKEN_ARROW, "->");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_SUB,"-");
+          return makeToken(TokenKind::TOKEN_SUB, "-");
         }
       case '!':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_BANGEQ,"!=");
+          return makeToken(TokenKind::TOKEN_BANGEQ, "!=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_BANG,"!");
+          return makeToken(TokenKind::TOKEN_BANG, "!");
         }
       case '/':tokenStart = in.tellg();
         in.ignore();
@@ -216,20 +216,20 @@ void Lex::getToken() {
         } else if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_SLASHEQ,"/=");
+          return makeToken(TokenKind::TOKEN_SLASHEQ, "/=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_SLASH,"/");
+          return makeToken(TokenKind::TOKEN_SLASH, "/");
         }
       case '%':tokenStart = in.tellg();
         in.ignore();
         if (in.peek() == '=') {
           tokenEnd = in.tellg();
           in.ignore();
-          return makeToken(TokenKind::TOKEN_PERCENTEQ,"%=");
+          return makeToken(TokenKind::TOKEN_PERCENTEQ, "%=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_PERCENT,"%");
+          return makeToken(TokenKind::TOKEN_PERCENT, "%");
         }
       case '<':tokenStart = in.tellg();
         in.ignore();
@@ -239,16 +239,16 @@ void Lex::getToken() {
           if (in.peek() == '=') {
             tokenEnd = in.tellg();
             in.ignore();
-            return makeToken(TokenKind::TOKEN_LTLTEQ,"<<=");
+            return makeToken(TokenKind::TOKEN_LTLTEQ, "<<=");
           } else {
-            return makeToken(TokenKind::TOKEN_LTLT,"<<");
+            return makeToken(TokenKind::TOKEN_LTLT, "<<");
           }
         } else if (in.peek() == '=') {
           in.ignore();
-          return makeToken(TokenKind::TOKEN_LTEQ,"<=");
+          return makeToken(TokenKind::TOKEN_LTEQ, "<=");
         } else {
           tokenEnd = tokenStart;
-          return makeToken(TokenKind::TOKEN_LT,"<");
+          return makeToken(TokenKind::TOKEN_LT, "<");
         }
       case '>':tokenStart = in.tellg();
         in.ignore();
@@ -258,9 +258,9 @@ void Lex::getToken() {
           if (in.peek() == '=') {
             tokenEnd = in.tellg();
             in.ignore();
-            return makeToken(TokenKind::TOKEN_GTGTEQ,">>=");
+            return makeToken(TokenKind::TOKEN_GTGTEQ, ">>=");
           } else {
-            return makeToken(TokenKind::TOKEN_GTGT,">>");
+            return makeToken(TokenKind::TOKEN_GTGT, ">>");
           }
         } else if (in.peek() == '=') {
           in.ignore();
@@ -541,8 +541,7 @@ void Lex::consumeToken() {
     end_of_tokens = true;
   }
 }
-const Token &
-Lex::peek(long offsite) const {
+const Token &Lex::peek(long offsite) const {
   return tokens[current + offsite];
 }
 void Lex::makeToken(TokenKind kind, std::string value) {

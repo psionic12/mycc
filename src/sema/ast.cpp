@@ -38,7 +38,7 @@ void TranslationUnitAST::codegen() {
                                                llvm::GlobalVariable::LinkageTypes::InternalLinkage);
   // we do not create llvm.global_ctors cause we don't really use globalVarInit;
 
-  auto *globalVarInitBB = llvm::BasicBlock::Create(sContext, "", globalVarInit, 0);
+  auto *globalVarInitBB = llvm::BasicBlock::Create(sContext, "", globalVarInit);
   sBuilder.SetInsertPoint(globalVarInitBB);
   for (const auto &ds : external_declarations) {
     ds->codegen();
@@ -46,7 +46,7 @@ void TranslationUnitAST::codegen() {
   if (!globalVarInitBB->empty()) {
     throw std::runtime_error("WTF: globalVarInitBB is not empty");
   } else {
-    globalVarInit->eraseFromParent();
+//    globalVarInit->eraseFromParent();
   }
 }
 ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def)
@@ -207,32 +207,34 @@ void DeclarationAST::codegen() {
     if (auto *objSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
       const auto *type = objSymbol->getQualifiedType().getType();
       auto *value = objSymbol->getValue();
-      if (const auto *objtype = dynamic_cast<const ObjectType *>(type)) {
-        auto *initValue = objtype->initializerCodegen(initPair.second.get());
-        // if the initializer is array type, the declaration is not imcomplete any more
-        if (auto *arrayTy = llvm::dyn_cast<llvm::ArrayType>(initValue->getType())) {
-          const_cast<ArrayType *>(static_cast<const ArrayType *>(objtype))->setSize(arrayTy->getArrayNumElements());
-        }
-        if (auto *constantInitValue = llvm::dyn_cast<llvm::Constant>(initValue)) {
-          if (auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
-            global->setInitializer(constantInitValue);
+      if (initPair.second.get()) {
+        if (const auto *objtype = dynamic_cast<const ObjectType *>(type)) {
+          auto *initValue = objtype->initializerCodegen(initPair.second.get());
+          // if the initializer is array type, the declaration is not imcomplete any more
+          if (auto *arrayTy = llvm::dyn_cast<llvm::ArrayType>(initValue->getType())) {
+            const_cast<ArrayType *>(static_cast<const ArrayType *>(objtype))->setSize(arrayTy->getArrayNumElements());
+          }
+          if (auto *constantInitValue = llvm::dyn_cast<llvm::Constant>(initValue)) {
+            if (auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+              global->setInitializer(constantInitValue);
+            } else {
+              sBuilder.CreateMemCpy(value,
+                                    initValue,
+                                    objtype->getSizeInBits() / 8,
+                                    0,
+                                    objSymbol->getQualifiedType().isVolatile());
+            }
           } else {
-            sBuilder.CreateMemCpy(value,
-                                  initValue,
-                                  objtype->getSizeInBits() / 8,
-                                  0,
-                                  objSymbol->getQualifiedType().isVolatile());
+            if (llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+              throw SemaException("initializer element is not a compile-time constant",
+                                  initPair.second->involvedTokens());
+            } else {
+              sBuilder.CreateStore(value, initValue);
+            }
           }
         } else {
-          if (llvm::dyn_cast<llvm::GlobalVariable>(value)) {
-            throw SemaException("initializer element is not a compile-time constant",
-                                initPair.second->involvedTokens());
-          } else {
-            sBuilder.CreateStore(value, initValue);
-          }
+          throw SemaException("only object types can be initialized", initPair.first->involvedTokens());
         }
-      } else {
-        throw SemaException("only object types can be initialized", initPair.first->involvedTokens());
       }
     } else if (initPair.second != nullptr) {
       throw SemaException("not assignable: ", initPair.first->involvedTokens());
@@ -343,8 +345,7 @@ QualifiedType SpecifierQualifierAST::codegen() {
   }
   return qualifiedType;
 }
-ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifierOp>
-                                             specifier)
+ProtoTypeSpecifierAST::ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifierOp> specifier)
     : AST(AST::Kind::PROTO_TYPE_SPECIFIER), Terminal<ProtoTypeSpecifierOp>(specifier), specifier(specifier) {}
 void ProtoTypeSpecifierAST::print(int indent) {
   AST::print(indent);
@@ -912,13 +913,11 @@ void FloatingConstantAST::print(int indent) {
   AST::printIndent(++indent);
   std::cout << mToken.getValue() << std::endl;
 }
-EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST>
-                                               id)
+EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST> id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
 ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST>
                                    parameter_declaration,
-                                   bool
-                                   hasMultiple,
+                                   bool hasMultiple,
                                    SymbolTable &table)
     : AST(AST::Kind::PARAMETER_LIST),
       parameter_declaration(std::move(parameter_declaration)),
@@ -954,8 +953,7 @@ bool ParameterListAST::hasMultiple() const {
 }
 ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST>
                                                  declaration_specifiers,
-                                                 nt<DeclaratorAST>
-                                                 declarator)
+                                                 nt<DeclaratorAST> declarator)
     : AST(AST::Kind::PARAMETER_DECLARATION), declaration_specifiers(std::move(declaration_specifiers)),
       declarator(std::move(declarator)) {}
 void ParameterDeclarationAST::print(int indent) {
@@ -979,6 +977,8 @@ ISymbol *ParameterDeclarationAST::codegen() {
   if (const auto *obj = dynamic_cast<ObjectSymbol *>(symbol)) {
     if (const auto *type = dynamic_cast<const ArrayType *>(obj->getQualifiedType().getType())) {
       return declarator->codegen(storageSpecifier, QualifiedType((const PointerType *) type, {}));
+    } else {
+      return declarator->codegen(storageSpecifier, qualifiedType);
     }
   } else if (const auto *func = dynamic_cast<FunctionSymbol *>(symbol)) {
     return declarator->codegen(storageSpecifier, QualifiedType((const PointerType *) (func->getType()), {}));
@@ -1201,7 +1201,7 @@ llvm::Module &AST::getModule() {
 llvm::IRBuilder<> &AST::getBuilder() {
   return sBuilder;
 }
-SymbolTables & AST::getTables() {
+SymbolTables &AST::getTables() {
   return mTables;
 }
 IntegerConstantAST::IntegerConstantAST(
@@ -1490,7 +1490,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
       case ScopeKind::TAG:throw SemaException("cannot declare funciton in a tag", involvedTokens());
     }
   }
-    const Token *token = identifier ? &identifier->token : nullptr;
+  const Token *token = identifier ? &identifier->token : nullptr;
   mSymbol = std::make_unique<ObjectSymbol>(derivedType, value, token);
   mSymbol->setLinkage(linkage);
   sObjectTable->insert(*token, mSymbol.get());

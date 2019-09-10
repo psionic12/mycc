@@ -700,21 +700,20 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
 ///                   | <parameter-list> , <parameter-declaration>
 nt<ParameterListAST> Parser::parseParameterLists() {
   mStartToken = &lex.peek();
-  SymbolScope s(table, symbolTables.createTable(ScopeKind::FUNCTION_PROTOTYPE));
+  auto* temp_table = symbolTables.createTable(ScopeKind::FUNCTION_PROTOTYPE);
+  SymbolScope s(table, temp_table);
   nts<ParameterDeclarationAST> decls;
   bool hasMutiple = false;
   do {
-    if (lex.peek() == TokenKind::TOKEN_ELLIPSIS) {
+    const Token& token = lex.peek();
+    if (token == TokenKind::TOKEN_ELLIPSIS) {
       hasMutiple = true;
       lex.consumeToken();
-      break;
-    }
-    if (lex.peek() != TokenKind::TOKEN_COMMA) {
       break;
     } else {
       decls.emplace_back(parseParameterDeclaration());
     }
-  } while (true);
+  } while (expect(TokenKind::TOKEN_COMMA));
   return make_ast<ParameterListAST>(std::move(decls), hasMutiple, *table);
 }
 

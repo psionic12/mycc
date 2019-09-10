@@ -238,7 +238,7 @@ class SymbolScope {
  public:
   SymbolScope(SymbolTable *&outter, SymbolTable *inner) : outter(outter), outter_valule(outter) {
     outter = inner;
-    inner->setFather(outter);
+    inner->setFather(outter_valule);
   }
   ~SymbolScope() {
     outter = outter_valule;
