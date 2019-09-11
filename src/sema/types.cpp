@@ -25,7 +25,7 @@ const IntegerType IntegerType::sIntType(32, true);
 const IntegerType IntegerType::sLongIntType(64, true);
 const IntegerType IntegerType::sLongLongIntType(64, true);
 const IntegerType IntegerType::sUnsignedCharType(8, false);
-const IntegerType& IntegerType::sCharType(sUnsignedCharType);
+const IntegerType &IntegerType::sCharType(sUnsignedCharType);
 const IntegerType IntegerType::sUnsignedShortIntType(16, false);
 const IntegerType IntegerType::sUnsignedIntType(32, false);
 const IntegerType IntegerType::sUnsignedLongIntType(64, false);
@@ -346,18 +346,20 @@ llvm::StructType *StructType::getLLVMType() const {
   return mLLVMType;
 }
 void StructType::setBody(SymbolTable &&table) {
+  if (table.size() == 0) return;
   mTable = std::move(table);
   std::vector<llvm::Type *> fields(mTable.size());
   for (const auto &pair : mTable) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
       if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
         fields[obj->getIndex()] = (obj->getQualifiedType().getType()->getLLVMType());
-        mOrderedFields[obj->getIndex()] = obj->getQualifiedType();
+        mOrderedFields.insert(mOrderedFields.begin() + obj->getIndex(), obj->getQualifiedType());
         mSizeInBits += type->getSizeInBits();
       }
     }
   }
   mLLVMType->setBody(fields);
+  mComplete = true;
 }
 bool StructType::compatible(const Type *type) const {
   const auto *st = dynamic_cast<const StructType *>(type);
@@ -450,6 +452,7 @@ llvm::StructType *UnionType::getLLVMType() const {
   return mLLVMType;
 }
 void UnionType::setBody(SymbolTable &&table) {
+  if (table.size() == 0) return;
   mTable = std::move(table);
   std::vector<llvm::Type *> fields;
   for (const auto &pair : mTable) {
@@ -465,6 +468,7 @@ void UnionType::setBody(SymbolTable &&table) {
     }
   }
   mLLVMType->setBody(fields);
+  mComplete = true;
 }
 bool UnionType::compatible(const Type *type) const {
   const auto *st = dynamic_cast<const UnionType *>(type);

@@ -215,11 +215,12 @@ void DeclarationAST::codegen() {
             if (auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
               global->setInitializer(constantInitValue);
             } else {
-              sBuilder.CreateMemCpy(value,
-                                    initValue,
-                                    objtype->getSizeInBits() / 8,
-                                    0,
-                                    objSymbol->getQualifiedType().isVolatile());
+//              sBuilder.CreateMemCpy(value,
+//                                    initValue,
+//                                    objtype->getSizeInBits() / 8,
+//                                    0,
+//                                    objSymbol->getQualifiedType().isVolatile());
+              sBuilder.CreateStore(value, initValue);
             }
           } else {
             if (llvm::dyn_cast<llvm::GlobalVariable>(value)) {
@@ -384,44 +385,39 @@ void StructOrUnionSpecifierAST::print(int indent) {
   declarations.print(indent);
 }
 const ObjectType *StructOrUnionSpecifierAST::codegen() {
-  CompoundType *tagType;
   //TODO A struct-declaration that does not declare an anonymous structure or anonymous union shall contain a struct-declarator-list.
-  if (bStruct == StructOrUnion::kSTRUCT) {
-    if (id) {
-      const auto &token = id->token;
-      mSymbol = std::make_unique<TagSymbol>(std::make_unique<StructType>(token.getValue()), &token);
-      sTagTable->insert(token, mSymbol.get());
-    } else {
-      mSymbol = std::make_unique<TagSymbol>(std::make_unique<StructType>(), nullptr);
-      sTagTable->insert(mSymbol.get());
-    }
-  } else {
-    if (id) {
-      const auto &token = id->token;
-      mSymbol = std::make_unique<TagSymbol>(std::make_unique<UnionType>(token.getValue()), &token);
-      sTagTable->insert(token, mSymbol.get());
-    } else {
-      mSymbol = std::make_unique<TagSymbol>(std::make_unique<UnionType>(), nullptr);
-      sTagTable->insert(mSymbol.get());
-    }
-  }
-  tagType = dynamic_cast<CompoundType *>(mSymbol->getTagType());
-  SymbolTable table(ScopeKind::TAG);
-  int index = 0;
-  for (const auto &declaration :declarations) {
-    auto d = declaration->codegen();
-    for (auto *symbol : d) {
-      if (const Token *token = symbol->getToken()) {
-        symbol->setIndex(index);
-        ++index;
-        table.insert(*token, symbol);
+  const auto &token = id->token;
+  auto *decl = dynamic_cast<TagSymbol *>(sTagTable->lookup(token));
+  ObjectType *tagType = decl ? decl->getTagType() : nullptr;
+  if (!tagType || !tagType->complete()) {
+    std::unique_ptr<ObjectType> structTy;
+    if (!tagType) {
+      if (bStruct == StructOrUnion::kSTRUCT) {
+        structTy = std::make_unique<StructType>(token.getValue());
       } else {
-        throw std::runtime_error("WTF: member has to got a name");
+        structTy = std::make_unique<UnionType>(token.getValue());
+      }
+      mSymbol = std::make_unique<TagSymbol>(std::move(structTy), id ? &token : nullptr);
+      sTagTable->insert(token, mSymbol.get());
+      tagType = mSymbol->getTagType();
+    }
+    SymbolTable table(ScopeKind::TAG);
+    int index = 0;
+    for (const auto &declaration :declarations) {
+      auto d = declaration->codegen();
+      for (auto *symbol : d) {
+        if (const Token *token = symbol->getToken()) {
+          symbol->setIndex(index);
+          ++index;
+          table.insert(*token, symbol);
+        } else {
+          throw std::runtime_error("WTF: member has to got a name");
+        }
       }
     }
+    dynamic_cast<CompoundType *>(tagType)->setBody(std::move(table));
   }
-  tagType->setBody(std::move(table));
-  return mSymbol->getTagType();
+  return tagType;
 }
 EnumSpecifierAST::EnumSpecifierAST(nt<IdentifierAST>
                                    identifier,
@@ -912,11 +908,13 @@ void FloatingConstantAST::print(int indent) {
   AST::printIndent(++indent);
   std::cout << mToken.getValue() << std::endl;
 }
-EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST> id)
+EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST>
+                                               id)
     : AST(AST::Kind::ENUMERATION_CONSTANT), id(std::move(id)) {}
 ParameterListAST::ParameterListAST(nts<ParameterDeclarationAST>
                                    parameter_declaration,
-                                   bool hasMultiple,
+                                   bool
+                                   hasMultiple,
                                    SymbolTable &table)
     : AST(AST::Kind::PARAMETER_LIST),
       parameter_declaration(std::move(parameter_declaration)),
@@ -947,7 +945,8 @@ bool ParameterListAST::hasMultiple() const {
 }
 ParameterDeclarationAST::ParameterDeclarationAST(nt<DeclarationSpecifiersAST>
                                                  declaration_specifiers,
-                                                 nt<DeclaratorAST> declarator)
+                                                 nt<DeclaratorAST>
+                                                 declarator)
     : AST(AST::Kind::PARAMETER_DECLARATION), declaration_specifiers(std::move(declaration_specifiers)),
       declarator(std::move(declarator)) {}
 void ParameterDeclarationAST::print(int indent) {
@@ -1109,7 +1108,9 @@ SymbolTable *AST::sObjectTable = nullptr;
 SymbolTable *AST::sTagTable = nullptr;
 SymbolTable *AST::sLabelTable = nullptr;
 SymbolTables AST::mTables;
-AST::AST(AST::Kind kind, int id) : mKind(kind), mProductionId(id) {}
+AST::AST(AST::Kind
+         kind, int
+         id) : mKind(kind), mProductionId(id) {}
 const char *AST::toString() {
   switch (mKind) {
     case AST::Kind::TRANSLATION_UNIT:return "TRANSLATION_UNIT";
@@ -1572,7 +1573,8 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const
         involvedTokens());
   }
   if (parameterList) {
-    mFunctionType = std::make_unique<FunctionType>(derivedType, parameterList->codegen(), parameterList->hasMultiple());
+    mFunctionType =
+        std::make_unique<FunctionType>(derivedType, parameterList->codegen(), parameterList->hasMultiple());
   } else {
     mFunctionType = std::make_unique<FunctionType>(derivedType, std::move(std::vector<QualifiedType>()), false);
   }
