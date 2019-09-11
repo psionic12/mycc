@@ -85,7 +85,7 @@ std::pair<const IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *
   }
 }
 llvm::Constant *IntegerType::getDefaultValue() const {
-  return llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 0));
+  return llvm::ConstantInt::get(AST::getContext(), llvm::APInt(mSizeInBits, 0));
 }
 const FloatingType FloatingType::sFloatType(32);
 const FloatingType FloatingType::sDoubleType(64);
@@ -181,6 +181,9 @@ bool FunctionType::compatible(const Type *type) const {
 }
 const PointerType *FunctionType::castToPointerType() const {
   return &mPointerType;
+}
+bool FunctionType::hasVarArg() const {
+  return mVarArg;
 }
 ArrayType::ArrayType(const QualifiedType elementType, unsigned int size)
     : mSize(size), mElementType(elementType), mPointerType(elementType) {}

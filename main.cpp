@@ -3,6 +3,7 @@
 #include <parser/parser.h>
 #include <tokens/specifier_combination.h>
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetMachine.h"
 
 int main() {
 //  try {

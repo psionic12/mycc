@@ -117,8 +117,10 @@ class FunctionType : public Type {
   llvm::FunctionType *getLLVMType() const override;
   bool compatible(const Type *type) const override;
   const PointerType *castToPointerType() const;
+  bool hasVarArg() const;
  private:
   bool mVarArg;
+ private:
   QualifiedType mReturnType;
   std::vector<QualifiedType> mParameters;
   PointerType mPointerType;

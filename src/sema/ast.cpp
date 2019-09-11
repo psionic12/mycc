@@ -118,13 +118,10 @@ llvm::Value *FunctionDefinitionAST::codegen() {
     if (auto *theFunction = llvm::dyn_cast<llvm::Function>(functionSymbol->getValue())) {
       if (theFunction->empty()) {
         StatementContexts contexts(theFunction);
-        const auto *functionTy = dynamic_cast<const FunctionType *>(functionSymbol->getType());
-        if (!functionTy) {
-          throw std::runtime_error("WTF: function definition is not a function type");
-        }
+        const auto *functionTy = functionSymbol->getType();
         contexts.add(std::make_unique<FunctionContext>(functionTy));
-        auto *endBB = compound_statement->codegen(contexts);
-        if (auto *inst = endBB->getTerminator()) {
+        compound_statement->codegen(contexts);
+        if (auto *inst = sBuilder.GetInsertBlock()->getTerminator()) {
           if (!llvm::dyn_cast<llvm::ReturnInst>(inst)) {
             throw std::runtime_error("WTF: function end with out a ReturnInst");
           }
@@ -1849,13 +1846,17 @@ Value FunctionPostfixExpressionAST::codegen() {
     throw SemaException("return type cannot be function type", postfix_expression->involvedTokens());
   }
   const auto &arguments = argument_expression_list->codegen();
-  if (tFunction->getParameters().size() != arguments.size()) {
+  auto paramtersSize = tFunction->getParameters().size();
+  auto argumentsSize = arguments.size();
+  if (!tFunction->hasVarArg() && paramtersSize != argumentsSize) {
     throw SemaException("arguments do not match function proto type", postfix_expression->involvedTokens());
+  } else if (paramtersSize > argumentsSize) {
+    throw SemaException("arguments are less than function defined", postfix_expression->involvedTokens());
   }
   auto para = tFunction->getParameters().begin();
   auto arg = arguments.begin();
   std::vector<llvm::Value *> argumentValues;
-  while (para != tFunction->getParameters().end()) {
+  while (arg != arguments.end()) {
     auto *argType = dynamic_cast<const ObjectType *>(arg->qualifiedType.getType());
     if (!argType) {
       throw SemaException("arguments must be object type", postfix_expression->involvedTokens());
@@ -1863,12 +1864,13 @@ Value FunctionPostfixExpressionAST::codegen() {
     if (!argType->complete()) {
       throw SemaException("arguments must be completed type", postfix_expression->involvedTokens());
     }
-    if (!argType->compatible(para->getType())) {
-      throw SemaException("arguments do not match function proto type", postfix_expression->involvedTokens());
+    if (para != tFunction->getParameters().end()) {
+      if (!argType->compatible(para->getType())) {
+        throw SemaException("arguments do not match function proto type", postfix_expression->involvedTokens());
+      }
+      ++para;
     }
-    argumentValues.push_back(arg->getValue());
-    ++para;
-    ++arg;
+    argumentValues.push_back(arg++->getValue());
   }
   return Value(tFunction->getReturnType(), false, sBuilder.CreateCall(lhs.getValue(), argumentValues));
 }
