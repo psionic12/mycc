@@ -4,7 +4,6 @@
 #include <tokens/specifier_combination.h>
 Parser::Parser(std::ifstream &ifstream)
     : in(ifstream), lex(ifstream), symbolTables(AST::getTables()) {
-  table = symbolTables.createTable(ScopeKind::FILE);
 }
 bool Parser::expect(TokenKind kind) {
   TokenKind peekKind = lex.peek().getKind();
@@ -99,6 +98,7 @@ nt<TranslationUnitAST>
 Parser::parseTranslationUnit() {
   mStartToken = &lex.peek();
   nts<ExternalDeclarationAST> declarations;
+  table = symbolTables.createTable(ScopeKind::FILE);
   while (lex.peek() != TokenKind::TOKEN_EOF) {
     declarations.push_back(parseExternalDeclaration());
   }

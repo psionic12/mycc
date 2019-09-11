@@ -3,14 +3,18 @@
 Value::Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
     : qualifiedType(std::move(qualifiedType)), lvalue(lvalue), mValue(value) {}
 llvm::Value *Value::getValue() const {
-  if (qualifiedType.getType()->getLLVMType() == mValue->getType()) {
+  auto *markedType = qualifiedType.getType()->getLLVMType();
+  auto *actualType = mValue->getType();
+  if (markedType == actualType) {
     return mValue;
-  } else if (auto *pointerType = llvm::dyn_cast<llvm::PointerType>(mValue->getType())) {
-    if (pointerType->getElementType() == qualifiedType.getType()->getLLVMType()) {
+  } else if (auto *pointerType = llvm::dyn_cast<llvm::PointerType>(actualType)) {
+    if (llvm::dyn_cast<llvm::FunctionType>(markedType)) {
+      return mValue;
+    } else if (pointerType->getElementType() == markedType) {
       return AST::getBuilder().CreateLoad(mValue, qualifiedType.isVolatile());
     }
   }
-  throw std::runtime_error("WTF: type and value do not match");
+  throw std::runtime_error(std::string("WTF: type and value do not match: "));
 }
 llvm::Value *Value::getPtr() const {
   if (lvalue) {

@@ -40,7 +40,7 @@ class AggregateType : public ObjectType {};
 class IntegerType : public ArithmeticType {
  public:
   unsigned int getSizeInBits() const;
-  static const IntegerType sCharType;
+  static const IntegerType& sCharType;
   static const IntegerType sShortIntType;
   static const IntegerType sIntType;
   static const IntegerType sLongIntType;

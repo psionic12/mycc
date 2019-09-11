@@ -114,11 +114,11 @@ llvm::Value *FunctionDefinitionAST::codegen() {
   }
   const auto &pair = declaration_spcifiers->codegen();
   auto *symbol = declarator->codegen(pair.first, pair.second);
-  if (auto *objectSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
-    if (auto *theFunction = llvm::dyn_cast<llvm::Function>(objectSymbol->getValue())) {
+  if (auto *functionSymbol = dynamic_cast<FunctionSymbol *>(symbol)) {
+    if (auto *theFunction = llvm::dyn_cast<llvm::Function>(functionSymbol->getValue())) {
       if (theFunction->empty()) {
         StatementContexts contexts(theFunction);
-        const auto *functionTy = dynamic_cast<const FunctionType *>(objectSymbol->getQualifiedType().getType());
+        const auto *functionTy = dynamic_cast<const FunctionType *>(functionSymbol->getType());
         if (!functionTy) {
           throw std::runtime_error("WTF: function definition is not a function type");
         }
@@ -673,7 +673,9 @@ void ExpressionAST::print(int indent) {
   mAssignmentExpression->print(indent);
 }
 Value ExpressionAST::codegen() {
-  mExpression->codegen();
+  if (mExpression) {
+    mExpression->codegen();
+  }
   return mAssignmentExpression->codegen();
 }
 
@@ -1094,7 +1096,14 @@ void IdentifierAST::print(int indent) {
 }
 StringAST::StringAST(
     const Token &token) : AST(AST::Kind::STRING), mToken(token) {
-  mType = std::make_unique<ArrayType>(QualifiedType(&IntegerType::sCharType, {}), mToken.getValue().size());
+  mType = std::make_unique<ArrayType>(QualifiedType(&IntegerType::sCharType, {TypeQualifier::kCONST}),
+                                      mToken.getValue().size());
+}
+const ArrayType *StringAST::getType() const {
+  return mType.get();
+}
+const Token &StringAST::getToken() const {
+  return mToken;
 }
 llvm::LLVMContext AST::sContext;
 llvm::Module AST::sModule("top", sContext);
@@ -1266,8 +1275,9 @@ ArgumentExpressionList::ArgumentExpressionList(nts<AssignmentExpressionAST>
 std::vector<Value> ArgumentExpressionList::codegen() {
   std::vector<Value> arguments;
   for (const auto &argument : argumentsList) {
-    argument->codegen();
+    arguments.push_back(argument->codegen());
   }
+  return arguments;
 }
 TypeSpecifiersAST::TypeSpecifiersAST(CombinationKind
                                      kind, nts<TypeSpecifierAST>
@@ -1365,7 +1375,6 @@ const Token *SimpleDirectDeclaratorAST::getIdentifier() {
 }
 ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
   Linkage linkage = Linkage::kNone;
-  llvm::Value *value = nullptr;
 
   ISymbol *priorDeclartion = sObjectTable->lookup(identifier->token);
 
@@ -1431,7 +1440,9 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
     throw SemaException("cannot initiate incomplete type: ", involvedTokens());
   }
   QualifiedType newType = derivedType;
+  const Token *token = identifier ? &identifier->token : nullptr;
   if (const auto *objectType = dynamic_cast<const ObjectType *>(derivedType.getType())) {
+    llvm::Value *value = nullptr;
     switch (sObjectTable->getScopeKind()) {
       case ScopeKind::FILE: {
         sModule.getOrInsertGlobal(identifier->token.getValue(), objectType->getLLVMType());
@@ -1462,12 +1473,16 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
         //do not create value
         break;
     }
+    mSymbol = std::make_unique<ObjectSymbol>(newType, value, token);
   } else if (const auto *functionType = dynamic_cast<const FunctionType *>(derivedType.getType())) {
+    llvm::Function *value = nullptr;
     switch (sObjectTable->getScopeKind()) {
       case ScopeKind::FILE:
       case ScopeKind::BLOCK: {
-        value = sModule.getFunction(identifier->token.getValue());
-        if (!value) {
+        auto *symbol = sObjectTable->lookup(identifier->token);
+        if (auto *functionSymbol = dynamic_cast<FunctionSymbol *>(symbol)) {
+          return functionSymbol;
+        } else {
           value = llvm::Function::Create(functionType->getLLVMType(),
                                          llvm::Function::ExternalLinkage,
                                          identifier->token.getValue(),
@@ -1479,9 +1494,8 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
       case ScopeKind::FUNCTION_PROTOTYPE:break;
       case ScopeKind::TAG:throw SemaException("cannot declare funciton in a tag", involvedTokens());
     }
+    mSymbol = std::make_unique<FunctionSymbol>(functionType, value, token);
   }
-  const Token *token = identifier ? &identifier->token : nullptr;
-  mSymbol = std::make_unique<ObjectSymbol>(newType, value, token);
   mSymbol->setLinkage(linkage);
   sObjectTable->insert(*token, mSymbol.get());
   return mSymbol.get();
@@ -1584,6 +1598,10 @@ Value IdentifierPrimaryExpressionAST::codegen() {
     qualifiedType = obj->getQualifiedType();
     lvalue = true;
     value = obj->getValue();
+  } else if (auto *function = dynamic_cast<FunctionSymbol *>(symbol)) {
+    qualifiedType = {function->getType(), {}};
+    lvalue = false;
+    value = function->getValue();
   } else if (auto *enumeration = dynamic_cast<EnumConstSymbol *>(symbol)) {
     qualifiedType = QualifiedType(enumeration->getType(), {TypeQualifier::kCONST});
     value = enumeration->getValue();
@@ -1730,9 +1748,9 @@ void StringPrimaryExpressionAST::print(int indent) {
   string->print(++indent);
 }
 Value StringPrimaryExpressionAST::codegen() {
-  return Value(QualifiedType(string->mType.get(), {TypeQualifier::kCONST}),
+  return Value(QualifiedType(string->getType()->castToPointerType(), {}),
                true,
-               sBuilder.CreateGlobalStringPtr(string->mToken.getValue()));
+               sBuilder.CreateGlobalStringPtr(string->getToken().getValue()));
 }
 StringPrimaryExpressionAST::StringPrimaryExpressionAST(nt<StringAST>
                                                        string) : string(std::move(string)) {}
@@ -1814,14 +1832,14 @@ void FunctionPostfixExpressionAST::print(int indent) {
 Value FunctionPostfixExpressionAST::codegen() {
   //6.5.2.2 Function calls
   Value lhs = postfix_expression->codegen();
-  auto *p = dynamic_cast<const PointerType *>(lhs.qualifiedType.getType());
-  if (!p) {
+  const FunctionType *tFunction = nullptr;
+  if (auto *p = dynamic_cast<const PointerType *>(lhs.qualifiedType.getType())) {
+    tFunction = dynamic_cast<const FunctionType *>(p->getReferencedType());
+  } else if (auto *f = dynamic_cast<const FunctionType *>(lhs.qualifiedType.getType())) {
+    tFunction = f;
+  } else {
     throw SemaException("The expression that denotes the called function92) shall have type pointer to function",
                         postfix_expression->involvedTokens());
-  }
-  auto *tFunction = dynamic_cast<const FunctionType *>(p->getReferencedType());
-  if (!tFunction) {
-    throw SemaException("left side must be a function type", postfix_expression->involvedTokens());
   }
   auto returnType = tFunction->getReturnType();
   if (dynamic_cast<const ArrayType *>(returnType.getType())) {

@@ -103,7 +103,7 @@ class AST {
   static llvm::LLVMContext &getContext();
   static llvm::Module &getModule();
   static llvm::IRBuilder<> &getBuilder();
-  static SymbolTables & getTables();
+  static SymbolTables &getTables();
  private:
   const Kind mKind;
   //the id of which production
@@ -179,7 +179,10 @@ class IExpression : public AST {
 class StringAST : public AST {
  public:
   StringAST(const Token &token);
-  std::unique_ptr<Type> mType;
+  const ArrayType * getType() const;
+  const Token &getToken() const;
+ private:
+  std::unique_ptr<ArrayType> mType;
   const Token &mToken;
 };
 class IdentifierAST : public AST {

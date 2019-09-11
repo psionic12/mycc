@@ -104,7 +104,7 @@ class ObjectSymbol : public ISymbol {
 
 class FunctionSymbol : public ISymbol {
  public:
-  FunctionSymbol(FunctionType *type, llvm::Function *value, const Token *token)
+  FunctionSymbol(const FunctionType *type, llvm::Function *value, const Token *token)
       : mFunctionType(type), mFunction(value), ISymbol(token) {}
   SymbolKind getKind() const override {
     return SymbolKind::FUNCTION;
@@ -119,7 +119,7 @@ class FunctionSymbol : public ISymbol {
     mFunction = value;
   }
  private:
-  FunctionType *mFunctionType;
+  const FunctionType *mFunctionType;
   llvm::Function *mFunction;
 };
 
@@ -207,7 +207,7 @@ class EnumConstSymbol : public ISymbol {
 
 class SymbolTable : public std::map<std::string, ISymbol *> {
  public:
-  SymbolTable(ScopeKind kind) : mScopeKind(kind) {}
+  SymbolTable(ScopeKind kind) : mScopeKind(kind), mFather(nullptr) {}
   ISymbol *lookup(const Token &token) const;
   ISymbol *insert(const Token &token, ISymbol *symbol);
   ISymbol *insert(ISymbol *symbol);

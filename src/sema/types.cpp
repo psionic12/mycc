@@ -19,12 +19,13 @@ llvm::Value *Type::cast(const Type *type, llvm::Value *value, const AST *ast) co
 unsigned int IntegerType::getSizeInBits() const {
   return mSizeInBits;
 }
-const IntegerType IntegerType::sCharType(8, false);
+
 const IntegerType IntegerType::sShortIntType(16, true);
 const IntegerType IntegerType::sIntType(32, true);
 const IntegerType IntegerType::sLongIntType(64, true);
 const IntegerType IntegerType::sLongLongIntType(64, true);
 const IntegerType IntegerType::sUnsignedCharType(8, false);
+const IntegerType& IntegerType::sCharType(sUnsignedCharType);
 const IntegerType IntegerType::sUnsignedShortIntType(16, false);
 const IntegerType IntegerType::sUnsignedIntType(32, false);
 const IntegerType IntegerType::sUnsignedLongIntType(64, false);
@@ -182,7 +183,7 @@ const PointerType *FunctionType::castToPointerType() const {
   return &mPointerType;
 }
 ArrayType::ArrayType(const QualifiedType elementType, unsigned int size)
-    : mSize(size), mElementType(elementType), mPointerType(QualifiedType(this, {})) {}
+    : mSize(size), mElementType(elementType), mPointerType(elementType) {}
 bool ArrayType::complete() const {
   return mSize > 0;
 }
