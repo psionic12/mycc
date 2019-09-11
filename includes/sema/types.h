@@ -116,6 +116,7 @@ class FunctionType : public Type {
   const std::vector<QualifiedType> &getParameters() const;
   llvm::FunctionType *getLLVMType() const override;
   bool compatible(const Type *type) const override;
+  const PointerType *castToPointerType() const;
  private:
   bool mVarArg;
   QualifiedType mReturnType;
@@ -133,6 +134,7 @@ class ArrayType : public AggregateType {
   const QualifiedType &getReferencedQualifiedType() const;
   llvm::Value *initializerCodegen(InitializerAST *ast) const override;
   llvm::Constant *getDefaultValue() const override;
+  const PointerType *castToPointerType() const;
   unsigned int getSizeInBits() const override;
  private:
   int64_t mSize = 0; // same with llvm

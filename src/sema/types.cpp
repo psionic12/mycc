@@ -178,6 +178,9 @@ bool FunctionType::compatible(const Type *type) const {
   }
   return false;
 }
+const PointerType *FunctionType::castToPointerType() const {
+  return &mPointerType;
+}
 ArrayType::ArrayType(const QualifiedType elementType, unsigned int size)
     : mSize(size), mElementType(elementType), mPointerType(QualifiedType(this, {})) {}
 bool ArrayType::complete() const {
@@ -260,6 +263,9 @@ llvm::Constant *ArrayType::getDefaultValue() const {
 }
 unsigned int ArrayType::getSizeInBits() const {
   return mSize * static_cast<const ObjectType *>(mElementType.getType())->getSizeInBits();
+}
+const PointerType *ArrayType::castToPointerType() const {
+  return &mPointerType;
 }
 const Type *PointerType::getReferencedType() const {
   return mReferencedQualifiedType.getType();

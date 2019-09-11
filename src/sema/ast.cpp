@@ -936,11 +936,6 @@ std::vector<QualifiedType> ParameterListAST::codegen() {
       if (obj->getQualifiedType().getType() == &VoidType::sVoidType && parameter_declaration.size() > 1) {
         throw SemaException("void should be the first and only parameter", involvedTokens());
       }
-      if (const Token *token = symbol->getToken()) {
-        sObjectTable->insert(*token, symbol);
-      } else {
-        sObjectTable->insert(symbol);
-      }
       parameters.push_back(obj->getQualifiedType());
     } else {
       throw std::runtime_error("WTF: how could parameter list have symbols other than object symbol");
@@ -973,19 +968,7 @@ ISymbol *ParameterDeclarationAST::codegen() {
                         involvedTokens());
   }
   const QualifiedType &qualifiedType = pair.second;
-  ISymbol *symbol = declarator->codegen(storageSpecifier, qualifiedType);
-  if (const auto *obj = dynamic_cast<ObjectSymbol *>(symbol)) {
-    if (const auto *type = dynamic_cast<const ArrayType *>(obj->getQualifiedType().getType())) {
-      return declarator->codegen(storageSpecifier, QualifiedType((const PointerType *) type, {}));
-    } else {
-      return declarator->codegen(storageSpecifier, qualifiedType);
-    }
-  } else if (const auto *func = dynamic_cast<FunctionSymbol *>(symbol)) {
-    return declarator->codegen(storageSpecifier, QualifiedType((const PointerType *) (func->getType()), {}));
-  } else {
-    return symbol;
-  }
-
+  return declarator->codegen(storageSpecifier, qualifiedType);
 }
 EnumeratorListAST::EnumeratorListAST(nts<EnumeratorAST>
                                      enumerator)
@@ -1447,6 +1430,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
   if (!derivedType.getType()->complete()) {
     throw SemaException("cannot initiate incomplete type: ", involvedTokens());
   }
+  QualifiedType newType = derivedType;
   if (const auto *objectType = dynamic_cast<const ObjectType *>(derivedType.getType())) {
     switch (sObjectTable->getScopeKind()) {
       case ScopeKind::FILE: {
@@ -1468,6 +1452,12 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
       }
       case ScopeKind::LABEL:throw std::runtime_error("WTF: how could a object type declared in a tag symbol");
       case ScopeKind::FUNCTION_PROTOTYPE:
+        if (const auto *arrayTy = dynamic_cast<const ArrayType *>(derivedType.getType())) {
+          newType = {arrayTy->castToPointerType(), derivedType.getQualifiers()};
+        } else if (const auto *functionTy = dynamic_cast<const FunctionType *>(derivedType.getType())) {
+          newType = {functionTy->castToPointerType(), derivedType.getQualifiers()};
+        }
+        break;
       case ScopeKind::TAG:
         //do not create value
         break;
@@ -1491,7 +1481,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
     }
   }
   const Token *token = identifier ? &identifier->token : nullptr;
-  mSymbol = std::make_unique<ObjectSymbol>(derivedType, value, token);
+  mSymbol = std::make_unique<ObjectSymbol>(newType, value, token);
   mSymbol->setLinkage(linkage);
   sObjectTable->insert(*token, mSymbol.get());
   return mSymbol.get();
