@@ -1627,12 +1627,14 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const
   auto functionSymbol = dynamic_cast<FunctionSymbol *>(symbol);
   auto *theFunction = functionSymbol->getValue();
   auto args = theFunction->arg_begin();
-  for (auto &pair :parameterList->mObjectTable) {
-    const auto &name = pair.first;
-    auto *item = dynamic_cast<ObjectSymbol *>(pair.second);
-    llvm::Value *value = args + item->getIndex();
-    value->setName(name);
-    // we do not set value to the symbol, but leave it in compound statement codegen
+  if (parameterList) {
+    for (auto &pair :parameterList->mObjectTable) {
+      const auto &name = pair.first;
+      auto *item = dynamic_cast<ObjectSymbol *>(pair.second);
+      llvm::Value *value = args + item->getIndex();
+      value->setName(name);
+      // we do not set value to the symbol, but leave it in compound statement codegen
+    }
   }
   return symbol;
 }
