@@ -122,7 +122,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
       if (theFunction->empty()) {
         StatementContexts contexts(theFunction);
         const auto *functionTy = functionSymbol->getType();
-        contexts.add(std::make_unique<FunctionContext>(functionTy));
+        contexts.add(std::make_unique<FunctionContext>(functionTy, theFunction));
         compound_statement->codegen(contexts);
         if (auto *inst = sBuilder.GetInsertBlock()->getTerminator()) {
           if (!llvm::dyn_cast<llvm::ReturnInst>(inst)) {
@@ -158,6 +158,30 @@ llvm::BasicBlock *CompoundStatementAST::codegen(StatementContexts &contexts) {
   SymbolScope s2(sTagTable, &mTagTable);
   auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
   sBuilder.SetInsertPoint(BB);
+
+  // what codes below doing:
+  // arguments in llvm is not pointer, which means if you get argument by name, and using it to some address opreration,
+  // llvm will assert errors. But in nomal language, arguments are identifiers, which is a pointer in low level, so in
+  // order to do the address operation, we need save the value in a memery and save the memory address to the
+  // identifier(symbol table);
+  if (auto *context = dynamic_cast<FunctionContext *>(contexts.getLastContext())) {
+    // this is the block of a function
+    auto *theFunction = context->getFunction();
+    auto it = theFunction->arg_begin();
+    while (it != theFunction->arg_end()) {
+      const auto &name = it->getName();
+      auto *symbol = dynamic_cast<ObjectSymbol *>(sObjectTable->lookup(name));
+      if (!symbol) {
+        throw std::runtime_error("WTF: cannot find declared parameter");
+      }
+      auto *alloc = sBuilder.CreateAlloca(it->getType());
+      //TODO any chance I need to check is_volatile?
+      sBuilder.CreateStore(it, alloc);
+      symbol->setValue(alloc);
+      ++it;
+    }
+  }
+
   for (auto &ast : mASTs) {
     if (auto *decl = dynamic_cast<DeclarationAST *>(ast.get())) {
       decl->codegen();
@@ -1608,7 +1632,7 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const
     auto *item = dynamic_cast<ObjectSymbol *>(pair.second);
     llvm::Value *value = args + item->getIndex();
     value->setName(name);
-    item->setValue(value);
+    // we do not set value to the symbol, but leave it in compound statement codegen
   }
   return symbol;
 }

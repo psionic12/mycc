@@ -14,12 +14,17 @@ class StatementContext {
 
 class FunctionContext : public StatementContext {
  public:
-  FunctionContext(const FunctionType *functionTy) : mFunctionType(functionTy) {}
+  FunctionContext(const FunctionType *functionTy, llvm::Function *theFunction)
+      : mFunctionType(functionTy), mTheFunction(theFunction) {}
   const FunctionType *getFunctionType() const {
     return mFunctionType;
   }
+  llvm::Function *getFunction() const {
+    return mTheFunction;
+  }
  private:
   const FunctionType *mFunctionType;
+  llvm::Function *mTheFunction;
 };
 
 class SwitchContext : public StatementContext {
@@ -62,6 +67,9 @@ class StatementContexts {
   }
   void add(std::unique_ptr<StatementContext> &&context) {
     mContexts.push_back(std::move(context));
+  }
+  StatementContext *getLastContext() {
+    return mContexts.back().get();
   }
   // find the closest required context by type, return null if not found any.
   template<typename T>

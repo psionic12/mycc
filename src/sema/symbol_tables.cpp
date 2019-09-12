@@ -12,6 +12,18 @@ ISymbol *SymbolTable::lookup(const Token &token) const {
     }
   }
 }
+
+ISymbol *SymbolTable::lookup(const std::string &name) const {
+  try {
+    return at(name);
+  } catch (const std::out_of_range &) {
+    if (mFather) {
+      return mFather->lookup(name);
+    } else {
+      return nullptr;
+    }
+  }
+}
 bool SymbolTable::isTypedef(const Token &token) {
   return lookup(token) != nullptr && *lookup(token) == SymbolKind::TYPEDEF;
 }

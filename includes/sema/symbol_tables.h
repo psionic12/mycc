@@ -82,9 +82,16 @@ class ObjectSymbol : public ISymbol {
     return SymbolKind::OBJECT;
   }
   llvm::Value *getValue() override {
-    return mValue;
+    if (!mValue) {
+      throw std::runtime_error("WTF: get value when value is null");
+    } else {
+      return mValue;
+    }
   }
   void setValue(llvm::Value *value) {
+    if(mValue) {
+      throw std::runtime_error("WTF: setting a not null value");
+    }
     mValue = value;
   }
   const QualifiedType &getQualifiedType() const {
@@ -209,6 +216,7 @@ class SymbolTable : public std::map<std::string, ISymbol *> {
  public:
   SymbolTable(ScopeKind kind) : mScopeKind(kind), mFather(nullptr) {}
   ISymbol *lookup(const Token &token) const;
+  ISymbol *lookup(const std::string &name) const;
   ISymbol *insert(const Token &token, ISymbol *symbol);
   ISymbol *insert(ISymbol *symbol);
   // TODO move this to parser
