@@ -186,6 +186,7 @@ llvm::BasicBlock *CompoundStatementAST::codegen(StatementContexts &contexts) {
     if (auto *decl = dynamic_cast<DeclarationAST *>(ast.get())) {
       decl->codegen();
     } else if (auto *statement = dynamic_cast<StatementAST *>(ast.get())) {
+      contexts.add(std::make_unique<CodeBlockContext>());
       statement->codegen(contexts);
     }
   }

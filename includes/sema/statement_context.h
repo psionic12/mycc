@@ -12,6 +12,8 @@ class StatementContext {
   virtual ~StatementContext() = default;
 };
 
+class CodeBlockContext : public StatementContext {};
+
 class FunctionContext : public StatementContext {
  public:
   FunctionContext(const FunctionType *functionTy, llvm::Function *theFunction)
