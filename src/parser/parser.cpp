@@ -389,10 +389,10 @@ nt<AssignmentExpressionAST> Parser::parseAssignmentExpression() {
     case TokenKind::TOKEN_GTGTEQ:
     case TokenKind::TOKEN_AMPEQ:
     case TokenKind::TOKEN_CARETEQ:
-    case TokenKind::TOKEN_BAREQ:
-      return make_ast<AssignmentExpressionAST>(std::move(LHS),
-                                               Terminal<AssignmentOp>(parseAssignmentOperator(), lex.peek()),
-                                               parseAssignmentExpression());
+    case TokenKind::TOKEN_BAREQ: {
+      Terminal<AssignmentOp> terminalOp(parseAssignmentOperator(), lex.peek());
+      return make_ast<AssignmentExpressionAST>(std::move(LHS), terminalOp, parseAssignmentExpression());
+    }
     default:return make_ast<AssignmentExpressionAST>(std::move(LHS));
   }
 }
@@ -672,8 +672,7 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
         case TokenKind::TOKEN_UNION:
         case TokenKind::TOKEN_UNSIGNED:
         case TokenKind::TOKEN_VOID:
-        case TokenKind::TOKEN_VOLATILE:
-          root = make_ast<FunctionDeclaratorAST>(std::move(root), parseParameterLists());
+        case TokenKind::TOKEN_VOLATILE:root = make_ast<FunctionDeclaratorAST>(std::move(root), parseParameterLists());
           break;
         case TokenKind::TOKEN_IDENTIFIER:
 //          if (table->isTypedef(lex.peek())) {
@@ -700,12 +699,12 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
 ///                   | <parameter-list> , <parameter-declaration>
 nt<ParameterListAST> Parser::parseParameterLists() {
   mStartToken = &lex.peek();
-  auto* temp_table = symbolTables.createTable(ScopeKind::FUNCTION_PROTOTYPE);
+  auto *temp_table = symbolTables.createTable(ScopeKind::FUNCTION_PROTOTYPE);
   SymbolScope s(table, temp_table);
   nts<ParameterDeclarationAST> decls;
   bool hasMutiple = false;
   do {
-    const Token& token = lex.peek();
+    const Token &token = lex.peek();
     if (token == TokenKind::TOKEN_ELLIPSIS) {
       hasMutiple = true;
       lex.consumeToken();

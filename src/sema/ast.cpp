@@ -31,14 +31,17 @@ void TranslationUnitAST::codegen() {
   // c do not have global constructors for initiate global variables, the reason why we create one is because
   // we don't know if an initializer is a constant or not before we evaluate it,
   // if there's no BB for global variable to evaluate, the IRBuilder will crash.
+
+  // there's other way to the check, I just want use this way in case global variable initiation is needed;
   llvm::FunctionType *globalVarInit_t = llvm::FunctionType::get(
       VoidType::sVoidType.getLLVMType(), {}, false);
 
   auto *globalVarInit = llvm::Function::Create(globalVarInit_t,
-                                               llvm::GlobalVariable::LinkageTypes::InternalLinkage);
+                                               llvm::GlobalVariable::LinkageTypes::InternalLinkage,
+                                               "globalVarInit", &sModule);
   // we do not create llvm.global_ctors cause we don't really use globalVarInit;
 
-  auto *globalVarInitBB = llvm::BasicBlock::Create(sContext, "", globalVarInit);
+  auto *globalVarInitBB = llvm::BasicBlock::Create(sContext, "globalVarInitBB", globalVarInit);
   sBuilder.SetInsertPoint(globalVarInitBB);
   for (const auto &ds : external_declarations) {
     ds->codegen();
@@ -46,7 +49,7 @@ void TranslationUnitAST::codegen() {
   if (!globalVarInitBB->empty()) {
     throw std::runtime_error("WTF: globalVarInitBB is not empty");
   } else {
-//    globalVarInit->eraseFromParent();
+    globalVarInit->eraseFromParent();
   }
 }
 ExternalDeclarationAST::ExternalDeclarationAST(nt<AST> def)
@@ -89,14 +92,7 @@ FunctionDefinitionAST::FunctionDefinitionAST(nt<DeclarationSpecifiersAST> declar
       declarator(std::move(declarator)),
       declarations(std::move(declarations)),
       compound_statement(std::move(compound_statement)),
-      mLabelTable(labelTable) {
-  if (auto *functionDeclarator = dynamic_cast<FunctionDeclaratorAST *>(this->declarator->direct_declarator.get())) {
-    if (functionDeclarator->parameterList) {
-      auto table = functionDeclarator->parameterList->mObjectTable;
-      this->compound_statement->mObjectTable.setFather(&table);
-    }
-  }
-}
+      mLabelTable(labelTable) {}
 void FunctionDefinitionAST::print(int indent) {
   AST::print(indent);
   ++indent;
@@ -107,6 +103,13 @@ void FunctionDefinitionAST::print(int indent) {
 }
 llvm::Value *FunctionDefinitionAST::codegen() {
   sLabelTable = &mLabelTable;
+  if (auto *functionDeclarator = dynamic_cast<FunctionDeclaratorAST *>(this->declarator->direct_declarator.get())) {
+    if (functionDeclarator->parameterList) {
+      auto &table = functionDeclarator->parameterList->mObjectTable;
+      table.setFather(sObjectTable);
+      this->compound_statement->mObjectTable.setFather(&table);
+    }
+  }
   for (const auto &specifier : declaration_spcifiers->storage_specifiers) {
     if (specifier.type != StorageSpecifier::kEXTERN && specifier.type != StorageSpecifier::kSTATIC) {
       throw SemaException("declaration specifiers shall be either extern or static", specifier.token);
@@ -207,9 +210,22 @@ void DeclarationAST::codegen() {
       if (initPair.second.get()) {
         if (const auto *objtype = dynamic_cast<const ObjectType *>(type)) {
           auto *initValue = objtype->initializerCodegen(initPair.second.get());
-          // if the initializer is array type, the declaration is not imcomplete any more
-          if (auto *arrayTy = llvm::dyn_cast<llvm::ArrayType>(initValue->getType())) {
+          // if the initializer is an incomplete array type, the declaration is not imcomplete any more
+          auto *arrayTy = llvm::dyn_cast<llvm::ArrayType>(initValue->getType());
+          if (arrayTy && !objtype->complete()) {
             const_cast<ArrayType *>(static_cast<const ArrayType *>(objtype))->setSize(arrayTy->getArrayNumElements());
+            if (auto *gVar = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+              auto linkage = gVar->getLinkage();
+              gVar->eraseFromParent();
+              const auto &name = objSymbol->getToken()->getValue();
+              sModule.getOrInsertGlobal(name, objtype->getLLVMType());
+              gVar = sModule.getNamedGlobal(name);
+              gVar->setLinkage(linkage);
+              objSymbol->setValue(gVar);
+              value = gVar;
+            } else {
+              throw std::runtime_error("WTF: array type has non-global value");
+            }
           }
           if (auto *constantInitValue = llvm::dyn_cast<llvm::Constant>(initValue)) {
             if (auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
@@ -220,7 +236,7 @@ void DeclarationAST::codegen() {
 //                                    objtype->getSizeInBits() / 8,
 //                                    0,
 //                                    objSymbol->getQualifiedType().isVolatile());
-              sBuilder.CreateStore(value, initValue);
+              sBuilder.CreateStore(initValue, value);
             }
           } else {
             if (llvm::dyn_cast<llvm::GlobalVariable>(value)) {
@@ -402,16 +418,18 @@ const ObjectType *StructOrUnionSpecifierAST::codegen() {
       tagType = mSymbol->getTagType();
     }
     SymbolTable table(ScopeKind::TAG);
-    int index = 0;
-    for (const auto &declaration :declarations) {
-      auto d = declaration->codegen();
-      for (auto *symbol : d) {
-        if (const Token *token = symbol->getToken()) {
-          symbol->setIndex(index);
-          ++index;
-          table.insert(*token, symbol);
-        } else {
-          throw std::runtime_error("WTF: member has to got a name");
+    {
+      SymbolScope s(sObjectTable, &table);
+      int index = 0;
+      for (const auto &declaration :declarations) {
+        auto d = declaration->codegen();
+        for (auto *symbol : d) {
+          if (const Token *token = symbol->getToken()) {
+            symbol->setIndex(index);
+            ++index;
+          } else {
+            throw std::runtime_error("WTF: member has to got a name");
+          }
         }
       }
     }
@@ -933,6 +951,7 @@ std::vector<QualifiedType> ParameterListAST::codegen() {
       if (obj->getQualifiedType().getType() == &VoidType::sVoidType && parameter_declaration.size() > 1) {
         throw SemaException("void should be the first and only parameter", involvedTokens());
       }
+      obj->setIndex(parameters.size());
       parameters.push_back(obj->getQualifiedType());
     } else {
       throw std::runtime_error("WTF: how could parameter list have symbols other than object symbol");
@@ -1434,14 +1453,12 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
       }
     }
   }
-  if (!derivedType.getType()->complete()) {
-    throw SemaException("cannot initiate incomplete type: ", involvedTokens());
-  }
   QualifiedType newType = derivedType;
   const Token *token = identifier ? &identifier->token : nullptr;
   if (const auto *objectType = dynamic_cast<const ObjectType *>(derivedType.getType())) {
     llvm::Value *value = nullptr;
     switch (sObjectTable->getScopeKind()) {
+      create_in_file_scope:
       case ScopeKind::FILE: {
         sModule.getOrInsertGlobal(identifier->token.getValue(), objectType->getLLVMType());
         llvm::GlobalVariable *gVar = sModule.getNamedGlobal(identifier->token.getValue());
@@ -1456,6 +1473,9 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
         break;
       }
       case ScopeKind::BLOCK: {
+        if (dynamic_cast<const ArrayType *>(objectType)) {
+          goto create_in_file_scope;
+        }
         value = sBuilder.CreateAlloca(objectType->getLLVMType(), nullptr, identifier->token.getValue());
         break;
       }
@@ -1579,7 +1599,18 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const
     mFunctionType = std::make_unique<FunctionType>(derivedType, std::move(std::vector<QualifiedType>()), false);
   }
   QualifiedType qualifiedType(mFunctionType.get(), {});
-  return directDeclarator->codegen(storageSpecifier, qualifiedType);
+  auto *symbol = directDeclarator->codegen(storageSpecifier, qualifiedType);
+  auto functionSymbol = dynamic_cast<FunctionSymbol *>(symbol);
+  auto *theFunction = functionSymbol->getValue();
+  auto args = theFunction->arg_begin();
+  for (auto &pair :parameterList->mObjectTable) {
+    const auto &name = pair.first;
+    auto *item = dynamic_cast<ObjectSymbol *>(pair.second);
+    llvm::Value *value = args + item->getIndex();
+    value->setName(name);
+    item->setValue(value);
+  }
+  return symbol;
 }
 void IdentifierPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
@@ -2354,7 +2385,8 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
             return Value(QualifiedType(pointerType, {}), false, sBuilder.CreateGEP(rhs.getValue(), lhs.getValue()));
           }
         }
-      } else if (dynamic_cast<const ArithmeticType *>(lhs.qualifiedType.getType())
+      }
+      if (dynamic_cast<const ArithmeticType *>(lhs.qualifiedType.getType())
           || dynamic_cast<const ArithmeticType *>(rhs.qualifiedType.getType())) {
         std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
         if (dynamic_cast<const IntegerType *>(type)) {
@@ -2828,11 +2860,11 @@ void ReturnJumpStatementAST::print(int indent) {
 ReturnJumpStatementAST::ReturnJumpStatementAST(nt<ExpressionAST>
                                                expression) : mExpression(std::move(expression)) {}
 llvm::BasicBlock *ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
-  auto *funtion = contexts.getLastContext<FunctionContext>();
-  if (!funtion) {
+  auto *function = contexts.getLastContext<FunctionContext>();
+  if (!function) {
     throw SemaException("return statement should only appear in functions", involvedTokens());
   }
-  auto *type = funtion->getFunctionType()->getReturnType().getType();
+  auto *type = function->getFunctionType()->getReturnType().getType();
   if (!mExpression) {
     if (type == &VoidType::sVoidType) {
       sBuilder.CreateRetVoid();

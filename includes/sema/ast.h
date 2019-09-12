@@ -108,6 +108,7 @@ class AST {
   const Kind mKind;
   //the id of which production
   const int mProductionId;
+  static SymbolTables mTables;
  protected:
   static llvm::LLVMContext sContext;
   static llvm::Module sModule;
@@ -115,7 +116,6 @@ class AST {
   static SymbolTable *sObjectTable;
   static SymbolTable *sTagTable;
   static SymbolTable *sLabelTable;
-  static SymbolTables mTables;
   const Token *mLeftMost;
   const Token *mRightMost;
 };

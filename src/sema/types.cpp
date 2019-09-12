@@ -217,8 +217,10 @@ llvm::Value *ArrayType::initializerCodegen(InitializerAST *ast) const {
   if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
     const auto &initializers = list->initializers;
     bool isAllConstant = true;
-    auto difference = mSize - initializers.size();
-    if (complete() && difference < 0) {
+    long difference = mSize - initializers.size();
+    if (!complete()) {
+      difference = 0;
+    } else if (difference < 0) {
       throw SemaException("excess elements", ast->involvedTokens());
     }
     std::vector<llvm::Value *> values;
@@ -232,7 +234,8 @@ llvm::Value *ArrayType::initializerCodegen(InitializerAST *ast) const {
     auto *constInt0 = llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 0));
     auto *constInt1 = llvm::ConstantInt::get(AST::getContext(), llvm::APInt(64, 1));
     if (isAllConstant) {
-      std::vector<llvm::Constant *> constants(values.size());
+      std::vector<llvm::Constant *> constants;
+      constants.reserve(values.size());
       for (auto *value : values) {
         constants.push_back(static_cast<llvm::Constant *>(value));
       }
@@ -346,14 +349,15 @@ llvm::StructType *StructType::getLLVMType() const {
   return mLLVMType;
 }
 void StructType::setBody(SymbolTable &&table) {
-  if (table.size() == 0) return;
+  if (table.empty()) return;
   mTable = std::move(table);
   std::vector<llvm::Type *> fields(mTable.size());
+  mOrderedFields.resize(mTable.size());
   for (const auto &pair : mTable) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
       if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
-        fields[obj->getIndex()] = (obj->getQualifiedType().getType()->getLLVMType());
-        mOrderedFields.insert(mOrderedFields.begin() + obj->getIndex(), obj->getQualifiedType());
+        mOrderedFields.at(obj->getIndex()) = obj->getQualifiedType();
+        fields.at(obj->getIndex()) = type->getLLVMType();
         mSizeInBits += type->getSizeInBits();
       }
     }
@@ -405,12 +409,13 @@ llvm::Value *StructType::initializerCodegen(InitializerAST *ast) const {
       ++iter;
     }
     if (isAllConstant) {
-      std::vector<llvm::Constant *> constants(values.size());
+      std::vector<llvm::Constant *> constants;
+      constants.reserve(values.size());
       for (auto *value : values) {
         constants.push_back(static_cast<llvm::Constant *>(value));
       }
       while (iter != mOrderedFields.end()) {
-        constants.push_back(static_cast<const ObjectType *>(iter->getType())->getDefaultValue());
+        constants.push_back(static_cast<const ObjectType *>(iter++->getType())->getDefaultValue());
       }
       result = llvm::ConstantStruct::get(getLLVMType(), constants);
     } else {
@@ -439,11 +444,12 @@ llvm::Constant *StructType::getDefaultValue() const {
   if (!complete()) {
     throw std::runtime_error("WTF: cannot set default values to imcompleted array");
   }
-  std::vector<llvm::Constant *> values(mOrderedFields.size());
+  std::vector<llvm::Constant *> values;
+  values.reserve(mOrderedFields.size());
   for (const auto &qualifiedType : mOrderedFields) {
     values.push_back(static_cast<const ObjectType *>(qualifiedType.getType())->getDefaultValue());
   }
-  llvm::ConstantStruct::get(getLLVMType(), values);
+  return llvm::ConstantStruct::get(getLLVMType(), values);
 }
 UnionType::UnionType(const std::string &tag)
     : mLLVMType(llvm::StructType::create(AST::getContext(), tag)), CompoundType(tag) {}
@@ -452,13 +458,13 @@ llvm::StructType *UnionType::getLLVMType() const {
   return mLLVMType;
 }
 void UnionType::setBody(SymbolTable &&table) {
-  if (table.size() == 0) return;
+  if (table.empty()) return;
   mTable = std::move(table);
-  std::vector<llvm::Type *> fields;
+  mOrderedFields.resize(mTable.size());
   for (const auto &pair : mTable) {
     if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
       if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
-        fields.push_back(obj->getQualifiedType().getType()->getLLVMType());
+        mOrderedFields.insert(mOrderedFields.begin() + obj->getIndex(), obj->getQualifiedType());
         auto size = type->getSizeInBits();
         if (size > mSizeInBits) {
           mSizeInBits = size;
@@ -467,7 +473,7 @@ void UnionType::setBody(SymbolTable &&table) {
       }
     }
   }
-  mLLVMType->setBody(fields);
+  mLLVMType->setBody({mBigestType->getLLVMType()});
   mComplete = true;
 }
 bool UnionType::compatible(const Type *type) const {

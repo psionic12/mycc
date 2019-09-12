@@ -187,6 +187,7 @@ class UnionType : public CompoundType, public ObjectType {
  private:
   llvm::StructType *mLLVMType;
   const ObjectType *mBigestType;
+  std::vector<QualifiedType> mOrderedFields;
 };
 
 class EnumerationType : public CompoundType, public ObjectType {
