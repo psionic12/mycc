@@ -42,36 +42,36 @@ bool IntegerType::isSigned() const {
   return mSigned;
 }
 
-llvm::Value *IntegerType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+llvm::Value *IntegerType::cast(const Type *targetTy, llvm::Value *value, const AST *ast) const {
   auto &builder = AST::getBuilder();
   auto &module = AST::getModule();
   if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
     return llvm::ConstantInt::get(getLLVMType(), constantInt->getSExtValue());
   } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
     return llvm::ConstantInt::get(getLLVMType(), constantFp->getValueAPF().bitcastToAPInt());
-  } else if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
-    if (mSizeInBits > integerType->mSizeInBits) {
+  } else if (const auto *integerType = dynamic_cast<const IntegerType *>(targetTy)) {
+    if (integerType->mSizeInBits > mSizeInBits) {
       if (integerType->mSizeInBits) {
-        return builder.CreateSExt(value, type->getLLVMType());
+        return builder.CreateSExt(value, targetTy->getLLVMType());
       } else {
-        return builder.CreateZExt(value, type->getLLVMType());
+        return builder.CreateZExt(value, targetTy->getLLVMType());
       }
     } else if (mSizeInBits == integerType->mSizeInBits) {
 
       return value;
     } else {
-      return builder.CreateTrunc(value, type->getLLVMType());
+      return builder.CreateTrunc(value, targetTy->getLLVMType());
     }
-  } else if (dynamic_cast<const FloatingType * >(type)) {
+  } else if (dynamic_cast<const FloatingType * >(targetTy)) {
     if (isSigned()) {
-      return builder.CreateSIToFP(value, type->getLLVMType());
+      return builder.CreateSIToFP(value, targetTy->getLLVMType());
     } else {
-      return builder.CreateUIToFP(value, type->getLLVMType());
+      return builder.CreateUIToFP(value, targetTy->getLLVMType());
     }
-  } else if (dynamic_cast<const PointerType *>(type)) {
-    return builder.CreateIntToPtr(value, type->getLLVMType());
+  } else if (dynamic_cast<const PointerType *>(targetTy)) {
+    return builder.CreateIntToPtr(value, targetTy->getLLVMType());
     //TODO do I need extend the size?
-  } else if (dynamic_cast<const VoidType *>(type)) {
+  } else if (dynamic_cast<const VoidType *>(targetTy)) {
     return nullptr;
   } else {
     throw SemaException("cannot cast to integer type", ast->involvedTokens());
