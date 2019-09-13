@@ -2,7 +2,7 @@
 
 As this linkage is post by me and some friends, I decide to write a document for this compiler
 
-#1 My C Language Compiler
+## My C Language Compiler
 
 This compiler takes a c file as input and generate llvm IR code to be used in JIT or converted to object files to be linked with.
 The parser is a hand writing ll(1) parser, and depends on the famous  BNF wrote by Brian W. Kernighan and Dennis M. Ritchie,Prentice Hall, 1988 do not support variable length array
@@ -15,17 +15,17 @@ Take llvm as backend.
 
 Obviously not implemented (yet) feature: Bit-fields, variable lengh array, identifier parameter list, declaration for loop.
 
-#1 What is this compiler used for
+## What is this compiler used for
 
 This compiler intent to bring llvm beginners in, and make a full picture of how a real language compiler looks like, not toy examples on the internet. Write some code and put break points to see how a statement is turn to IR code from pure string.
 
-#1 Why can't I use #include?
+## Why can't I use #include?
 
 Because I don't have time to implement all key words in C99 standard, mostly header will have these key words. just use `extern function_declaration` instead.
 
 And as mentioned above, this compiler is used for compilers beginners, who is focusing on compiler implementation, so using `extern` is acceptable.
 
-#1 This compilers is still in debug
+## This compilers is still in debug
 
 This project is written in my spare time, so it takes amost half a year and still get tons of bugs, including and especialy wrong 
 diagnosities. Try to fix these if you see(usually not very hard to debug) will also make you get deeper to this compiler. 
