@@ -25,7 +25,7 @@ Because I don't have time to implement all key words in C99 standard, mostly hea
 
 And as mentioned above, this compiler is used for compilers beginners, who is focusing on compiler implementation, so using `extern` is acceptable.
 
-## This compilers is still in debug
+## This compiler is still in debuging
 
 This project is written in my spare time, so it takes amost half a year and still get tons of bugs, including and especialy wrong 
 diagnosities. Try to fix these if you see(usually not very hard to debug) will also make you get deeper to this compiler. 
