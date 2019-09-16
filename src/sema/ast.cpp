@@ -646,11 +646,13 @@ Value ConditionalExpressionAST::codegen() {
     // true block
     sBuilder.SetInsertPoint(trueBlock);
     auto exp1 = expression->codegen();
+    sBuilder.CreateBr(endBlock);
 
     // false block
     currentFunction->getBasicBlockList().push_back(falseBlock);
     sBuilder.SetInsertPoint(falseBlock);
     auto exp2 = conditional_expression->codegen();
+    sBuilder.CreateBr(endBlock);
 
     // end block
     currentFunction->getBasicBlockList().push_back(endBlock);
