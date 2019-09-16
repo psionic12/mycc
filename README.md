@@ -1,8 +1,4 @@
-# mycc
-
-As this linkage is post by me and some friends, I decide to write a document for this compiler
-
-## My C Language Compiler
+# My C Language Compiler
 
 This compiler takes a c file as input and generate llvm IR code to be used in JIT or converted to object files to be linked with.
 The parser is a hand writing ll(1) parser, and depends on the famous  BNF wrote by Brian W. Kernighan and Dennis M. Ritchie,Prentice Hall, 1988 do not support variable length array
