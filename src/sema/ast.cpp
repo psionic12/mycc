@@ -103,6 +103,7 @@ void FunctionDefinitionAST::print(int indent) {
 }
 llvm::Value *FunctionDefinitionAST::codegen() {
   sLabelTable = &mLabelTable;
+  // set parameter table to compound statements table as father
   if (auto *functionDeclarator = dynamic_cast<FunctionDeclaratorAST *>(this->declarator->direct_declarator.get())) {
     if (functionDeclarator->parameterList) {
       auto &table = functionDeclarator->parameterList->mObjectTable;
@@ -122,18 +123,41 @@ llvm::Value *FunctionDefinitionAST::codegen() {
       if (theFunction->empty()) {
         StatementContexts contexts(theFunction);
         const auto *functionTy = functionSymbol->getType();
-        contexts.add(std::make_unique<FunctionContext>(functionTy, theFunction));
+        auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+        auto *returnBB = llvm::BasicBlock::Create(sContext, "", theFunction);
+        sBuilder.SetInsertPoint(BB);
+        llvm::AllocaInst *returnAlloca = nullptr;
+        if (functionTy->getReturnType().getType() != &VoidType::sVoidType) {
+          returnAlloca = sBuilder.CreateAlloca(theFunction->getReturnType());
+        }
+        bool hasReturn = false;
+        contexts.add(std::make_unique<FunctionContext>(functionTy, theFunction, returnAlloca, hasReturn, returnBB));
+        // what codes below doing:
+        // arguments in llvm is not pointer, which means if you get argument by name, and using it to some address opreration,
+        // llvm will assert errors. But in nomal language, arguments are identifiers, which is a pointer in low level, so in
+        // order to do the address operation, we need save the value in a memery and save the memory address to the
+        // identifier(symbol table);
+        auto it = theFunction->arg_begin();
+        while (it != theFunction->arg_end()) {
+          const auto &name = it->getName();
+          auto *symbol = dynamic_cast<ObjectSymbol *>(compound_statement->mObjectTable.lookup(name));
+          if (!symbol) {
+            throw std::runtime_error("WTF: cannot find declared parameter");
+          }
+          auto *alloc = sBuilder.CreateAlloca(it->getType());
+          //TODO any chance I need to check is_volatile?
+          sBuilder.CreateStore(it, alloc);
+          symbol->setValue(alloc);
+          ++it;
+        }
         compound_statement->codegen(contexts);
-        if (auto *inst = sBuilder.GetInsertBlock()->getTerminator()) {
-          if (!llvm::dyn_cast<llvm::ReturnInst>(inst)) {
-            throw std::runtime_error("WTF: function end with out a ReturnInst");
-          }
+        sBuilder.SetInsertPoint(returnBB);
+        if (!returnAlloca) {
+          sBuilder.CreateRetVoid();
+        } else if (hasReturn) {
+          sBuilder.CreateRet(sBuilder.CreateLoad(returnAlloca));
         } else {
-          if (functionTy->getReturnType().getType() == &VoidType::sVoidType) {
-            sBuilder.CreateRetVoid();
-          } else {
-            throw SemaException("function missing return statement", *mRightMost);
-          }
+          throw SemaException("function missing return statement", *mRightMost);
         }
       } else {
         throw SemaException("Function cannot redifined", declarator->involvedTokens());
@@ -153,35 +177,9 @@ void CompoundStatementAST::print(int indent) {
   ++indent;
   mASTs.print(indent);
 }
-llvm::BasicBlock *CompoundStatementAST::codegen(StatementContexts &contexts) {
+void CompoundStatementAST::codegen(StatementContexts &contexts) {
   SymbolScope s1(sObjectTable, &mObjectTable);
   SymbolScope s2(sTagTable, &mTagTable);
-  auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  sBuilder.SetInsertPoint(BB);
-
-  // what codes below doing:
-  // arguments in llvm is not pointer, which means if you get argument by name, and using it to some address opreration,
-  // llvm will assert errors. But in nomal language, arguments are identifiers, which is a pointer in low level, so in
-  // order to do the address operation, we need save the value in a memery and save the memory address to the
-  // identifier(symbol table);
-  if (auto *context = dynamic_cast<FunctionContext *>(contexts.getLastContext())) {
-    // this is the block of a function
-    auto *theFunction = context->getFunction();
-    auto it = theFunction->arg_begin();
-    while (it != theFunction->arg_end()) {
-      const auto &name = it->getName();
-      auto *symbol = dynamic_cast<ObjectSymbol *>(sObjectTable->lookup(name));
-      if (!symbol) {
-        throw std::runtime_error("WTF: cannot find declared parameter");
-      }
-      auto *alloc = sBuilder.CreateAlloca(it->getType());
-      //TODO any chance I need to check is_volatile?
-      sBuilder.CreateStore(it, alloc);
-      symbol->setValue(alloc);
-      ++it;
-    }
-  }
-
   for (auto &ast : mASTs) {
     if (auto *decl = dynamic_cast<DeclarationAST *>(ast.get())) {
       decl->codegen();
@@ -190,7 +188,6 @@ llvm::BasicBlock *CompoundStatementAST::codegen(StatementContexts &contexts) {
       statement->codegen(contexts);
     }
   }
-  return BB;
 }
 CompoundStatementAST::CompoundStatementAST(nts<AST>
                                            asts, SymbolTable &objectTable, SymbolTable &tagTable)
@@ -1090,9 +1087,8 @@ void ExpressionStatementAST::print(int indent) {
   AST::print(indent);
   expression->print(++indent);
 }
-llvm::BasicBlock *ExpressionStatementAST::codegen(StatementContexts &contexts) {
+void ExpressionStatementAST::codegen(StatementContexts &contexts) {
   expression->codegen();
-  return nullptr;
 }
 SelectionStatementAST::SelectionStatementAST() : StatementAST(AST::Kind::SELECTION_STATEMENT) {}
 IterationStatementAST::IterationStatementAST() : StatementAST(AST::Kind::ITERATION_STATEMENT) {}
@@ -2703,7 +2699,7 @@ void IfSelectionStatementAST::print(int indent) {
     mElseStatement->print(indent);
   }
 }
-llvm::BasicBlock *IfSelectionStatementAST::codegen(StatementContexts &contexts) {
+void IfSelectionStatementAST::codegen(StatementContexts &contexts) {
   auto exp = mExpression->codegen();
   llvm::Value *cond;
   if (auto *integerTy = dynamic_cast<const IntegerType *>(exp.qualifiedType.getType())) {
@@ -2719,22 +2715,22 @@ llvm::BasicBlock *IfSelectionStatementAST::codegen(StatementContexts &contexts) 
   auto *function = contexts.getContainingFunction();
   auto *trueBB = llvm::BasicBlock::Create(sContext, "", function);
   auto *endBB = llvm::BasicBlock::Create(sContext, "", function);
+  if (mElseStatement) {
+    auto *falseBB = llvm::BasicBlock::Create(sContext, "", function, endBB);
+    sBuilder.CreateCondBr(cond, trueBB, falseBB);
+    // false BB
+    sBuilder.SetInsertPoint(falseBB);
+    mElseStatement->codegen(contexts);
+    sBuilder.CreateBr(endBB);
+  } else {
+    sBuilder.CreateCondBr(cond, trueBB, endBB);
+  }
   // ture BB
   sBuilder.SetInsertPoint(trueBB);
   mStatement->codegen(contexts);
   sBuilder.CreateBr(endBB);
-  if (mElseStatement) {
-    auto *falseBB = llvm::BasicBlock::Create(sContext, "", function);
-    sBuilder.CreateCondBr(cond, trueBB, falseBB);
-    // false BB
-    sBuilder.SetInsertPoint(falseBB);
-    sBuilder.CreateBr(endBB);
-  } else {
-    sBuilder.CreateCondBr(cond, trueBB, endBB);
-    // endBB
-    sBuilder.SetInsertPoint(endBB);
-  }
-  return endBB;
+  // endBB
+  sBuilder.SetInsertPoint(endBB);
 }
 SwitchSelectionStatementAST::SwitchSelectionStatementAST(nt<ExpressionAST>
                                                          expression, nt<StatementAST>
@@ -2746,7 +2742,7 @@ void SwitchSelectionStatementAST::print(int indent) {
   mExpression->print(indent);
   mStatement->print(indent);
 }
-llvm::BasicBlock *SwitchSelectionStatementAST::codegen(StatementContexts &contexts) {
+void SwitchSelectionStatementAST::codegen(StatementContexts &contexts) {
   auto exp = mExpression->codegen();
   if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(exp.getValue())) {
     auto *switchInst = sBuilder.CreateSwitch(constInt, nullptr);
@@ -2754,7 +2750,6 @@ llvm::BasicBlock *SwitchSelectionStatementAST::codegen(StatementContexts &contex
     contexts.add(std::make_unique<SwitchContext>(switchInst, endBB));
     mStatement->codegen(contexts);
     sBuilder.SetInsertPoint(endBB);
-    return endBB;
   } else {
     throw SemaException("The controlling expression of a switch statement shall have integer type.",
                         mExpression->involvedTokens());
@@ -2770,14 +2765,13 @@ IdentifierLabeledStatementAST::IdentifierLabeledStatementAST(nt<IdentifierAST>
                                                              id, nt<StatementAST>
                                                              statement)
     : LabeledStatementAST(std::move(statement)) {}
-llvm::BasicBlock *IdentifierLabeledStatementAST::codegen(StatementContexts &contexts) {
+void IdentifierLabeledStatementAST::codegen(StatementContexts &contexts) {
   if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
     if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
       if (label->isDefinedByGoto()) {
         auto *BB = label->getBasicBlock();
         sBuilder.SetInsertPoint(BB);
         mStatement->codegen(contexts);
-        return BB;
       } else {
         throw SemaException("WTF: redifined label", mIdentifier->involvedTokens());
       }
@@ -2790,7 +2784,6 @@ llvm::BasicBlock *IdentifierLabeledStatementAST::codegen(StatementContexts &cont
     mStatement->codegen(contexts);
     mLabelSymbol = std::make_unique<LabelSymbol>(&mIdentifier->token, BB, false);
     sLabelTable->insert(mIdentifier->token, mLabelSymbol.get());
-    return BB;
   }
 }
 void CaseLabeledStatementAST::print(int indent) {
@@ -2804,7 +2797,7 @@ CaseLabeledStatementAST::CaseLabeledStatementAST(nt<ConstantExpressionAST>
                                                  nt<StatementAST>
                                                  statement)
     : LabeledStatementAST(std::move(statement)) {}
-llvm::BasicBlock *CaseLabeledStatementAST::codegen(StatementContexts &contexts) {
+void CaseLabeledStatementAST::codegen(StatementContexts &contexts) {
   auto *switchContext = contexts.getLastContext<SwitchContext>();
   if (switchContext) {
     auto *switchInst = switchContext->getSwitchInst();
@@ -2827,7 +2820,6 @@ llvm::BasicBlock *CaseLabeledStatementAST::codegen(StatementContexts &contexts) 
           "no two of the case constant expressions in the same switch statement shall have the same value",
           mConstantExpression->involvedTokens());
     }
-    return nullptr;
   } else {
     throw SemaException("A case or default label shall appear only in a switch statement.", involvedTokens());
   }
@@ -2837,7 +2829,7 @@ void DefaultLabeledStatementAST::print(int indent) {
   ++indent;
   mStatement->print(indent);
 }
-llvm::BasicBlock *DefaultLabeledStatementAST::codegen(StatementContexts &contexts) {
+void DefaultLabeledStatementAST::codegen(StatementContexts &contexts) {
   auto *switchContext = contexts.getLastContext<SwitchContext>();
   if (switchContext) {
     auto *switchInst = switchContext->getSwitchInst();
@@ -2854,7 +2846,6 @@ llvm::BasicBlock *DefaultLabeledStatementAST::codegen(StatementContexts &context
       throw SemaException(
           "There may be at most one default label in a switch statement", involvedTokens());
     }
-    return nullptr;
   } else {
     throw SemaException("A case or default label shall appear only in a switch statement.", involvedTokens());
   }
@@ -2865,7 +2856,7 @@ void GotoJumpStatementAST::print(int indent) {
 }
 GotoJumpStatementAST::GotoJumpStatementAST(nt<IdentifierAST>
                                            identifier) : mIdentifier(std::move(identifier)) {}
-llvm::BasicBlock *GotoJumpStatementAST::codegen(StatementContexts &contexts) {
+void GotoJumpStatementAST::codegen(StatementContexts &contexts) {
   llvm::BasicBlock *BB;
   if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
     if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
@@ -2878,7 +2869,6 @@ llvm::BasicBlock *GotoJumpStatementAST::codegen(StatementContexts &contexts) {
   }
   sBuilder.SetInsertPoint(BB);
   sBuilder.CreateBr(BB);
-  return BB;
 }
 void ReturnJumpStatementAST::print(int indent) {
   AST::print(indent);
@@ -2886,21 +2876,17 @@ void ReturnJumpStatementAST::print(int indent) {
 }
 ReturnJumpStatementAST::ReturnJumpStatementAST(nt<ExpressionAST>
                                                expression) : mExpression(std::move(expression)) {}
-llvm::BasicBlock *ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
+void ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
   auto *function = contexts.getLastContext<FunctionContext>();
   if (!function) {
     throw SemaException("return statement should only appear in functions", involvedTokens());
   }
-  auto *type = function->getFunctionType()->getReturnType().getType();
-  if (!mExpression) {
-    if (type == &VoidType::sVoidType) {
-      sBuilder.CreateRetVoid();
-      return nullptr;
-    } else {
-      throw SemaException(
-          "A return statement without an expression shall only appear in a function whose return type is void",
-          involvedTokens());
-    }
+  const auto *type = function->getFunctionType()->getReturnType().getType();
+  auto *returnAlloca = function->getReturnAlloca();
+  if (!mExpression && returnAlloca) {
+    throw SemaException(
+        "A return statement without an expression shall only appear in a function whose return type is void",
+        involvedTokens());
   } else {
     if (type == &VoidType::sVoidType) {
       throw SemaException(
@@ -2908,16 +2894,17 @@ llvm::BasicBlock *ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
           involvedTokens());
     } else {
       auto v = mExpression->codegen();
-      sBuilder.CreateRet(v.qualifiedType.getType()->cast(type, v.getValue(), this));
-      return nullptr;
+      sBuilder.CreateStore(v.qualifiedType.getType()->cast(type, v.getValue(), this), returnAlloca);
     }
   }
+  sBuilder.CreateBr(function->getReturnBlock());
+  function->addReturn();
 }
 WhileIterationStatementAST::WhileIterationStatementAST(nt<ExpressionAST>
                                                        expression, nt<StatementAST>
                                                        statement)
     : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
-llvm::BasicBlock *WhileIterationStatementAST::codegen(StatementContexts &contexts) {
+void WhileIterationStatementAST::codegen(StatementContexts &contexts) {
   auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
   auto *loopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
   auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
@@ -2944,9 +2931,8 @@ llvm::BasicBlock *WhileIterationStatementAST::codegen(StatementContexts &context
   sBuilder.CreateBr(conditionBB);
   // end body
   sBuilder.SetInsertPoint(endBB);
-  return endBB;
 }
-llvm::BasicBlock *DoIterationStatementAST::codegen(StatementContexts &contexts) {
+void DoIterationStatementAST::codegen(StatementContexts &contexts) {
   auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
   auto *loopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
   auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
@@ -2973,9 +2959,8 @@ llvm::BasicBlock *DoIterationStatementAST::codegen(StatementContexts &contexts) 
   contexts.add(std::make_unique<LoopContext>(conditionBB, endBB));
   // end body
   sBuilder.SetInsertPoint(endBB);
-  return endBB;
 }
-llvm::BasicBlock *ForIterationStatementAST::codegen(StatementContexts &contexts) {
+void ForIterationStatementAST::codegen(StatementContexts &contexts) {
   if (mExpression) {
     mExpression->codegen();
   }
@@ -3010,19 +2995,16 @@ llvm::BasicBlock *ForIterationStatementAST::codegen(StatementContexts &contexts)
   sBuilder.CreateBr(conditionBB);
   // end body
   sBuilder.SetInsertPoint(endBB);
-  return endBB;
 }
-llvm::BasicBlock *ContinueJumpStatementAST::codegen(StatementContexts &contexts) {
+void ContinueJumpStatementAST::codegen(StatementContexts &contexts) {
   if (auto *context = contexts.getLastContext<LoopContext>()) {
     sBuilder.CreateBr(context->getContinueBB());
   }
-  return sBuilder.GetInsertBlock();
 }
-llvm::BasicBlock *BreakJumpStatementAST::codegen(StatementContexts &contexts) {
+void BreakJumpStatementAST::codegen(StatementContexts &contexts) {
   if (auto *context = contexts.getLastContext<LoopContext>()) {
     sBuilder.CreateBr(context->getBreakBB());
   } else if (auto *context = contexts.getLastContext<SwitchContext>()) {
     sBuilder.CreateBr(context->getBreakBB());
   }
-  return sBuilder.GetInsertBlock();
 }

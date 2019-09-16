@@ -16,17 +16,37 @@ class CodeBlockContext : public StatementContext {};
 
 class FunctionContext : public StatementContext {
  public:
-  FunctionContext(const FunctionType *functionTy, llvm::Function *theFunction)
-      : mFunctionType(functionTy), mTheFunction(theFunction) {}
+  FunctionContext(const FunctionType *functionTy,
+                  llvm::Function *theFunction,
+                  llvm::AllocaInst *returnAlloca,
+                  bool &hasReturn,
+                  llvm::BasicBlock *returnBlock)
+      : mFunctionType(functionTy),
+        mTheFunction(theFunction),
+        mReturnAlloca(returnAlloca),
+        mHasReturn(hasReturn),
+        mReturnBlock(returnBlock) {}
+  llvm::BasicBlock *getReturnBlock() const {
+    return mReturnBlock;
+  }
   const FunctionType *getFunctionType() const {
     return mFunctionType;
   }
   llvm::Function *getFunction() const {
     return mTheFunction;
   }
+  llvm::AllocaInst *getReturnAlloca() const {
+    return mReturnAlloca;
+  }
+  void addReturn() {
+    mHasReturn = true;
+  }
  private:
   const FunctionType *mFunctionType;
   llvm::Function *mTheFunction;
+  llvm::AllocaInst *mReturnAlloca;
+  bool &mHasReturn;
+  llvm::BasicBlock *mReturnBlock;
 };
 
 class SwitchContext : public StatementContext {
