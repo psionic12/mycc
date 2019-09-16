@@ -124,7 +124,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
         StatementContexts contexts(theFunction);
         const auto *functionTy = functionSymbol->getType();
         auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-        auto *returnBB = llvm::BasicBlock::Create(sContext, "", theFunction);
+        auto *returnBB = llvm::BasicBlock::Create(sContext);
         sBuilder.SetInsertPoint(BB);
         llvm::AllocaInst *returnAlloca = nullptr;
         if (functionTy->getReturnType().getType() != &VoidType::sVoidType) {
@@ -151,6 +151,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
           ++it;
         }
         compound_statement->codegen(contexts);
+        theFunction->getBasicBlockList().push_back(returnBB);
         sBuilder.SetInsertPoint(returnBB);
         if (!returnAlloca) {
           sBuilder.CreateRetVoid();
@@ -626,8 +627,8 @@ Value ConditionalExpressionAST::codegen() {
     llvm::Value *cond;
     auto *currentFunction = sBuilder.GetInsertBlock()->getParent();
     auto *trueBlock = llvm::BasicBlock::Create(sContext, "", currentFunction);
-    auto *falseBlock = llvm::BasicBlock::Create(sContext, "", currentFunction);
-    auto *endBlock = llvm::BasicBlock::Create(sContext, "", currentFunction);
+    auto *falseBlock = llvm::BasicBlock::Create(sContext);
+    auto *endBlock = llvm::BasicBlock::Create(sContext);
 
     if (const auto *ltype = dynamic_cast<const IntegerType *> (condValue.qualifiedType.getType())) {
       auto *const0 = llvm::ConstantInt::get(ltype->getLLVMType(), 0);
@@ -647,10 +648,12 @@ Value ConditionalExpressionAST::codegen() {
     auto exp1 = expression->codegen();
 
     // false block
+    currentFunction->getBasicBlockList().push_back(falseBlock);
     sBuilder.SetInsertPoint(falseBlock);
     auto exp2 = conditional_expression->codegen();
 
     // end block
+    currentFunction->getBasicBlockList().push_back(endBlock);
     sBuilder.SetInsertPoint(endBlock);
     const Type *type;
     llvm::Value *trueValue = exp1.getValue();
@@ -2635,8 +2638,8 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
 Value LogicalBinaryOperatorAST::codegen() {
   auto *currentFunction = sBuilder.GetInsertBlock()->getParent();
   auto *thisBlock = sBuilder.GetInsertBlock();
-  auto *otherBlock = llvm::BasicBlock::Create(sContext, "", currentFunction);
-  auto *endBlock = llvm::BasicBlock::Create(sContext, "", currentFunction);
+  auto *otherBlock = llvm::BasicBlock::Create(sContext);
+  auto *endBlock = llvm::BasicBlock::Create(sContext);
   llvm::Value *cond1;
   llvm::Value *cond2;
   auto lhs = mLeft->codegen();
@@ -2657,8 +2660,10 @@ Value LogicalBinaryOperatorAST::codegen() {
   } else {
     sBuilder.CreateCondBr(cond1, endBlock, otherBlock);
   }
-  sBuilder.SetInsertPoint(otherBlock);
+
   // otherBlock
+  currentFunction->getBasicBlockList().push_back(otherBlock);
+  sBuilder.SetInsertPoint(otherBlock);
   auto rhs = mRight->codegen();
   if (const auto *rtype = dynamic_cast<const IntegerType *> (rhs.qualifiedType.getType())) {
     auto *const0 = llvm::ConstantInt::get(rtype->getLLVMType(), 0);
@@ -2674,6 +2679,7 @@ Value LogicalBinaryOperatorAST::codegen() {
   }
   sBuilder.CreateBr(endBlock);
   // endBlock
+  currentFunction->getBasicBlockList().push_back(endBlock);
   sBuilder.SetInsertPoint(endBlock);
   auto *phi = sBuilder.CreatePHI(IntegerType::sOneBitBoolIntType.getLLVMType(), 2);
   phi->addIncoming(cond1, thisBlock);
@@ -2714,11 +2720,12 @@ void IfSelectionStatementAST::codegen(StatementContexts &contexts) {
   }
   auto *function = contexts.getContainingFunction();
   auto *trueBB = llvm::BasicBlock::Create(sContext, "", function);
-  auto *endBB = llvm::BasicBlock::Create(sContext, "", function);
+  auto *endBB = llvm::BasicBlock::Create(sContext);
   if (mElseStatement) {
-    auto *falseBB = llvm::BasicBlock::Create(sContext, "", function, endBB);
+    auto *falseBB = llvm::BasicBlock::Create(sContext);
     sBuilder.CreateCondBr(cond, trueBB, falseBB);
     // false BB
+    function->getBasicBlockList().push_back(falseBB);
     sBuilder.SetInsertPoint(falseBB);
     mElseStatement->codegen(contexts);
     sBuilder.CreateBr(endBB);
@@ -2730,6 +2737,7 @@ void IfSelectionStatementAST::codegen(StatementContexts &contexts) {
   mStatement->codegen(contexts);
   sBuilder.CreateBr(endBB);
   // endBB
+  function->getBasicBlockList().push_back(endBB);
   sBuilder.SetInsertPoint(endBB);
 }
 SwitchSelectionStatementAST::SwitchSelectionStatementAST(nt<ExpressionAST>
@@ -2746,9 +2754,10 @@ void SwitchSelectionStatementAST::codegen(StatementContexts &contexts) {
   auto exp = mExpression->codegen();
   if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(exp.getValue())) {
     auto *switchInst = sBuilder.CreateSwitch(constInt, nullptr);
-    auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+    auto *endBB = llvm::BasicBlock::Create(sContext);
     contexts.add(std::make_unique<SwitchContext>(switchInst, endBB));
     mStatement->codegen(contexts);
+    contexts.getContainingFunction()->getBasicBlockList().push_back(endBB);
     sBuilder.SetInsertPoint(endBB);
   } else {
     throw SemaException("The controlling expression of a switch statement shall have integer type.",
@@ -2906,8 +2915,8 @@ WhileIterationStatementAST::WhileIterationStatementAST(nt<ExpressionAST>
     : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
 void WhileIterationStatementAST::codegen(StatementContexts &contexts) {
   auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *loopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(sContext);
+  auto *endBB = llvm::BasicBlock::Create(sContext);
   sBuilder.CreateBr(conditionBB);
   //condition bb
   sBuilder.SetInsertPoint(conditionBB);
@@ -2926,18 +2935,21 @@ void WhileIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.CreateCondBr(cond, loopBB, endBB);
   contexts.add(std::make_unique<LoopContext>(conditionBB, endBB));
   // loop body
+  contexts.getContainingFunction()->getBasicBlockList().push_back(loopBB);
   sBuilder.SetInsertPoint(loopBB);
   mStatement->codegen(contexts);
   sBuilder.CreateBr(conditionBB);
   // end body
+  contexts.getContainingFunction()->getBasicBlockList().push_back(endBB);
   sBuilder.SetInsertPoint(endBB);
 }
 void DoIterationStatementAST::codegen(StatementContexts &contexts) {
   auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *loopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(sContext);
+  auto *endBB = llvm::BasicBlock::Create(sContext);
   sBuilder.CreateBr(loopBB);
   // loop body
+  contexts.getContainingFunction()->getBasicBlockList().push_back(loopBB);
   sBuilder.SetInsertPoint(loopBB);
   mStatement->codegen(contexts);
   sBuilder.CreateBr(conditionBB);
@@ -2958,6 +2970,7 @@ void DoIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.CreateCondBr(cond, loopBB, endBB);
   contexts.add(std::make_unique<LoopContext>(conditionBB, endBB));
   // end body
+  contexts.getContainingFunction()->getBasicBlockList().push_back(endBB);
   sBuilder.SetInsertPoint(endBB);
 }
 void ForIterationStatementAST::codegen(StatementContexts &contexts) {
@@ -2965,9 +2978,9 @@ void ForIterationStatementAST::codegen(StatementContexts &contexts) {
     mExpression->codegen();
   }
   auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *loopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *afterLoopBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *endBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(sContext);
+  auto *afterLoopBB = llvm::BasicBlock::Create(sContext);
+  auto *endBB = llvm::BasicBlock::Create(sContext);
   sBuilder.CreateBr(conditionBB);
   //condition bb
   sBuilder.SetInsertPoint(conditionBB);
@@ -2986,14 +2999,17 @@ void ForIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.CreateCondBr(cond, loopBB, endBB);
   contexts.add(std::make_unique<LoopContext>(conditionBB, endBB));
   // loop body
+  contexts.getContainingFunction()->getBasicBlockList().push_back(loopBB);
   sBuilder.SetInsertPoint(loopBB);
   mStatement->codegen(contexts);
   sBuilder.CreateBr(afterLoopBB);
   //after loop
+  contexts.getContainingFunction()->getBasicBlockList().push_back(afterLoopBB);
   sBuilder.SetInsertPoint(afterLoopBB);
   mStepExpression->codegen();
   sBuilder.CreateBr(conditionBB);
   // end body
+  contexts.getContainingFunction()->getBasicBlockList().push_back(endBB);
   sBuilder.SetInsertPoint(endBB);
 }
 void ContinueJumpStatementAST::codegen(StatementContexts &contexts) {
