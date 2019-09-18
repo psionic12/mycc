@@ -1240,10 +1240,14 @@ SymbolTables &AST::getTables() {
   return mTables;
 }
 std::unique_ptr<llvm::Module> AST::takeModule() {
-  return std::move(sModule);
+  auto module = std::move(sModule);
+  sModule = std::make_unique<llvm::Module>("top", getContext());
+  return std::move(module);
 }
 std::unique_ptr<llvm::LLVMContext> AST::takeContext() {
-  return std::move(sContext);
+  auto context = std::move(sContext);
+  sContext = std::make_unique<llvm::LLVMContext>();
+  return std::move(context);
 }
 IntegerConstantAST::IntegerConstantAST(
     const Token &token)
