@@ -44,7 +44,7 @@ bool IntegerType::isSigned() const {
 
 llvm::Value *IntegerType::cast(const Type *targetTy, llvm::Value *value, const AST *ast) const {
   auto &builder = AST::getBuilder();
-  auto &module = AST::getModule();
+  auto *module = AST::getModule();
   if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
     return llvm::ConstantInt::get(getLLVMType(), constantInt->getSExtValue());
   } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
@@ -113,7 +113,7 @@ llvm::APFloat FloatingType::getAPFloat(long double n) const {
 }
 llvm::Value *FloatingType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
   auto &builder = AST::getBuilder();
-  auto &module = AST::getModule();
+  auto *module = AST::getModule();
   if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
     return llvm::ConstantFP::get(getLLVMType(), constantInt->getSExtValue());
   } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
@@ -304,7 +304,7 @@ bool PointerType::compatible(const Type *type) const {
 }
 llvm::Value *PointerType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
   auto &builder = AST::getBuilder();
-  auto &module = AST::getModule();
+  auto *module = AST::getModule();
   if (dynamic_cast<const IntegerType *>(type)) {
     return builder.CreatePtrToInt(value, type->getLLVMType());
   } else if (dynamic_cast<const PointerType *>(type)) {

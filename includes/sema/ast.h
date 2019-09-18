@@ -101,17 +101,19 @@ class AST {
   virtual ~AST() = default;
   friend class Parser;
   static llvm::LLVMContext &getContext();
-  static llvm::Module &getModule();
+  static llvm::Module *getModule();
   static llvm::IRBuilder<> &getBuilder();
   static SymbolTables &getTables();
+  static std::unique_ptr<llvm::Module> takeModule();
+  static std::unique_ptr<llvm::LLVMContext> takeContext();
  private:
   const Kind mKind;
   //the id of which production
   const int mProductionId;
   static SymbolTables mTables;
  protected:
-  static llvm::LLVMContext sContext;
-  static llvm::Module sModule;
+  static std::unique_ptr<llvm::LLVMContext> sContext;
+  static std::unique_ptr<llvm::Module> sModule;
   static llvm::IRBuilder<> sBuilder;
   static SymbolTable *sObjectTable;
   static SymbolTable *sTagTable;

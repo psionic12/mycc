@@ -38,10 +38,10 @@ void TranslationUnitAST::codegen() {
 
   auto *globalVarInit = llvm::Function::Create(globalVarInit_t,
                                                llvm::GlobalVariable::LinkageTypes::InternalLinkage,
-                                               "globalVarInit", &sModule);
+                                               "globalVarInit", sModule.get());
   // we do not create llvm.global_ctors cause we don't really use globalVarInit;
 
-  auto *globalVarInitBB = llvm::BasicBlock::Create(sContext, "globalVarInitBB", globalVarInit);
+  auto *globalVarInitBB = llvm::BasicBlock::Create(getContext(), "globalVarInitBB", globalVarInit);
   sBuilder.SetInsertPoint(globalVarInitBB);
   for (const auto &ds : external_declarations) {
     ds->codegen();
@@ -123,8 +123,8 @@ llvm::Value *FunctionDefinitionAST::codegen() {
       if (theFunction->empty()) {
         StatementContexts contexts(theFunction);
         const auto *functionTy = functionSymbol->getType();
-        auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-        auto *returnBB = llvm::BasicBlock::Create(sContext);
+        auto *BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
+        auto *returnBB = llvm::BasicBlock::Create(getContext());
         sBuilder.SetInsertPoint(BB);
         llvm::AllocaInst *returnAlloca = nullptr;
         if (functionTy->getReturnType().getType() != &VoidType::sVoidType) {
@@ -241,8 +241,8 @@ void DeclarationAST::codegen() {
               auto linkage = gVar->getLinkage();
               gVar->eraseFromParent();
               const auto &name = objSymbol->getToken()->getValue();
-              sModule.getOrInsertGlobal(name, objtype->getLLVMType());
-              gVar = sModule.getNamedGlobal(name);
+              sModule->getOrInsertGlobal(name, objtype->getLLVMType());
+              gVar = sModule->getNamedGlobal(name);
               gVar->setLinkage(linkage);
               objSymbol->setValue(gVar);
               value = gVar;
@@ -626,9 +626,9 @@ Value ConditionalExpressionAST::codegen() {
   if (expression) {
     llvm::Value *cond;
     auto *currentFunction = sBuilder.GetInsertBlock()->getParent();
-    auto *trueBlock = llvm::BasicBlock::Create(sContext, "", currentFunction);
-    auto *falseBlock = llvm::BasicBlock::Create(sContext);
-    auto *endBlock = llvm::BasicBlock::Create(sContext);
+    auto *trueBlock = llvm::BasicBlock::Create(getContext(), "", currentFunction);
+    auto *falseBlock = llvm::BasicBlock::Create(getContext());
+    auto *endBlock = llvm::BasicBlock::Create(getContext());
 
     if (const auto *ltype = dynamic_cast<const IntegerType *> (condValue.qualifiedType.getType())) {
       auto *const0 = llvm::ConstantInt::get(ltype->getLLVMType(), 0);
@@ -1058,7 +1058,7 @@ EnumConstSymbol *EnumeratorAST::codegen(const EnumerationType *enumerationType, 
       index = constInt->getSExtValue();
     }
   }
-  llvm::ConstantInt *value = llvm::ConstantInt::get(sModule.getContext(), llvm::APInt(32, index, true));
+  llvm::ConstantInt *value = llvm::ConstantInt::get(sModule->getContext(), llvm::APInt(32, index, true));
   mSymbol =
       std::make_unique<EnumConstSymbol>(std::make_unique<EnumerationMemberType>(enumerationType), &id->token, value);
   //TODO insert now or after type is complete?
@@ -1146,9 +1146,9 @@ const ArrayType *StringAST::getType() const {
 const Token &StringAST::getToken() const {
   return mToken;
 }
-llvm::LLVMContext AST::sContext;
-llvm::Module AST::sModule("top", sContext);
-llvm::IRBuilder<> AST::sBuilder(sContext);
+std::unique_ptr<llvm::LLVMContext> AST::sContext = std::make_unique<llvm::LLVMContext>();
+std::unique_ptr<llvm::Module> AST::sModule = std::make_unique<llvm::Module>("top", getContext());
+llvm::IRBuilder<> AST::sBuilder(getContext());
 SymbolTable *AST::sObjectTable = nullptr;
 SymbolTable *AST::sTagTable = nullptr;
 SymbolTable *AST::sLabelTable = nullptr;
@@ -1228,16 +1228,22 @@ std::pair<const Token &, const Token &> AST::involvedTokens() const {
   return {*mLeftMost, *mRightMost};
 }
 llvm::LLVMContext &AST::getContext() {
-  return sContext;
+  return *sContext;
 }
-llvm::Module &AST::getModule() {
-  return sModule;
+llvm::Module *AST::getModule() {
+  return sModule.get();
 }
 llvm::IRBuilder<> &AST::getBuilder() {
   return sBuilder;
 }
 SymbolTables &AST::getTables() {
   return mTables;
+}
+std::unique_ptr<llvm::Module> AST::takeModule() {
+  return std::move(sModule);
+}
+std::unique_ptr<llvm::LLVMContext> AST::takeContext() {
+  return std::move(sContext);
 }
 IntegerConstantAST::IntegerConstantAST(
     const Token &token)
@@ -1486,8 +1492,8 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
     switch (sObjectTable->getScopeKind()) {
       create_in_file_scope:
       case ScopeKind::FILE: {
-        sModule.getOrInsertGlobal(identifier->token.getValue(), objectType->getLLVMType());
-        llvm::GlobalVariable *gVar = sModule.getNamedGlobal(identifier->token.getValue());
+        sModule->getOrInsertGlobal(identifier->token.getValue(), objectType->getLLVMType());
+        llvm::GlobalVariable *gVar = sModule->getNamedGlobal(identifier->token.getValue());
         if (linkage != Linkage::kNone) {
           gVar->setLinkage(linkage == Linkage::kExternal ? llvm::GlobalValue::LinkageTypes::ExternalLinkage
                                                          : llvm::GlobalVariable::LinkageTypes::InternalLinkage);
@@ -1530,7 +1536,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
           value = llvm::Function::Create(functionType->getLLVMType(),
                                          llvm::Function::ExternalLinkage,
                                          identifier->token.getValue(),
-                                         &sModule);
+                                         sModule.get());
         }
         break;
       }
@@ -1780,7 +1786,7 @@ Value FloatingConstantPrimaryExpressionAST::codegen() {
   }
   return Value(QualifiedType(type, {TypeQualifier::kCONST}),
                false,
-               llvm::ConstantFP::get(sModule.getContext(), type->getAPFloat(floating_constant->value)));
+               llvm::ConstantFP::get(sModule->getContext(), type->getAPFloat(floating_constant->value)));
 }
 FloatingConstantPrimaryExpressionAST::FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST>
                                                                            floating_constant)
@@ -2025,11 +2031,11 @@ Value IncrementPostfixExpression::codegen() {
   result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
   if (dynamic_cast<const IntegerType *>(type)) {
-    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else if (dynamic_cast<const FloatingType *>(type)) {
-    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(sContext, llvm::APFloat(1.0f)));
+    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
   } else if (dynamic_cast<const PointerType *>(type)) {
-    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else {
     throw SemaException(
         "The operand of the postfix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
@@ -2057,11 +2063,11 @@ Value DecrementPostfixExpression::codegen() {
   result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
   if (dynamic_cast<const IntegerType *>(type)) {
-    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else if (dynamic_cast<const FloatingType *>(type)) {
-    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(sContext, llvm::APFloat(1.0f)));
+    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
   } else if (dynamic_cast<const PointerType *>(type)) {
-    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, -1, true)));
+    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true)));
   } else {
     throw SemaException(
         "The operand of the postfix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
@@ -2092,11 +2098,11 @@ Value PrefixIncrementExpressionAST::codegen() {
   }
   llvm::Value *newVal;
   if (dynamic_cast<const IntegerType *>(value.qualifiedType.getType())) {
-    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else if (dynamic_cast<const FloatingType *>(value.qualifiedType.getType())) {
-    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(sContext, llvm::APFloat(1.0f)));
+    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
   } else if (!dynamic_cast<const PointerType *>(value.qualifiedType.getType())) {
-    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else {
     throw SemaException(
         "The operand of the prefix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
@@ -2120,11 +2126,11 @@ Value PrefixDecrementExpressionAST::codegen() {
   }
   llvm::Value *newVal;
   if (dynamic_cast<const IntegerType *>(value.qualifiedType.getType())) {
-    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else if (dynamic_cast<const FloatingType *>(value.qualifiedType.getType())) {
-    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(sContext, llvm::APFloat(1.0f)));
+    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
   } else if (!dynamic_cast<const PointerType *>(value.qualifiedType.getType())) {
-    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(sContext, llvm::APInt(32, -1, true)));
+    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true)));
   } else {
     throw SemaException(
         "The operand of the prefix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
@@ -2177,12 +2183,12 @@ Value UnaryOperatorExpressionAST::codegen() {
       if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
         std::tie(type, newVal) = integerType->promote(value.getValue(), mCastExpression.get());
         newVal = sBuilder.CreateSub(
-            llvm::ConstantInt::get(sContext, llvm::APInt(32, 0)),
+            llvm::ConstantInt::get(getContext(), llvm::APInt(32, 0)),
             newVal);
 
       } else if (dynamic_cast<const FloatingType *>(type)) {
         newVal = sBuilder.CreateFSub(
-            llvm::ConstantFP::get(sContext, llvm::APFloat(0.0f)),
+            llvm::ConstantFP::get(getContext(), llvm::APFloat(0.0f)),
             newVal);
       } else
         throw SemaException("The operand of the unary + or - operator shall have arithmetic type",
@@ -2191,7 +2197,7 @@ Value UnaryOperatorExpressionAST::codegen() {
     case UnaryOp::TILDE:
       if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
         std::tie(type, newVal) = integerType->promote(value.getValue(), mCastExpression.get());
-        newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(sContext, llvm::APInt(32, -1, true)));
+        newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true)));
       } else {
         throw SemaException("The operand of the unary ~ operator shall have integer type",
                             mCastExpression->involvedTokens());
@@ -2199,12 +2205,12 @@ Value UnaryOperatorExpressionAST::codegen() {
       return Value(QualifiedType(type, value.qualifiedType.getQualifiers()), false, newVal);
     case UnaryOp::BANG:
       if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
-        newVal = sBuilder.CreateICmpEQ(newVal, llvm::ConstantInt::get(sContext, llvm::APInt(32, 0)));
+        newVal = sBuilder.CreateICmpEQ(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(32, 0)));
         type = &IntegerType::sIntType;
         newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType());
       } else if (dynamic_cast<const FloatingType *>(type)) {
-        newVal = sBuilder.CreateFCmpUEQ(newVal, llvm::ConstantFP::get(sContext, llvm::APFloat(0.0f)));
-        newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(sContext, llvm::APInt(1, 1)));
+        newVal = sBuilder.CreateFCmpUEQ(newVal, llvm::ConstantFP::get(getContext(), llvm::APFloat(0.0f)));
+        newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(1, 1)));
         type = &IntegerType::sIntType;
         newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType());
       } else if (dynamic_cast<const PointerType *>(type)) {
@@ -2233,7 +2239,7 @@ Value SizeofUnaryExpressionAST::codegen() {
   } // or a bit field
   return Value(QualifiedType(&IntegerType::sIntType, {TypeQualifier::kCONST}),
                false,
-               llvm::ConstantInt::get(sContext,
+               llvm::ConstantInt::get(getContext(),
                                       llvm::APInt(IntegerType::sIntType.getSizeInBits(),
                                                   IntegerType::sIntType.getSizeInBits() / 8)));
 }
@@ -2640,8 +2646,8 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
 Value LogicalBinaryOperatorAST::codegen() {
   auto *currentFunction = sBuilder.GetInsertBlock()->getParent();
   auto *thisBlock = sBuilder.GetInsertBlock();
-  auto *otherBlock = llvm::BasicBlock::Create(sContext);
-  auto *endBlock = llvm::BasicBlock::Create(sContext);
+  auto *otherBlock = llvm::BasicBlock::Create(getContext());
+  auto *endBlock = llvm::BasicBlock::Create(getContext());
   llvm::Value *cond1;
   llvm::Value *cond2;
   auto lhs = mLeft->codegen();
@@ -2721,10 +2727,10 @@ void IfSelectionStatementAST::codegen(StatementContexts &contexts) {
                         mExpression->involvedTokens());
   }
   auto *function = contexts.getContainingFunction();
-  auto *trueBB = llvm::BasicBlock::Create(sContext, "", function);
-  auto *endBB = llvm::BasicBlock::Create(sContext);
+  auto *trueBB = llvm::BasicBlock::Create(getContext(), "", function);
+  auto *endBB = llvm::BasicBlock::Create(getContext());
   if (mElseStatement) {
-    auto *falseBB = llvm::BasicBlock::Create(sContext);
+    auto *falseBB = llvm::BasicBlock::Create(getContext());
     sBuilder.CreateCondBr(cond, trueBB, falseBB);
     // false BB
     function->getBasicBlockList().push_back(falseBB);
@@ -2756,7 +2762,7 @@ void SwitchSelectionStatementAST::codegen(StatementContexts &contexts) {
   auto exp = mExpression->codegen();
   if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(exp.getValue())) {
     auto *switchInst = sBuilder.CreateSwitch(constInt, nullptr);
-    auto *endBB = llvm::BasicBlock::Create(sContext);
+    auto *endBB = llvm::BasicBlock::Create(getContext());
     contexts.add(std::make_unique<SwitchContext>(switchInst, endBB));
     mStatement->codegen(contexts);
     contexts.getContainingFunction()->getBasicBlockList().push_back(endBB);
@@ -2790,7 +2796,7 @@ void IdentifierLabeledStatementAST::codegen(StatementContexts &contexts) {
       throw std::runtime_error("WTF: label table has other symbol type");
     }
   } else {
-    auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+    auto *BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
     sBuilder.SetInsertPoint(BB);
     mStatement->codegen(contexts);
     mLabelSymbol = std::make_unique<LabelSymbol>(&mIdentifier->token, BB, false);
@@ -2817,7 +2823,7 @@ void CaseLabeledStatementAST::codegen(StatementContexts &contexts) {
     if (!constInt)
       throw SemaException("The expression of each case label shall be an integer constant expression",
                           mConstantExpression->involvedTokens());
-    auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+    auto *BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
     // check if last case fall through to this case
     if (switchInst->getNumCases() != 0 && !(--switchInst->case_end())->getCaseSuccessor()->getTerminator()) {
       sBuilder.CreateBr(BB);
@@ -2845,7 +2851,7 @@ void DefaultLabeledStatementAST::codegen(StatementContexts &contexts) {
   if (switchContext) {
     auto *switchInst = switchContext->getSwitchInst();
     if (!switchInst->getOperand(1)) {
-      auto *BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+      auto *BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
       // check if last case fall through to this case
       if (switchInst->getNumCases() != 0 && !(--switchInst->case_end())->getCaseSuccessor()->getTerminator()) {
         sBuilder.CreateBr(BB);
@@ -2876,7 +2882,7 @@ void GotoJumpStatementAST::codegen(StatementContexts &contexts) {
       throw std::runtime_error("WTF: label table has other symbol type");
     }
   } else {
-    BB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
+    BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
   }
   sBuilder.SetInsertPoint(BB);
   sBuilder.CreateBr(BB);
@@ -2916,9 +2922,9 @@ WhileIterationStatementAST::WhileIterationStatementAST(nt<ExpressionAST>
                                                        statement)
     : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
 void WhileIterationStatementAST::codegen(StatementContexts &contexts) {
-  auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *loopBB = llvm::BasicBlock::Create(sContext);
-  auto *endBB = llvm::BasicBlock::Create(sContext);
+  auto *conditionBB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(getContext());
+  auto *endBB = llvm::BasicBlock::Create(getContext());
   sBuilder.CreateBr(conditionBB);
   //condition bb
   sBuilder.SetInsertPoint(conditionBB);
@@ -2946,9 +2952,9 @@ void WhileIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.SetInsertPoint(endBB);
 }
 void DoIterationStatementAST::codegen(StatementContexts &contexts) {
-  auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *loopBB = llvm::BasicBlock::Create(sContext);
-  auto *endBB = llvm::BasicBlock::Create(sContext);
+  auto *conditionBB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(getContext());
+  auto *endBB = llvm::BasicBlock::Create(getContext());
   sBuilder.CreateBr(loopBB);
   // loop body
   contexts.getContainingFunction()->getBasicBlockList().push_back(loopBB);
@@ -2979,10 +2985,10 @@ void ForIterationStatementAST::codegen(StatementContexts &contexts) {
   if (mExpression) {
     mExpression->codegen();
   }
-  auto *conditionBB = llvm::BasicBlock::Create(sContext, "", contexts.getContainingFunction());
-  auto *loopBB = llvm::BasicBlock::Create(sContext);
-  auto *afterLoopBB = llvm::BasicBlock::Create(sContext);
-  auto *endBB = llvm::BasicBlock::Create(sContext);
+  auto *conditionBB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
+  auto *loopBB = llvm::BasicBlock::Create(getContext());
+  auto *afterLoopBB = llvm::BasicBlock::Create(getContext());
+  auto *endBB = llvm::BasicBlock::Create(getContext());
   sBuilder.CreateBr(conditionBB);
   //condition bb
   sBuilder.SetInsertPoint(conditionBB);
