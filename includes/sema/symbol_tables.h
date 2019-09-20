@@ -88,12 +88,7 @@ class ObjectSymbol : public ISymbol {
       return mValue;
     }
   }
-  void setValue(llvm::Value *value) {
-    if(mValue) {
-      throw std::runtime_error("WTF: setting a not null value");
-    }
-    mValue = value;
-  }
+  void setValue(llvm::Value *value);
   const QualifiedType &getQualifiedType() const {
     return mQualifiedType;
   }

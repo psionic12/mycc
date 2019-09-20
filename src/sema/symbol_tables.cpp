@@ -1,6 +1,7 @@
 #include <sema/symbol_tables.h>
 #include <sema/ast.h>
 #include <llvm/IR/IRBuilder.h>
+#include <sema/types.h>
 ISymbol *SymbolTable::lookup(const Token &token) const {
   try {
     return at(token.getValue());
@@ -57,4 +58,7 @@ void ISymbol::setLinkage(Linkage linkage) {
 }
 Linkage ISymbol::getLinkage() const {
   return linkage;
+}
+void ObjectSymbol::setValue(llvm::Value *value) {
+  mValue = value;
 }

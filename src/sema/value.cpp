@@ -1,30 +1,24 @@
 #include <sema/value.h>
 #include <sema/ast.h>
 Value::Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
-    : qualifiedType(std::move(qualifiedType)), lvalue(lvalue), mValue(value) {}
+    : qualifiedType(std::move(qualifiedType)), mLValue(lvalue), mValue(value) {
+}
 llvm::Value *Value::getValue() const {
-  auto *markedType = qualifiedType.getType()->getLLVMType();
-  auto *actualType = mValue->getType();
-  if (markedType == actualType) {
+  if (isLValue()) {
+    return AST::getBuilder().CreateLoad(mValue, isVolatile());
+  } else {
     return mValue;
-  } else if (auto *pointerType = llvm::dyn_cast<llvm::PointerType>(actualType)) {
-    if (llvm::dyn_cast<llvm::FunctionType>(markedType)) {
-      return mValue;
-    } else if (pointerType->getElementType() == markedType) {
-      return AST::getBuilder().CreateLoad(mValue, qualifiedType.isVolatile());
-    }
   }
-  throw std::runtime_error(std::string("WTF: type and value do not match: "));
 }
 llvm::Value *Value::getPtr() const {
-  if (lvalue) {
+  if (isLValue()) {
     return mValue;
   } else {
     throw std::runtime_error("WTF: get addr for rvalue");
   }
 }
 bool Value::modifiable() const {
-  if (lvalue) {
+  if (mLValue) {
     if (dynamic_cast<const ArrayType *>(qualifiedType.getType())) {
       return false;
     } else if (!qualifiedType.getType()->complete()) {
@@ -47,4 +41,34 @@ bool Value::modifiable() const {
   } else {
     return false;
   }
+}
+const Type *Value::getType() const {
+  return qualifiedType.getType();
+}
+const std::set<TypeQualifier> &Value::getQualifiers() const {
+  return qualifiedType.getQualifiers();
+}
+bool Value::isConst() const {
+  return qualifiedType.isConst();
+}
+bool Value::isVolatile() const {
+  return qualifiedType.isVolatile();
+}
+llvm::Constant *Value::isConatant() const {
+  if (mLValue) {
+    throw std::runtime_error("WTF: constant llvm value is a lvalue");
+  }
+  return llvm::dyn_cast<llvm::Constant>(mValue);
+}
+llvm::GlobalVariable *Value::isGlobalVariable() const {
+  if (!mLValue) {
+    throw std::runtime_error("WTF: global variable llvm value is not a lvalue");
+  }
+  return llvm::dyn_cast<llvm::GlobalVariable>(mValue);
+}
+bool Value::isLValue() const {
+  return mLValue;
+}
+const QualifiedType &Value::getQualifiedType() const {
+  return qualifiedType;
 }

@@ -143,7 +143,7 @@ FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> 
     : mReturnType(std::move(returnType)),
       mParameters(parameters),
       mVarArg(varArg),
-      mPointerType(QualifiedType(this, {})) {}
+      mReferencedQualifiedType{this, {}} {}
 QualifiedType FunctionType::getReturnType() const {
   return mReturnType;
 }
@@ -179,14 +179,14 @@ bool FunctionType::compatible(const Type *type) const {
   }
   return false;
 }
-const PointerType *FunctionType::castToPointerType() const {
-  return &mPointerType;
-}
 bool FunctionType::hasVarArg() const {
   return mVarArg;
 }
+const QualifiedType &FunctionType::getReferencedQualifiedType() const {
+  return mReferencedQualifiedType;
+}
 ArrayType::ArrayType(const QualifiedType elementType, unsigned int size)
-    : mSize(size), mElementType(elementType), mPointerType(elementType) {}
+    : mSize(size), mElementType(elementType) {}
 bool ArrayType::complete() const {
   return mSize > 0;
 }
@@ -205,6 +205,8 @@ bool ArrayType::compatible(const Type *type) const {
     return true;
   } else if (const auto *arrayType = dynamic_cast<const ArrayType *>(type)) {
     return arrayType->getReferencedQualifiedType().compatible(mElementType) && mSize == arrayType->mSize;
+  } else if (const auto *pointerType = dynamic_cast<const PointerType *> (type)) {
+    return pointerType->getReferencedQualifiedType().compatible(mElementType);
   } else {
     return false;
   }
@@ -212,7 +214,7 @@ bool ArrayType::compatible(const Type *type) const {
 const QualifiedType &ArrayType::getReferencedQualifiedType() const {
   return mElementType;
 }
-llvm::Value *ArrayType::initializerCodegen(InitializerAST *ast) const {
+Value ArrayType::initializerCodegen(InitializerAST *ast) const {
   llvm::Value *result = nullptr;
   if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
     const auto &initializers = list->initializers;
@@ -225,7 +227,8 @@ llvm::Value *ArrayType::initializerCodegen(InitializerAST *ast) const {
     }
     std::vector<llvm::Value *> values;
     for (const auto &initializer : initializers) {
-      auto *v = static_cast<const ObjectType *>(mElementType.getType())->initializerCodegen(initializer.get());
+      auto *v =
+          static_cast<const ObjectType *>(mElementType.getType())->initializerCodegen(initializer.get()).getValue();
       if (!llvm::dyn_cast<llvm::Constant>(v)) {
         isAllConstant = false;
       }
@@ -251,18 +254,19 @@ llvm::Value *ArrayType::initializerCodegen(InitializerAST *ast) const {
       auto *ptr = builder.CreateGEP(type, alloc, {constInt0, constInt0});
       for (auto *v :values) {
         builder.CreateStore(v, ptr);
-        ptr = builder.CreateGEP(mElementType.getType()->getLLVMType(), ptr, constInt1);
+        ptr = builder.CreateGEP(mElementType.getType()->getLLVMType(), ptr, {constInt0, constInt1});
       }
       result = alloc;
     }
+    mSize = initializers.size();
   } else {
     throw SemaException("array initializer must be an initializer list", ast->involvedTokens());
   }
-  return result;
+  return Value(QualifiedType(this, {}), false, result);
 }
 llvm::Constant *ArrayType::getDefaultValue() const {
   if (!complete()) {
-    throw std::runtime_error("WTF: cannot set default values to imcompleted array");
+    throw std::runtime_error("WTF: cannot set default values to incomplete array");
   }
   std::vector<llvm::Constant *>
       values(mSize, static_cast<const ObjectType *>(mElementType.getType())->getDefaultValue());
@@ -271,8 +275,12 @@ llvm::Constant *ArrayType::getDefaultValue() const {
 unsigned int ArrayType::getSizeInBits() const {
   return mSize * static_cast<const ObjectType *>(mElementType.getType())->getSizeInBits();
 }
-const PointerType *ArrayType::castToPointerType() const {
-  return &mPointerType;
+llvm::Value *ArrayType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+  if (this->compatible(type)) {
+    return value;
+  } else {
+    throw SemaException("cannot cast array type to target type", ast->involvedTokens());
+  }
 }
 const Type *PointerType::getReferencedType() const {
   return mReferencedQualifiedType.getType();
@@ -298,6 +306,8 @@ bool PointerType::compatible(const Type *type) const {
     return true;
   } else if (const auto *pointerType = dynamic_cast<const PointerType *>(type)) {
     return pointerType->getReferencedQualifiedType().compatible(mReferencedQualifiedType);
+  } else if (const auto *arrayType = dynamic_cast<const ArrayType *>(type)) {
+    return arrayType->getReferencedQualifiedType().compatible(mReferencedQualifiedType);
   } else {
     return false;
   }
@@ -328,7 +338,7 @@ llvm::Type *VoidType::getLLVMType() const {
 unsigned int VoidType::getSizeInBits() const {
   return 0;
 }
-llvm::Value *VoidType::initializerCodegen(InitializerAST *ast) const {
+Value VoidType::initializerCodegen(InitializerAST *ast) const {
   throw std::runtime_error("WTF: initializer to a void type?!");
 }
 llvm::Constant *VoidType::getDefaultValue() const {
@@ -390,7 +400,7 @@ bool StructType::compatible(const Type *type) const {
     return true;
   }
 }
-llvm::Value *StructType::initializerCodegen(InitializerAST *ast) const {
+Value StructType::initializerCodegen(InitializerAST *ast) const {
   llvm::Value *result = nullptr;
   if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
     const auto &initializers = list->initializers;
@@ -401,7 +411,7 @@ llvm::Value *StructType::initializerCodegen(InitializerAST *ast) const {
     std::vector<llvm::Value *> values;
     auto iter = mOrderedFields.begin();
     for (const auto &initializer : initializers) {
-      auto *v = static_cast<const ObjectType *>(iter->getType())->initializerCodegen(initializer.get());
+      auto *v = static_cast<const ObjectType *>(iter->getType())->initializerCodegen(initializer.get()).getValue();
       if (!llvm::dyn_cast<llvm::Constant>(v)) {
         isAllConstant = false;
       }
@@ -432,7 +442,7 @@ llvm::Value *StructType::initializerCodegen(InitializerAST *ast) const {
   } else {
     throw SemaException("array initializer must be an initializer list", ast->involvedTokens());
   }
-  return result;
+  return Value(QualifiedType(this, {}), false, result);
 }
 bool StructType::complete() const {
   return mComplete;
@@ -503,12 +513,12 @@ bool UnionType::compatible(const Type *type) const {
 unsigned int UnionType::getSizeInBits() const {
   return mSizeInBits;
 }
-llvm::Value *UnionType::initializerCodegen(InitializerAST *ast) const {
+Value UnionType::initializerCodegen(InitializerAST *ast) const {
   llvm::Value *result = nullptr;
   if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
     const auto &initializers = list->initializers;
     if (initializers.size() == 1) {
-      result = mBigestType->initializerCodegen(initializers[0].get());
+      result = mBigestType->initializerCodegen(initializers[0].get()).getValue();
     } else if (initializers.size() > 1) {
       throw SemaException("excess elements", ast->involvedTokens());
     } else {
@@ -517,7 +527,7 @@ llvm::Value *UnionType::initializerCodegen(InitializerAST *ast) const {
   } else {
     throw SemaException("union initializer must be an initializer list", ast->involvedTokens());
   }
-  return result;
+  return Value(QualifiedType(this, {}), false, result);
 }
 bool UnionType::complete() const {
   return mComplete;
@@ -538,27 +548,27 @@ bool EnumerationType::complete() const {
 unsigned int EnumerationType::getSizeInBits() const {
   throw std::runtime_error("WTF: get size in bits of enumeration type");
 }
-llvm::Value *EnumerationType::initializerCodegen(InitializerAST *ast) const {
+Value EnumerationType::initializerCodegen(InitializerAST *ast) const {
   throw std::runtime_error("WTF: initializerCodegen of enumeration type");
 }
 llvm::Constant *EnumerationType::getDefaultValue() const {
   throw std::runtime_error("WTF: getDefaultValue of enumeration type");
 }
 
-llvm::Value *ScalarType::initializerCodegen(InitializerAST *ast) const {
+Value ScalarType::initializerCodegen(InitializerAST *ast) const {
   llvm::Value *result = nullptr;
   if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(ast->ast.get())) {
     auto v = exp->codegen();
-    result = cast(v.qualifiedType.getType(), v.getValue(), ast);
+    result = cast(v.getType(), v.getValue(), ast);
   } else {
     const auto &initializers = static_cast<InitializerListAST *>(ast->ast.get())->initializers;
     if (initializers.size() > 1) {
       throw SemaException("excess elements", ast->involvedTokens());
     } else if (initializers.size() == 1) {
-      result = initializerCodegen(initializers[0].get());
+      result = initializerCodegen(initializers[0].get()).getValue();
     } else {
       result = getDefaultValue();
     };
   }
-  return result;
+  return Value(QualifiedType(this, {}), false, result);
 }

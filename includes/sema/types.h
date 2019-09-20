@@ -9,6 +9,7 @@
 #include "qualifiedType.h"
 #include "symbol_tables.h"
 #include "llvm/IR/IRBuilder.h"
+#include "value.h"
 
 class AST;
 class InitializerAST;
@@ -26,13 +27,13 @@ class Type {
 class ObjectType : public Type {
  public:
   virtual unsigned int getSizeInBits() const = 0;
-  virtual llvm::Value *initializerCodegen(InitializerAST *ast) const = 0;
+  virtual Value initializerCodegen(InitializerAST *ast) const = 0;
   virtual llvm::Constant *getDefaultValue() const = 0;
 };
 
 class ScalarType : public ObjectType {
  public:
-  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  Value initializerCodegen(InitializerAST *ast) const override;
 };
 class ArithmeticType : public ScalarType {};
 class AggregateType : public ObjectType {};
@@ -40,7 +41,7 @@ class AggregateType : public ObjectType {};
 class IntegerType : public ArithmeticType {
  public:
   unsigned int getSizeInBits() const;
-  static const IntegerType& sCharType;
+  static const IntegerType &sCharType;
   static const IntegerType sShortIntType;
   static const IntegerType sIntType;
   static const IntegerType sLongIntType;
@@ -87,17 +88,23 @@ class VoidType : public ObjectType {
   bool complete() const override;
   llvm::Type *getLLVMType() const override;
   unsigned int getSizeInBits() const override;
-  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  Value initializerCodegen(InitializerAST *ast) const override;
   llvm::Constant *getDefaultValue() const override;
 };
 
-class PointerType : public ScalarType {
+class ImplicitPointerType {
+ public:
+  virtual ~ImplicitPointerType() = default;
+  virtual const QualifiedType &getReferencedQualifiedType() const = 0;
+};
+
+class PointerType : public ScalarType, public ImplicitPointerType {
  public:
   PointerType(QualifiedType referencedQualifiedType);
   const Type *getReferencedType() const;
   llvm::PointerType *getLLVMType() const override;
   unsigned int getSizeInBits() const override;
-  const QualifiedType &getReferencedQualifiedType() const;
+  const QualifiedType &getReferencedQualifiedType() const override;
   llvm::Value *cast(const Type *type,
                     llvm::Value *value,
                     const AST *ast) const;
@@ -109,24 +116,23 @@ class PointerType : public ScalarType {
   QualifiedType mReferencedQualifiedType;
 };
 
-class FunctionType : public Type {
+class FunctionType : public Type, public ImplicitPointerType {
  public:
   FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg);
   QualifiedType getReturnType() const;
   const std::vector<QualifiedType> &getParameters() const;
   llvm::FunctionType *getLLVMType() const override;
   bool compatible(const Type *type) const override;
-  const PointerType *castToPointerType() const;
   bool hasVarArg() const;
+  const QualifiedType &getReferencedQualifiedType() const override;
  private:
   bool mVarArg;
- private:
   QualifiedType mReturnType;
   std::vector<QualifiedType> mParameters;
-  PointerType mPointerType;
+  QualifiedType mReferencedQualifiedType;
 };
 
-class ArrayType : public AggregateType {
+class ArrayType : public AggregateType, public ImplicitPointerType {
  public:
   ArrayType(QualifiedType elementType, unsigned int size);
   bool complete() const override;
@@ -134,14 +140,13 @@ class ArrayType : public AggregateType {
   llvm::ArrayType *getLLVMType() const override;
   bool compatible(const Type *type) const override;
   const QualifiedType &getReferencedQualifiedType() const;
-  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  Value initializerCodegen(InitializerAST *ast) const override;
   llvm::Constant *getDefaultValue() const override;
-  const PointerType *castToPointerType() const;
   unsigned int getSizeInBits() const override;
+  llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const override;
  private:
   int64_t mSize = 0; // same with llvm
   const QualifiedType mElementType;
-  PointerType mPointerType;
 };
 
 class CompoundType {
@@ -164,7 +169,7 @@ class StructType : public CompoundType, public AggregateType {
   llvm::StructType *getLLVMType() const override;
   void setBody(SymbolTable &&table) override;
   bool compatible(const Type *type) const override;
-  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  Value initializerCodegen(InitializerAST *ast) const override;
   bool complete() const override;
   unsigned int getSizeInBits() const override;
   llvm::Constant *getDefaultValue() const override;
@@ -182,7 +187,7 @@ class UnionType : public CompoundType, public ObjectType {
   bool compatible(const Type *type) const override;
   unsigned int getSizeInBits() const override;
   bool complete() const override;
-  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  Value initializerCodegen(InitializerAST *ast) const override;
   llvm::Constant *getDefaultValue() const override;
  private:
   llvm::StructType *mLLVMType;
@@ -198,7 +203,7 @@ class EnumerationType : public CompoundType, public ObjectType {
   llvm::Type *getLLVMType() const override;
   bool complete() const override;
   unsigned int getSizeInBits() const override;
-  llvm::Value *initializerCodegen(InitializerAST *ast) const override;
+  Value initializerCodegen(InitializerAST *ast) const override;
   llvm::Constant *getDefaultValue() const override;
 };
 
