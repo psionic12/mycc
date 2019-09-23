@@ -227,8 +227,7 @@ Value ArrayType::initializerCodegen(InitializerAST *ast) {
     }
     std::vector<llvm::Value *> values;
     for (const auto &initializer : initializers) {
-      auto *v =
-          static_cast<ObjectType *>(mElementType.getType())->initializerCodegen(initializer.get()).getValue();
+      auto *v = static_cast<ObjectType *>(mElementType.getType())->initializerCodegen(initializer.get()).getValue();
       if (!llvm::dyn_cast<llvm::Constant>(v)) {
         isAllConstant = false;
       }

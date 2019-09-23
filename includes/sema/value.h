@@ -22,6 +22,6 @@ class Value {
  private:
   llvm::Value *mValue;
   const bool mLValue;
-  QualifiedType qualifiedType;
+  QualifiedType mQualifiedType;
 };
 #endif //MYCCPILER_VALUE_H

@@ -123,7 +123,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
       if (theFunction->empty()) {
         StatementContexts contexts(theFunction);
         auto *functionTy = functionSymbol->getType();
-        auto *BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
+        auto *BB = llvm::BasicBlock::Create(getContext(), "", theFunction);
         auto *returnBB = llvm::BasicBlock::Create(getContext());
         sBuilder.SetInsertPoint(BB);
         llvm::AllocaInst *returnAlloca = nullptr;
@@ -151,6 +151,9 @@ llvm::Value *FunctionDefinitionAST::codegen() {
           ++it;
         }
         compound_statement->codegen(contexts);
+        if (!BB->getTerminator()) {
+          sBuilder.CreateBr(returnBB);
+        }
         theFunction->getBasicBlockList().push_back(returnBB);
         sBuilder.SetInsertPoint(returnBB);
         if (!returnAlloca) {
@@ -232,11 +235,12 @@ void DeclarationAST::codegen() {
       auto *value = objSymbol->getValue();
       if (initPair.second.get()) {
         if (auto *objtype = dynamic_cast<ObjectType *>(type)) {
+          bool complete = objtype->complete();
           auto initValue = objtype->initializerCodegen(initPair.second.get());
           // if the initializer is an incomplete array type, the declaration is not imcomplete any more
-          auto *arrayTy = llvm::dyn_cast<llvm::ArrayType>(initValue.getType()->getLLVMType());
-          if (arrayTy && !objtype->complete()) {
+          if (dynamic_cast<ArrayType *>(objtype) && !complete) {
             if (auto *gVar = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+              //gVar->mutateType() not work, re-create the global variable
               auto linkage = gVar->getLinkage();
               gVar->eraseFromParent();
               gVar = new llvm::GlobalVariable(*getModule(),
@@ -503,7 +507,7 @@ void StructDeclarationAST::print(int indent) {
 }
 std::vector<ObjectSymbol *> StructDeclarationAST::codegen() {
   auto qualifiedType = specifier_qualifier->codegen();
-  std::vector < ObjectSymbol * > symbols;
+  std::vector<ObjectSymbol *> symbols;
   for (auto &ast : struct_declarator_list->struct_declarators) {
     ISymbol *symbol = ast->codegen(qualifiedType);
     if (auto *obj = dynamic_cast<ObjectSymbol *>(symbol)) {
@@ -619,7 +623,7 @@ void ConditionalExpressionAST::print(int indent) {
 }
 Value ConditionalExpressionAST::codegen() {
   auto condValue = logical_or_expression->codegen();
-  auto *condType = dynamic_cast< ScalarType *> (condValue.getType());
+  auto *condType = dynamic_cast<ScalarType *> (condValue.getType());
   if (!condType) {
     throw SemaException("The first operand shall have scalar type.", logical_or_expression->involvedTokens());
   }
@@ -745,8 +749,8 @@ AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>
                                                  nt<AssignmentExpressionAST>
                                                  assignment_expression)
     : IExpression(AST::Kind::ASSIGNMENT_EXPRESSION), conditional_expression(std::move(conditional_expression)),
-      op(std::make_unique < Terminal < AssignmentOp >>
-                                                    (op)),
+      op(std::make_unique<Terminal<AssignmentOp >>
+             (op)),
       assignment_expression(std::move(assignment_expression)) {}
 void AssignmentExpressionAST::print(int indent) {
   AST::print(indent);
@@ -1022,7 +1026,7 @@ void EnumeratorListAST::print(int indent) {
   enumerators.print(++indent);
 }
 std::vector<EnumConstSymbol *> EnumeratorListAST::codegen(EnumerationType *enumType) {
-  std::vector < EnumConstSymbol * > members;
+  std::vector<EnumConstSymbol *> members;
   int64_t index = 0;
   for (auto &enumerator : enumerators) {
     auto *symbol = enumerator->codegen(enumType, index);
@@ -1140,7 +1144,7 @@ StringAST::StringAST(
   mType = std::make_unique<ArrayType>(QualifiedType(&IntegerType::sCharType, {TypeQualifier::kCONST}),
                                       mToken.getValue().size());
 }
-ArrayType *StringAST::getType() const {
+ArrayType *StringAST::getType() {
   return mType.get();
 }
 const Token &StringAST::getToken() const {
@@ -1597,7 +1601,7 @@ ISymbol *ArrayDeclaratorAST::codegen(StorageSpecifier storageSpecifier, Qualifie
   }
   mArrayType = std::make_unique<ArrayType>(derivedType, size);
   return directDeclarator->codegen(storageSpecifier,
-                                   QualifiedType(mArrayType.get(), std::set < TypeQualifier > {}));
+                                   QualifiedType(mArrayType.get(), std::set<TypeQualifier>{}));
 }
 void FunctionDeclaratorAST::print(int indent) {
   AST::print(indent);
@@ -1808,7 +1812,8 @@ void StringPrimaryExpressionAST::print(int indent) {
   string->print(++indent);
 }
 Value StringPrimaryExpressionAST::codegen() {
-  return Value(QualifiedType(string->getType(), {}),
+  mPointerType = std::make_unique<PointerType>(string->getType()->getReferencedQualifiedType());
+  return Value(QualifiedType(mPointerType.get(), {}),
                true,
                sBuilder.CreateGlobalStringPtr(string->getToken().getValue()));
 }
@@ -1918,7 +1923,7 @@ Value FunctionPostfixExpressionAST::codegen() {
   }
   auto para = tFunction->getParameters().begin();
   auto arg = arguments.begin();
-  std::vector < llvm::Value * > argumentValues;
+  std::vector<llvm::Value *> argumentValues;
   while (arg != arguments.end()) {
     auto *argType = dynamic_cast< ObjectType *>(arg->getType());
     if (!argType) {

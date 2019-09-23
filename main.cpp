@@ -3,14 +3,8 @@
 #include <parser/parser.h>
 #include <tokens/specifier_combination.h>
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/ExecutionEngine/JITSymbol.h"
-#include "llvm/ExecutionEngine/Orc/CompileUtils.h"
-#include "llvm/ExecutionEngine/Orc/Core.h"
-#include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
-#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
-#include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
-#include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
-#include "llvm/ExecutionEngine/SectionMemoryManager.h"
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/MCJIT.h>
 #include "llvm/IR/DataLayout.h"
 #include "llvm/ExecutionEngine/Interpreter.h"
 #include "llvm/Support/TargetSelect.h"
@@ -21,16 +15,6 @@ int main() {
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
-  // create jit
-  llvm::orc::ExecutionSession ES;
-  llvm::orc::RTDyldObjectLinkingLayer ObjectLayer(ES,
-                                                  []() { return std::make_unique<llvm::SectionMemoryManager>(); });
-  auto JTMB = llvm::orc::JITTargetMachineBuilder::detectHost();
-  auto DL = JTMB->getDefaultDataLayoutForTarget();
-  llvm::orc::IRCompileLayer CompileLayer(ES, ObjectLayer, llvm::orc::ConcurrentIRCompiler(std::move(*JTMB)));
-  llvm::orc::MangleAndInterner Mangle(ES, *DL);
-  ES.getMainJITDylib().setGenerator(
-      llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
 
 
 //  try {
@@ -53,13 +37,20 @@ int main() {
     std::cout << "Verified success\n";
   }
 
-  // run the generated IR code
-  llvm::cantFail(CompileLayer.add(ES.getMainJITDylib(),
-                                  llvm::orc::ThreadSafeModule(std::move(AST::takeModule()),
-                                                              AST::takeContext())));
+  std::string error;
+  auto engine = llvm::EngineBuilder(AST::takeModule())
+      .setErrorStr(&error)
+      .setOptLevel(llvm::CodeGenOpt::Aggressive)
+      .setEngineKind(llvm::EngineKind::JIT)
+      .create();
+  if (!engine) {
+    std::cerr << "EE Error: " << error << '\n';
+    return 1;
+  }
 
-  auto symbol = llvm::cantFail(ES.lookup({&ES.getMainJITDylib()}, Mangle("main")));
-
-  int (*entry)() = (decltype(entry)) symbol.getAddress();
-  std::cout << entry() << std::endl;
+  engine->finalizeObject();
+  typedef void (*Function)();
+  Function f = reinterpret_cast<Function>(
+      engine->getPointerToNamedFunction("main"));
+  f();
 }

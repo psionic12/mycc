@@ -1,10 +1,10 @@
 #include <sema/value.h>
 #include <sema/ast.h>
 Value::Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
-    : qualifiedType(std::move(qualifiedType)), mLValue(lvalue), mValue(value) {
+    : mQualifiedType(std::move(qualifiedType)), mLValue(lvalue), mValue(value) {
 }
 llvm::Value *Value::getValue() {
-  if (isLValue()) {
+  if (isLValue() && !dynamic_cast<PointerType *>(getType())) {
     return AST::getBuilder().CreateLoad(mValue, isVolatile());
   } else {
     return mValue;
@@ -19,13 +19,13 @@ llvm::Value *Value::getPtr() {
 }
 bool Value::modifiable() {
   if (mLValue) {
-    if (dynamic_cast<ArrayType *>(qualifiedType.getType())) {
+    if (dynamic_cast<ArrayType *>(mQualifiedType.getType())) {
       return false;
-    } else if (!qualifiedType.getType()->complete()) {
+    } else if (!mQualifiedType.getType()->complete()) {
       return false;
-    } else if (qualifiedType.isConst()) {
+    } else if (mQualifiedType.isConst()) {
       return false;
-    } else if (auto *type = dynamic_cast<CompoundType *>(qualifiedType.getType())) {
+    } else if (auto *type = dynamic_cast<CompoundType *>(mQualifiedType.getType())) {
       for (auto &pair : type->mTable) {
         auto *symbol = pair.second;
         if (auto *obj = dynamic_cast<ObjectSymbol *>(symbol)) {
@@ -42,17 +42,17 @@ bool Value::modifiable() {
     return false;
   }
 }
-Type * Value::getType() {
-  return qualifiedType.getType();
+Type *Value::getType() {
+  return mQualifiedType.getType();
 }
 const std::set<TypeQualifier> &Value::getQualifiers() const {
-  return qualifiedType.getQualifiers();
+  return mQualifiedType.getQualifiers();
 }
 bool Value::isConst() const {
-  return qualifiedType.isConst();
+  return mQualifiedType.isConst();
 }
 bool Value::isVolatile() const {
-  return qualifiedType.isVolatile();
+  return mQualifiedType.isVolatile();
 }
 llvm::Constant *Value::isConatant() {
   if (mLValue) {
@@ -70,5 +70,5 @@ bool Value::isLValue() const {
   return mLValue;
 }
 QualifiedType &Value::getQualifiedType() {
-  return qualifiedType;
+  return mQualifiedType;
 }

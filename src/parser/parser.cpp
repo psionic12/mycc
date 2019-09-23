@@ -1273,10 +1273,11 @@ nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
       case TokenKind::TOKEN_LPAREN: {
         lex.consumeToken();
         nts<AssignmentExpressionAST> arguments;
-        do {
-          arguments.emplace_back(parseAssignmentExpression());
-        } while (expect(TokenKind::TOKEN_COMMA));
-
+        if (lex.peek().getKind() != TokenKind ::TOKEN_RPAREN) {
+          do {
+            arguments.emplace_back(parseAssignmentExpression());
+          } while (expect(TokenKind::TOKEN_COMMA));
+        }
         p = make_ast<FunctionPostfixExpressionAST>(std::move(p),
                                                    make_ast<ArgumentExpressionList>(std::move(arguments)));
         accept(TokenKind::TOKEN_RPAREN);

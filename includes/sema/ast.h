@@ -181,7 +181,7 @@ class IExpression : public AST {
 class StringAST : public AST {
  public:
   StringAST(const Token &token);
-  ArrayType * getType() const;
+  ArrayType * getType();
   const Token &getToken() const;
  private:
   std::unique_ptr<ArrayType> mType;
@@ -507,6 +507,8 @@ class StringPrimaryExpressionAST : public PrimaryExpressionAST {
   nt<StringAST> string;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  std::unique_ptr<PointerType> mPointerType;
 };
 
 class ExpressionPrimaryExpressionAST : public PrimaryExpressionAST {
