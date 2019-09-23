@@ -547,6 +547,8 @@ class ArrayPostfixExpressionAST : public PostfixExpressionAST {
   nt<ExpressionAST> expression;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  std::unique_ptr<PointerType> mArrayToPointer;
 };
 
 class FunctionPostfixExpressionAST : public PostfixExpressionAST {

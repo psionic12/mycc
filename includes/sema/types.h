@@ -91,31 +91,25 @@ class VoidType : public ObjectType {
   llvm::Constant *getDefaultValue() override;
 };
 
-class ImplicitPointerType {
- public:
-  virtual ~ImplicitPointerType() = default;
-  virtual QualifiedType &getReferencedQualifiedType() = 0;
-};
-
-class PointerType : public ScalarType, public ImplicitPointerType {
+class PointerType : public ScalarType {
  public:
   PointerType(QualifiedType referencedQualifiedType);
   Type *getReferencedType();
   llvm::PointerType *getLLVMType() override;
   unsigned int getSizeInBits() override;
-  QualifiedType &getReferencedQualifiedType() override;
+  QualifiedType &getReferencedQualifiedType();
   llvm::Value *cast(Type *type,
                     llvm::Value *value,
                     const AST *ast);
   bool complete() override;
   bool compatible(Type *type) override;
-  static IntegerType * sAddrType;
+  static IntegerType *sAddrType;
   llvm::Constant *getDefaultValue() override;
  protected:
   QualifiedType mReferencedQualifiedType;
 };
 
-class FunctionType : public Type, public ImplicitPointerType {
+class FunctionType : public Type {
  public:
   FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg);
   QualifiedType getReturnType();
@@ -123,7 +117,7 @@ class FunctionType : public Type, public ImplicitPointerType {
   llvm::FunctionType *getLLVMType() override;
   bool compatible(Type *type) override;
   bool hasVarArg() const;
-  QualifiedType &getReferencedQualifiedType() override;
+  QualifiedType &getReferencedQualifiedType();
  private:
   bool mVarArg;
   QualifiedType mReturnType;
@@ -131,7 +125,7 @@ class FunctionType : public Type, public ImplicitPointerType {
   QualifiedType mReferencedQualifiedType;
 };
 
-class ArrayType : public AggregateType, public ImplicitPointerType {
+class ArrayType : public AggregateType {
  public:
   ArrayType(QualifiedType elementType, unsigned int size);
   bool complete() override;

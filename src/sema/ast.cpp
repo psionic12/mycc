@@ -1846,13 +1846,18 @@ Value ArrayPostfixExpressionAST::codegen() {
   // 6.5.2.1 Array subscripting
   Value lhs = postfix_expression->codegen();
   Value rhs = expression->codegen();
-  auto *tPointer = dynamic_cast<ImplicitPointerType *>(lhs.getType());
-  if (!tPointer) {
-    throw SemaException("array left side should be pointer to complete object type",
-                        postfix_expression->involvedTokens());
+  auto *pointerType = dynamic_cast<PointerType *>(lhs.getType());
+  if (!pointerType) {
+    auto *arrayType = dynamic_cast<ArrayType *>(lhs.getType());
+    if (arrayType) {
+      mArrayToPointer = std::make_unique<PointerType>(arrayType->getReferencedQualifiedType());
+      pointerType = mArrayToPointer.get();
+    } else {
+      throw SemaException("array left side should be pointer", postfix_expression->involvedTokens());
+    }
   }
-  auto *tObject = dynamic_cast< ObjectType *>(tPointer->getReferencedQualifiedType().getType());
-  if (!tObject || !tObject->complete()) {
+
+  if (!pointerType->getReferencedQualifiedType().getType()->complete()) {
     throw SemaException("array left side should be pointer to complete object type",
                         postfix_expression->involvedTokens());
   }
@@ -1885,8 +1890,7 @@ Value ArrayPostfixExpressionAST::codegen() {
       throw std::runtime_error("WTF: array position query in other scope? we may need global constructor here");
     }
   }
-
-  return Value(QualifiedType(dynamic_cast<Type *>(tPointer), lhs.getQualifiers()), true, value);
+  return Value(pointerType->getReferencedQualifiedType(), true, value);
 }
 void FunctionPostfixExpressionAST::print(int indent) {
   AST::print(indent);
@@ -2171,8 +2175,7 @@ Value UnaryOperatorExpressionAST::codegen() {
       break;
     case UnaryOp::STAR:
       if (auto *pointerType = dynamic_cast< PointerType *>(type)) {
-        newVal = sBuilder.CreateLoad(newVal);
-        return Value(pointerType->getReferencedQualifiedType(), false, newVal);
+        return Value(pointerType->getReferencedQualifiedType(), true, newVal);
       } else {
         throw SemaException("The operand of the unary * operator shall have pointer type.", mOp.token);
       }
