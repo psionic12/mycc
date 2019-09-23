@@ -116,13 +116,13 @@ llvm::Value *FunctionDefinitionAST::codegen() {
       throw SemaException("declaration specifiers shall be either extern or static", specifier.token);
     }
   }
-  const auto &pair = declaration_spcifiers->codegen();
+  auto pair = declaration_spcifiers->codegen();
   auto *symbol = declarator->codegen(pair.first, pair.second);
   if (auto *functionSymbol = dynamic_cast<FunctionSymbol *>(symbol)) {
     if (auto *theFunction = llvm::dyn_cast<llvm::Function>(functionSymbol->getValue())) {
       if (theFunction->empty()) {
         StatementContexts contexts(theFunction);
-        const auto *functionTy = functionSymbol->getType();
+        auto *functionTy = functionSymbol->getType();
         auto *BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
         auto *returnBB = llvm::BasicBlock::Create(getContext());
         sBuilder.SetInsertPoint(BB);
@@ -222,22 +222,21 @@ void DeclarationAST::print(int indent) {
   }
 }
 void DeclarationAST::codegen() {
-  const auto &pair = declaration_specifiers->codegen();
+  auto pair = declaration_specifiers->codegen();
   const auto &storageSpecifier = pair.first;
-  const auto &qualifiers = pair.second;
+  auto &qualifiers = pair.second;
   for (auto &initPair : init_declarators) {
     ISymbol *symbol = initPair.first->codegen(storageSpecifier, qualifiers);
     if (auto *objSymbol = dynamic_cast<ObjectSymbol *>(symbol)) {
-      const auto *type = objSymbol->getQualifiedType().getType();
+      auto *type = objSymbol->getQualifiedType().getType();
       auto *value = objSymbol->getValue();
       if (initPair.second.get()) {
-        if (const auto *objtype = dynamic_cast<const ObjectType *>(type)) {
+        if (auto *objtype = dynamic_cast<ObjectType *>(type)) {
           auto initValue = objtype->initializerCodegen(initPair.second.get());
           // if the initializer is an incomplete array type, the declaration is not imcomplete any more
           auto *arrayTy = llvm::dyn_cast<llvm::ArrayType>(initValue.getType()->getLLVMType());
           if (arrayTy && !objtype->complete()) {
             if (auto *gVar = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
-              const_cast<ArrayType *>(static_cast<const ArrayType *>(objtype))->setSize(arrayTy->getArrayNumElements());
               auto linkage = gVar->getLinkage();
               gVar->eraseFromParent();
               gVar = new llvm::GlobalVariable(*getModule(),
@@ -354,7 +353,7 @@ void DeclaratorAST::print(int indent) {
 const Token *DeclaratorAST::getIdentifier() const {
   return direct_declarator->getIdentifier();
 }
-ISymbol *DeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
+ISymbol *DeclaratorAST::codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) {
   return direct_declarator->codegen(storageSpecifier, pointer ? pointer->codegen(derivedType) : derivedType);
 }
 StorageClassSpecifierAST::StorageClassSpecifierAST(Terminal<StorageSpecifier>
@@ -424,7 +423,7 @@ void StructOrUnionSpecifierAST::print(int indent) {
   if (id != nullptr) id->print(indent);
   declarations.print(indent);
 }
-const ObjectType *StructOrUnionSpecifierAST::codegen() {
+ObjectType *StructOrUnionSpecifierAST::codegen() {
   //TODO A struct-declaration that does not declare an anonymous structure or anonymous union shall contain a struct-declarator-list.
   const auto &token = id->token;
   auto *decl = dynamic_cast<TagSymbol *>(sTagTable->lookup(token));
@@ -482,7 +481,7 @@ EnumerationType *EnumSpecifierAST::codegen() {
   const Token *token = id ? &id->token : nullptr;
   mSymbol = std::make_unique<TagSymbol>(std::make_unique<EnumerationType>(), token);
   SymbolTable table(ScopeKind::TAG);
-  const auto *enumType = static_cast<const EnumerationType *>(static_cast<TagSymbol *>(mSymbol.get())->getTagType());
+  auto *enumType = static_cast< EnumerationType *>(static_cast<TagSymbol *>(mSymbol.get())->getTagType());
   for (auto *symbol : enum_list->codegen(enumType)) {
     table.insert(*symbol->getToken(), symbol);
   }
@@ -504,11 +503,11 @@ void StructDeclarationAST::print(int indent) {
 }
 std::vector<ObjectSymbol *> StructDeclarationAST::codegen() {
   auto qualifiedType = specifier_qualifier->codegen();
-  std::vector<ObjectSymbol *> symbols;
+  std::vector < ObjectSymbol * > symbols;
   for (auto &ast : struct_declarator_list->struct_declarators) {
     ISymbol *symbol = ast->codegen(qualifiedType);
     if (auto *obj = dynamic_cast<ObjectSymbol *>(symbol)) {
-      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
+      if (auto *type = dynamic_cast<ObjectType *>(obj->getQualifiedType().getType())) {
         if (type->complete()) {
           symbols.push_back(obj);
         } else {
@@ -582,9 +581,9 @@ void PointerAST::print(int indent) {
   type_qualifiers.print(indent);
   if (pointer) pointer->print(indent);
 }
-const QualifiedType PointerAST::codegen(const QualifiedType &derivedType) {
+QualifiedType PointerAST::codegen(QualifiedType derivedType) {
   std::set<TypeQualifier> qualifiers;
-  for (const auto &qualifier : type_qualifiers) {
+  for (auto &qualifier : type_qualifiers) {
     qualifiers.insert(qualifier->codegen());
   }
   if (pointer) {
@@ -620,7 +619,7 @@ void ConditionalExpressionAST::print(int indent) {
 }
 Value ConditionalExpressionAST::codegen() {
   auto condValue = logical_or_expression->codegen();
-  const auto *condType = dynamic_cast<const ScalarType *> (condValue.getType());
+  auto *condType = dynamic_cast< ScalarType *> (condValue.getType());
   if (!condType) {
     throw SemaException("The first operand shall have scalar type.", logical_or_expression->involvedTokens());
   }
@@ -631,13 +630,13 @@ Value ConditionalExpressionAST::codegen() {
     auto *falseBlock = llvm::BasicBlock::Create(getContext());
     auto *endBlock = llvm::BasicBlock::Create(getContext());
 
-    if (const auto *ltype = dynamic_cast<const IntegerType *> (condValue.getType())) {
+    if (auto *ltype = dynamic_cast<IntegerType *> (condValue.getType())) {
       auto *const0 = llvm::ConstantInt::get(ltype->getLLVMType(), 0);
       cond = sBuilder.CreateICmpNE(condValue.getValue(), const0);
-    } else if (const auto *ltype = dynamic_cast<const FloatingType *> (condValue.getType())) {
+    } else if (auto *ltype = dynamic_cast<FloatingType *> (condValue.getType())) {
       auto *const0 = llvm::ConstantFP::get(ltype->getLLVMType(), 0.0);
       cond = sBuilder.CreateFCmpONE(condValue.getValue(), const0);
-    } else if (const auto *ltype = dynamic_cast<const PointerType *> (condValue.getType())) {
+    } else if (auto *ltype = dynamic_cast<PointerType *> (condValue.getType())) {
       auto *const0 = llvm::ConstantPointerNull::get(ltype->getLLVMType());
       cond = sBuilder.CreateICmpNE(condValue.getValue(), const0);
     } else {
@@ -658,32 +657,32 @@ Value ConditionalExpressionAST::codegen() {
     // end block
     currentFunction->getBasicBlockList().push_back(endBlock);
     sBuilder.SetInsertPoint(endBlock);
-    const Type *type;
+    Type *type;
     llvm::Value *trueValue = exp1.getValue();
     llvm::Value *falseValue = exp2.getValue();
 
-    if (dynamic_cast<const ArithmeticType *>(exp1.getType())
-        && dynamic_cast<const ArithmeticType *>(exp2.getType())) {
+    if (dynamic_cast< ArithmeticType *>(exp1.getType())
+        && dynamic_cast< ArithmeticType *>(exp2.getType())) {
       std::tie(type, trueValue, falseValue) = BinaryOperatorAST::UsualArithmeticConversions(exp1, exp2, this);
-    } else if ((dynamic_cast<const StructType *>(exp1.getType())
-        || dynamic_cast<const UnionType *>(exp1.getType()))
+    } else if ((dynamic_cast< StructType *>(exp1.getType())
+        || dynamic_cast< UnionType *>(exp1.getType()))
         && exp1.getType() == exp2.getType()) {
       type = exp1.getType();
     } else if (exp1.getType() == &VoidType::sVoidType
         && exp2.getType() == &VoidType::sVoidType) {
       type = &VoidType::sVoidType;
-    } else if (dynamic_cast<const PointerType *>(exp1.getType())
-        && dynamic_cast<const PointerType *>(exp2.getType())) {
+    } else if (dynamic_cast< PointerType *>(exp1.getType())
+        && dynamic_cast< PointerType *>(exp2.getType())) {
       if (exp1.getType()->compatible(exp2.getType())) {
         type = exp1.getType();
       } else {
-        const auto *p1 = static_cast<const PointerType *>(exp1.getType());
-        const auto *p2 = static_cast<const PointerType *>(exp2.getType());
+        auto *p1 = static_cast<PointerType *>(exp1.getType());
+        auto *p2 = static_cast<PointerType *>(exp2.getType());
         if (p1->getReferencedQualifiedType().getType() == &VoidType::sVoidType
-            && dynamic_cast<const ObjectType *> (p2->getReferencedQualifiedType().getType())) {
+            && dynamic_cast< ObjectType *> (p2->getReferencedQualifiedType().getType())) {
           type = p1;
         } else if (p1->getReferencedQualifiedType().getType() == &VoidType::sVoidType
-            && dynamic_cast<const ObjectType *> (p2->getReferencedQualifiedType().getType())) {
+            && dynamic_cast< ObjectType *> (p2->getReferencedQualifiedType().getType())) {
           type = p2;
         } else {
           throw SemaException(
@@ -746,8 +745,8 @@ AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>
                                                  nt<AssignmentExpressionAST>
                                                  assignment_expression)
     : IExpression(AST::Kind::ASSIGNMENT_EXPRESSION), conditional_expression(std::move(conditional_expression)),
-      op(std::make_unique<Terminal<AssignmentOp >>
-             (op)),
+      op(std::make_unique < Terminal < AssignmentOp >>
+                                                    (op)),
       assignment_expression(std::move(assignment_expression)) {}
 void AssignmentExpressionAST::print(int indent) {
   AST::print(indent);
@@ -883,23 +882,23 @@ Value AssignmentExpressionAST::codegen() {
   }
   return Value(lhs.getQualifiedType(), false, result);
 }
-llvm::Value *AssignmentExpressionAST::eqCodegen(const Value &lhs,
-                                                const Value &rhs,
+llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
+                                                Value &rhs,
                                                 AST *lhsAST,
                                                 AST *rhsAST) {
   llvm::Value *rhsValue = lhs.getValue();
-  if (dynamic_cast<const ArithmeticType *> (lhs.getType())
-      && dynamic_cast<const ArithmeticType *> (rhs.getType())) {
+  if (dynamic_cast<ArithmeticType *> (lhs.getType())
+      && dynamic_cast<ArithmeticType *> (rhs.getType())) {
     rhsValue =
-        static_cast<const ArithmeticType *>(rhs.getType())->cast(lhs.getType(),
-                                                                 rhsValue,
-                                                                 rhsAST);
-  } else if (dynamic_cast<const StructType *>(lhs.getType())
+        static_cast<ArithmeticType *>(rhs.getType())->cast(lhs.getType(),
+                                                           rhsValue,
+                                                           rhsAST);
+  } else if (dynamic_cast< StructType *>(lhs.getType())
       && lhs.getQualifiedType().compatible(rhs.getQualifiedType())) {
-  } else if (dynamic_cast<const PointerType *>(lhs.getType())
-      && dynamic_cast<const PointerType *>(rhs.getType())) {
-    const auto *p1 = static_cast<const PointerType *>(lhs.getType());
-    const auto *p2 = static_cast<const PointerType *>(rhs.getType());
+  } else if (dynamic_cast< PointerType *>(lhs.getType())
+      && dynamic_cast< PointerType *>(rhs.getType())) {
+    auto *p1 = static_cast<PointerType *>(lhs.getType());
+    auto *p2 = static_cast<PointerType *>(rhs.getType());
     if (!p1->getReferencedQualifiedType().isSub(p2->getReferencedQualifiedType().getQualifiers())) {
       throw SemaException(
           "qualifiers of the left operand do not contains all the qualifiers of the right operand",
@@ -907,9 +906,9 @@ llvm::Value *AssignmentExpressionAST::eqCodegen(const Value &lhs,
     }
     if (p1->getReferencedQualifiedType().getType()->compatible(p2->getReferencedQualifiedType().getType())) {
 
-    } else if ((dynamic_cast<const ObjectType *>(p1->getReferencedQualifiedType().getType())
+    } else if ((dynamic_cast< ObjectType *>(p1->getReferencedQualifiedType().getType())
         && p2->getReferencedQualifiedType().getType() == &VoidType::sVoidType) ||
-        (dynamic_cast<const ObjectType *>(p2->getReferencedQualifiedType().getType())
+        (dynamic_cast< ObjectType *>(p2->getReferencedQualifiedType().getType())
             && p1->getReferencedQualifiedType().getType() == &VoidType::sVoidType)) {
       rhsValue = p2->cast(p1->getReferencedQualifiedType().getType(), rhsValue, rhsAST);
     } else {
@@ -1022,8 +1021,8 @@ void EnumeratorListAST::print(int indent) {
   AST::print(indent);
   enumerators.print(++indent);
 }
-std::vector<EnumConstSymbol *> EnumeratorListAST::codegen(const EnumerationType *enumType) {
-  std::vector<EnumConstSymbol *> members;
+std::vector<EnumConstSymbol *> EnumeratorListAST::codegen(EnumerationType *enumType) {
+  std::vector < EnumConstSymbol * > members;
   int64_t index = 0;
   for (auto &enumerator : enumerators) {
     auto *symbol = enumerator->codegen(enumType, index);
@@ -1048,10 +1047,10 @@ void EnumeratorAST::print(int indent) {
     constant_expression->print(indent);
   }
 }
-EnumConstSymbol *EnumeratorAST::codegen(const EnumerationType *enumerationType, int64_t index) {
+EnumConstSymbol *EnumeratorAST::codegen(EnumerationType *enumerationType, int64_t index) {
   if (constant_expression) {
     auto value = constant_expression->codegen();
-    if (!dynamic_cast<const IntegerType *>(value.getType())) {
+    if (!dynamic_cast< IntegerType *>(value.getType())) {
       throw SemaException("the expression shall have an integer type", constant_expression->involvedTokens());
     } else {
       auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(value.getValue());
@@ -1141,7 +1140,7 @@ StringAST::StringAST(
   mType = std::make_unique<ArrayType>(QualifiedType(&IntegerType::sCharType, {TypeQualifier::kCONST}),
                                       mToken.getValue().size());
 }
-const ArrayType *StringAST::getType() const {
+ArrayType *StringAST::getType() const {
   return mType.get();
 }
 const Token &StringAST::getToken() const {
@@ -1427,7 +1426,7 @@ void SimpleDirectDeclaratorAST::print(int indent) {
 const Token *SimpleDirectDeclaratorAST::getIdentifier() {
   return &identifier->token;
 }
-ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
+ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) {
   Linkage linkage = Linkage::kNone;
 
   ISymbol *priorDeclartion = sObjectTable->lookup(identifier->token);
@@ -1449,7 +1448,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
       } else if (sObjectTable->getScopeKind() == ScopeKind::FILE) {
         linkage = Linkage::kInternal;
       } else if (sObjectTable->getScopeKind() == ScopeKind::BLOCK
-          && dynamic_cast<const FunctionType *>(derivedType.getType())) {
+          && dynamic_cast<FunctionType *>(derivedType.getType())) {
         throw SemaException(
             "The declaration of an identifier for a function that has block scope shall have no explicit storage-class specifier other than extern.\n",
             involvedTokens());
@@ -1460,7 +1459,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
       if (sObjectTable->getScopeKind() == ScopeKind::FILE) {
         linkage = Linkage::kExternal;
         break;
-      } else if (dynamic_cast<const FunctionType *>(derivedType.getType())) {
+      } else if (dynamic_cast<FunctionType *>(derivedType.getType())) {
         // will fall into extern case
       } else {
         break;
@@ -1492,7 +1491,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
   }
   QualifiedType newType = derivedType;
   const Token *token = identifier ? &identifier->token : nullptr;
-  if (const auto *objectType = dynamic_cast<const ObjectType *>(derivedType.getType())) {
+  if (auto *objectType = dynamic_cast<ObjectType *>(derivedType.getType())) {
     llvm::Value *value = nullptr;
     switch (sObjectTable->getScopeKind()) {
       create_in_file_scope:
@@ -1508,7 +1507,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
         break;
       }
       case ScopeKind::BLOCK: {
-        if (dynamic_cast<const ArrayType *>(objectType)) {
+        if (dynamic_cast< ArrayType *>(objectType)) {
           goto create_in_file_scope;
         }
         value = sBuilder.CreateAlloca(objectType->getLLVMType(), nullptr, identifier->token.getValue());
@@ -1521,7 +1520,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, c
         break;
     }
     mSymbol = std::make_unique<ObjectSymbol>(newType, value, token);
-  } else if (const auto *functionType = dynamic_cast<const FunctionType *>(derivedType.getType())) {
+  } else if (auto *functionType = dynamic_cast< FunctionType *>(derivedType.getType())) {
     llvm::Function *value = nullptr;
     switch (sObjectTable->getScopeKind()) {
       case ScopeKind::FILE:
@@ -1558,7 +1557,7 @@ const Token *ParenthesedDirectDeclaratorAST::getIdentifier() {
   return declarator->getIdentifier();
 }
 ISymbol *ParenthesedDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier,
-                                                 const QualifiedType &derivedType) {
+                                                 QualifiedType derivedType) {
   return declarator->codegen(storageSpecifier, derivedType);
 }
 ArrayDeclaratorAST::ArrayDeclaratorAST(nt<DirectDeclaratorAST>
@@ -1575,13 +1574,13 @@ void ArrayDeclaratorAST::print(int indent) {
 const Token *ArrayDeclaratorAST::getIdentifier() {
   return directDeclarator->getIdentifier();
 }
-ISymbol *ArrayDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
+ISymbol *ArrayDeclaratorAST::codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) {
   // 6.7.6.2 Array declarators
   // BNF wrote by Brian W. Kernighan and Dennis M. Ritchie,Prentice Hall, 1988 do not support variable length array
   int64_t size = 0;
   if (constantExpression) {
     auto value = constantExpression->codegen();
-    if (!dynamic_cast<const IntegerType *>(value.getType())) {
+    if (!dynamic_cast< IntegerType *>(value.getType())) {
       throw SemaException("the expression shall have an integer type", constantExpression->involvedTokens());
     } else {
       auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(value.getValue());
@@ -1593,12 +1592,12 @@ ISymbol *ArrayDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const Qu
     }
   }
   // The element type shall not be an incomplete or function type.
-  if (!derivedType.getType()->complete() || dynamic_cast<const FunctionType *>(derivedType.getType())) {
+  if (!derivedType.getType()->complete() || dynamic_cast< FunctionType *>(derivedType.getType())) {
     throw SemaException("The element type shall not be an incomplete or function type.", involvedTokens());
   }
   mArrayType = std::make_unique<ArrayType>(derivedType, size);
   return directDeclarator->codegen(storageSpecifier,
-                                   QualifiedType(mArrayType.get(), std::set<TypeQualifier>{}));
+                                   QualifiedType(mArrayType.get(), std::set < TypeQualifier > {}));
 }
 void FunctionDeclaratorAST::print(int indent) {
   AST::print(indent);
@@ -1614,9 +1613,9 @@ FunctionDeclaratorAST::FunctionDeclaratorAST(nt<DirectDeclaratorAST>
 const Token *FunctionDeclaratorAST::getIdentifier() {
   return directDeclarator->getIdentifier();
 }
-ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) {
-  if (dynamic_cast<const FunctionType *>(derivedType.getType())
-      || dynamic_cast<const ArrayType *>(derivedType.getType())) {
+ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) {
+  if (dynamic_cast< FunctionType *>(derivedType.getType())
+      || dynamic_cast< ArrayType *>(derivedType.getType())) {
     throw SemaException(
         std::string("function ") + getIdentifier()->getValue() + "cannot be array type or function type",
         involvedTokens());
@@ -1686,7 +1685,7 @@ Value IntegerConstantPrimaryExpressionAST::codegen() {
   unsigned int intSize = IntegerType::sIntType.getSizeInBits();
   unsigned int longSize = IntegerType::sLongIntType.getSizeInBits();
   unsigned int longLongSize = IntegerType::sLongLongIntType.getSizeInBits();
-  const IntegerType *type;
+  IntegerType *type;
   switch (integer_constant->suffix) {
     case IntegerConstantAST::Suffix::None:
       if (isBase10) {
@@ -1772,7 +1771,7 @@ void FloatingConstantPrimaryExpressionAST::print(int indent) {
   floating_constant->print(++indent);
 }
 Value FloatingConstantPrimaryExpressionAST::codegen() {
-  const FloatingType *type;
+  FloatingType *type;
   switch (floating_constant->suffix) {
     case FloatingConstantAST::Suffix::None:type = &FloatingType::sDoubleType;
       break;
@@ -1794,7 +1793,7 @@ void CharacterConstantPrimaryExpressionAST::print(int indent) {
   character_constant->print(++indent);
 }
 Value CharacterConstantPrimaryExpressionAST::codegen() {
-  const IntegerType *type = &IntegerType::sCharType;
+  IntegerType *type = &IntegerType::sCharType;
   return Value(QualifiedType(type, {TypeQualifier::kCONST}),
                false,
                llvm::ConstantInt::get(type->getLLVMType(),
@@ -1842,18 +1841,18 @@ Value ArrayPostfixExpressionAST::codegen() {
   // 6.5.2.1 Array subscripting
   Value lhs = postfix_expression->codegen();
   Value rhs = expression->codegen();
-  const auto *tPointer = dynamic_cast<const ImplicitPointerType *>(lhs.getType());
+  auto *tPointer = dynamic_cast<ImplicitPointerType *>(lhs.getType());
   if (!tPointer) {
     throw SemaException("array left side should be pointer to complete object type",
                         postfix_expression->involvedTokens());
   }
-  const auto *tObject = dynamic_cast<const ObjectType *>(tPointer->getReferencedQualifiedType().getType());
+  auto *tObject = dynamic_cast< ObjectType *>(tPointer->getReferencedQualifiedType().getType());
   if (!tObject || !tObject->complete()) {
     throw SemaException("array left side should be pointer to complete object type",
                         postfix_expression->involvedTokens());
   }
 
-  if (!(dynamic_cast<const IntegerType *>(rhs.getType()))) {
+  if (!(dynamic_cast< IntegerType *>(rhs.getType()))) {
     throw SemaException("array right side should be an integer type",
                         postfix_expression->involvedTokens());
   }
@@ -1882,7 +1881,7 @@ Value ArrayPostfixExpressionAST::codegen() {
     }
   }
 
-  return Value(QualifiedType(dynamic_cast<const Type*>(tPointer), lhs.getQualifiers()), true, value);
+  return Value(QualifiedType(dynamic_cast<Type *>(tPointer), lhs.getQualifiers()), true, value);
 }
 void FunctionPostfixExpressionAST::print(int indent) {
   AST::print(indent);
@@ -1893,23 +1892,23 @@ void FunctionPostfixExpressionAST::print(int indent) {
 Value FunctionPostfixExpressionAST::codegen() {
   //6.5.2.2 Function calls
   Value lhs = postfix_expression->codegen();
-  const FunctionType *tFunction = nullptr;
-  if (auto *p = dynamic_cast<const PointerType *>(lhs.getType())) {
-    tFunction = dynamic_cast<const FunctionType *>(p->getReferencedType());
-  } else if (auto *f = dynamic_cast<const FunctionType *>(lhs.getType())) {
+  FunctionType *tFunction = nullptr;
+  if (auto *p = dynamic_cast<PointerType *>(lhs.getType())) {
+    tFunction = dynamic_cast<FunctionType *>(p->getReferencedType());
+  } else if (auto *f = dynamic_cast< FunctionType *>(lhs.getType())) {
     tFunction = f;
   } else {
     throw SemaException("The expression that denotes the called function92) shall have type pointer to function",
                         postfix_expression->involvedTokens());
   }
   auto returnType = tFunction->getReturnType();
-  if (dynamic_cast<const ArrayType *>(returnType.getType())) {
+  if (dynamic_cast< ArrayType *>(returnType.getType())) {
     throw SemaException("return type cannot be array type", postfix_expression->involvedTokens());
   }
-  if (dynamic_cast<const FunctionType *>(returnType.getType())) {
+  if (dynamic_cast< FunctionType *>(returnType.getType())) {
     throw SemaException("return type cannot be function type", postfix_expression->involvedTokens());
   }
-  const auto &arguments = argument_expression_list->codegen();
+  auto arguments = argument_expression_list->codegen();
   auto paramtersSize = tFunction->getParameters().size();
   auto argumentsSize = arguments.size();
   if (!tFunction->hasVarArg() && paramtersSize != argumentsSize) {
@@ -1919,9 +1918,9 @@ Value FunctionPostfixExpressionAST::codegen() {
   }
   auto para = tFunction->getParameters().begin();
   auto arg = arguments.begin();
-  std::vector<llvm::Value *> argumentValues;
+  std::vector < llvm::Value * > argumentValues;
   while (arg != arguments.end()) {
-    auto *argType = dynamic_cast<const ObjectType *>(arg->getType());
+    auto *argType = dynamic_cast< ObjectType *>(arg->getType());
     if (!argType) {
       throw SemaException("arguments must be object type", postfix_expression->involvedTokens());
     }
@@ -1948,11 +1947,11 @@ Value MemberPostfixExpressionAST::codegen() {
   //6.5.2.3 Structure and union members
   Value lhs = postfix_expression->codegen();
   const CompoundType *compoundTy;
-  if (!dynamic_cast<const StructType *>(lhs.getType())
-      && !dynamic_cast<const UnionType *>(lhs.getType())) {
+  if (!dynamic_cast< StructType *>(lhs.getType())
+      && !dynamic_cast< UnionType *>(lhs.getType())) {
     throw SemaException("left side must be a struct type or union type", postfix_expression->involvedTokens());
   } else {
-    compoundTy = dynamic_cast<const CompoundType *>(lhs.getType());
+    compoundTy = dynamic_cast< CompoundType *>(lhs.getType());
   }
   auto *memberSymbol = dynamic_cast<ObjectSymbol *>(compoundTy->mTable.lookup(identifier->token));
   //TODO 6.5.2.3.6
@@ -1963,7 +1962,7 @@ Value MemberPostfixExpressionAST::codegen() {
   QualifiedType qualifiedType(memberSymbol->getQualifiedType());
   qualifiedType.addQualifiers(lhs.getQualifiers());
   unsigned int index;
-  if (dynamic_cast<const StructType *>(lhs.getType())) {
+  if (dynamic_cast< StructType *>(lhs.getType())) {
     index = memberSymbol->getIndex();
   } else {
     index = 0;
@@ -1983,13 +1982,13 @@ Value PointerMemberPostfixExpressionAST::codegen() {
   //6.5.2.3 Structure and union members
   Value lhs = postfix_expression->codegen();
   const CompoundType *compoundTy;
-  if (const auto *p = dynamic_cast<const PointerType *>(lhs.getType())) {
-    if (!dynamic_cast<const StructType *>(p->getReferencedType())
-        && !dynamic_cast<const UnionType *>(p->getReferencedType())) {
+  if (auto *p = dynamic_cast< PointerType *>(lhs.getType())) {
+    if (!dynamic_cast< StructType *>(p->getReferencedType())
+        && !dynamic_cast< UnionType *>(p->getReferencedType())) {
       throw SemaException("left side must be a pointer to a struct type or union type",
                           postfix_expression->involvedTokens());
     } else {
-      compoundTy = dynamic_cast<const CompoundType *>(p->getReferencedType());
+      compoundTy = dynamic_cast< CompoundType *>(p->getReferencedType());
     }
   } else {
     throw SemaException("left side must be a pointer type", postfix_expression->involvedTokens());
@@ -2002,7 +2001,7 @@ Value PointerMemberPostfixExpressionAST::codegen() {
   QualifiedType qualifiedType(memberSymbol->getQualifiedType());
   qualifiedType.addQualifiers(lhs.getQualifiers());
   unsigned int index;
-  if (dynamic_cast<const StructType *>(lhs.getType())) {
+  if (dynamic_cast< StructType *>(lhs.getType())) {
     index = memberSymbol->getIndex();
   } else {
     index = 0;
@@ -2022,16 +2021,16 @@ Value IncrementPostfixExpression::codegen() {
   if (!value.modifiable()) {
     throw SemaException("oprand must be modifiable", postfix_expression->involvedTokens());
   }
-  const Type *type = value.getType();
+  Type *type = value.getType();
   llvm::Value *result = sBuilder.CreateAlloca(value.getType()->getLLVMType());
   sBuilder.CreateStore(value.getValue(), result, value.isVolatile());
   result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
-  if (dynamic_cast<const IntegerType *>(type)) {
+  if (dynamic_cast< IntegerType *>(type)) {
     newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
-  } else if (dynamic_cast<const FloatingType *>(type)) {
+  } else if (dynamic_cast< FloatingType *>(type)) {
     newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
-  } else if (dynamic_cast<const PointerType *>(type)) {
+  } else if (dynamic_cast< PointerType *>(type)) {
     newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
                                                    llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1))});
   } else {
@@ -2055,16 +2054,16 @@ Value DecrementPostfixExpression::codegen() {
   if (!value.modifiable()) {
     throw SemaException("oprand must be modifiable", postfix_expression->involvedTokens());
   }
-  const Type *type = value.getType();
+  Type *type = value.getType();
   llvm::Value *result = sBuilder.CreateAlloca(value.getType()->getLLVMType());
   sBuilder.CreateStore(value.getValue(), result, value.isVolatile());
   result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
-  if (dynamic_cast<const IntegerType *>(type)) {
+  if (dynamic_cast< IntegerType *>(type)) {
     newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
-  } else if (dynamic_cast<const FloatingType *>(type)) {
+  } else if (dynamic_cast< FloatingType *>(type)) {
     newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
-  } else if (dynamic_cast<const PointerType *>(type)) {
+  } else if (dynamic_cast< PointerType *>(type)) {
     newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
                                                    llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true))});
   } else {
@@ -2096,11 +2095,11 @@ Value PrefixIncrementExpressionAST::codegen() {
     throw SemaException("oprand must be modifiable", mUnaryExpression->involvedTokens());
   }
   llvm::Value *newVal;
-  if (dynamic_cast<const IntegerType *>(value.getType())) {
+  if (dynamic_cast< IntegerType *>(value.getType())) {
     newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
-  } else if (dynamic_cast<const FloatingType *>(value.getType())) {
+  } else if (dynamic_cast< FloatingType *>(value.getType())) {
     newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
-  } else if (!dynamic_cast<const PointerType *>(value.getType())) {
+  } else if (!dynamic_cast< PointerType *>(value.getType())) {
     newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
                                                    llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1))});
   } else {
@@ -2125,11 +2124,11 @@ Value PrefixDecrementExpressionAST::codegen() {
     throw SemaException("oprand must be modifiable", mUnaryExpression->involvedTokens());
   }
   llvm::Value *newVal;
-  if (dynamic_cast<const IntegerType *>(value.getType())) {
+  if (dynamic_cast< IntegerType *>(value.getType())) {
     newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
-  } else if (dynamic_cast<const FloatingType *>(value.getType())) {
+  } else if (dynamic_cast< FloatingType *>(value.getType())) {
     newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
-  } else if (!dynamic_cast<const PointerType *>(value.getType())) {
+  } else if (!dynamic_cast< PointerType *>(value.getType())) {
     newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
                                                    llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true))});
   } else {
@@ -2151,7 +2150,7 @@ void UnaryOperatorExpressionAST::print(int indent) {
 }
 Value UnaryOperatorExpressionAST::codegen() {
   Value value = mCastExpression->codegen();
-  const Type *type = value.getType();
+  Type *type = value.getType();
   llvm::Value *newVal = value.getValue();
   switch (mOp.type) {
     case UnaryOp::AMP:
@@ -2166,28 +2165,28 @@ Value UnaryOperatorExpressionAST::codegen() {
       }
       break;
     case UnaryOp::STAR:
-      if (const auto *pointerType = dynamic_cast<const PointerType *>(type)) {
+      if (auto *pointerType = dynamic_cast< PointerType *>(type)) {
         newVal = sBuilder.CreateLoad(newVal);
         return Value(pointerType->getReferencedQualifiedType(), false, newVal);
       } else {
         throw SemaException("The operand of the unary * operator shall have pointer type.", mOp.token);
       }
     case UnaryOp::PLUS:
-      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+      if (auto *integerType = dynamic_cast< IntegerType *>(type)) {
         std::tie(type, newVal) = integerType->promote(value.getValue(), mCastExpression.get());
-      } else if (dynamic_cast<const FloatingType *>(type)) {
+      } else if (dynamic_cast< FloatingType *>(type)) {
       } else
         throw SemaException("The operand of the unary + or - operator shall have arithmetic type",
                             mCastExpression->involvedTokens());
       return Value(QualifiedType(type, value.getQualifiers()), false, newVal);
     case UnaryOp::SUB:
-      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+      if (auto *integerType = dynamic_cast< IntegerType *>(type)) {
         std::tie(type, newVal) = integerType->promote(value.getValue(), mCastExpression.get());
         newVal = sBuilder.CreateSub(
             llvm::ConstantInt::get(getContext(), llvm::APInt(32, 0)),
             newVal);
 
-      } else if (dynamic_cast<const FloatingType *>(type)) {
+      } else if (dynamic_cast< FloatingType *>(type)) {
         newVal = sBuilder.CreateFSub(
             llvm::ConstantFP::get(getContext(), llvm::APFloat(0.0f)),
             newVal);
@@ -2196,7 +2195,7 @@ Value UnaryOperatorExpressionAST::codegen() {
                             mCastExpression->involvedTokens());
       return Value(QualifiedType(type, value.getQualifiers()), false, newVal);
     case UnaryOp::TILDE:
-      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+      if (auto *integerType = dynamic_cast< IntegerType *>(type)) {
         std::tie(type, newVal) = integerType->promote(value.getValue(), mCastExpression.get());
         newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true)));
       } else {
@@ -2205,16 +2204,16 @@ Value UnaryOperatorExpressionAST::codegen() {
       }
       return Value(QualifiedType(type, value.getQualifiers()), false, newVal);
     case UnaryOp::BANG:
-      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+      if (auto *integerType = dynamic_cast< IntegerType *>(type)) {
         newVal = sBuilder.CreateICmpEQ(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(32, 0)));
         type = &IntegerType::sIntType;
         newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType());
-      } else if (dynamic_cast<const FloatingType *>(type)) {
+      } else if (dynamic_cast< FloatingType *>(type)) {
         newVal = sBuilder.CreateFCmpUEQ(newVal, llvm::ConstantFP::get(getContext(), llvm::APFloat(0.0f)));
         newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(1, 1)));
         type = &IntegerType::sIntType;
         newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType());
-      } else if (dynamic_cast<const PointerType *>(type)) {
+      } else if (dynamic_cast< PointerType *>(type)) {
         auto *pointerTy = llvm::PointerType::get(type->getLLVMType(), 0);
         auto *const_null = llvm::ConstantPointerNull::get(pointerTy);
         newVal = sBuilder.CreateICmpEQ(newVal, const_null);
@@ -2230,7 +2229,7 @@ Value UnaryOperatorExpressionAST::codegen() {
 }
 Value SizeofUnaryExpressionAST::codegen() {
   auto value = mUnaryExpression->codegen();
-  if (dynamic_cast<const FunctionType *>(value.getType())) {
+  if (dynamic_cast< FunctionType *>(value.getType())) {
     throw SemaException("The sizeof operator shall not be applied to an expression that has function type",
                         mUnaryExpression->involvedTokens());
   } else if (!value.getType()->complete()) {
@@ -2261,18 +2260,18 @@ void RealCastExpressionAST::print(int indent) {
   mCastExpression->print(indent);
 }
 Value RealCastExpressionAST::codegen() {
-  const Type *castType = mTypeName->codegen().getType();
+  Type *castType = mTypeName->codegen().getType();
 
   auto operand = mCastExpression->codegen();
-  if (auto *integerType = dynamic_cast<const IntegerType *>(operand.getType())) {
+  if (auto *integerType = dynamic_cast< IntegerType *>(operand.getType())) {
     return Value(QualifiedType(castType, {}),
                  false,
                  integerType->cast(castType, operand.getValue(), mCastExpression.get()));
-  } else if (const auto *floatType = dynamic_cast<const FloatingType * >(operand.getType())) {
+  } else if (auto *floatType = dynamic_cast< FloatingType * >(operand.getType())) {
     return Value(QualifiedType(castType, {}),
                  false,
                  floatType->cast(castType, operand.getValue(), mCastExpression.get()));
-  } else if (const auto *pointerType = dynamic_cast<const PointerType *>(operand.getType())) {
+  } else if (auto *pointerType = dynamic_cast< PointerType *>(operand.getType())) {
     return Value(QualifiedType(castType, {}),
                  false,
                  pointerType->cast(castType, operand.getValue(), mCastExpression.get()));
@@ -2299,20 +2298,16 @@ Value BinaryOperatorAST::codegen() {
   auto rhs = mRight->codegen();
   return codegen(lhs, rhs, mOp.type, mLeft.get(), mRight.get());
 }
-std::tuple<const Type *,
-           llvm::Value *,
-           llvm::Value *>
-BinaryOperatorAST::UsualArithmeticConversions(const Value &lhs,
-                                              const Value &rhs,
-                                              const AST *ast) {
-  const Type *lType = lhs.getType();
-  const Type *rType = rhs.getType();
+std::tuple<Type *, llvm::Value *, llvm::Value *>
+BinaryOperatorAST::UsualArithmeticConversions(Value &lhs, Value &rhs, AST *ast) {
+  Type *lType = lhs.getType();
+  Type *rType = rhs.getType();
   llvm::Value *lValue = lhs.getValue();
   llvm::Value *rValue = rhs.getValue();
 
   while (true) {
-    if (const auto *li = dynamic_cast<const IntegerType *>(lType)) {
-      if (const auto *ri = dynamic_cast<const IntegerType *>(rType)) {
+    if (auto *li = dynamic_cast< IntegerType *>(lType)) {
+      if (auto *ri = dynamic_cast< IntegerType *>(rType)) {
         if (li->getSizeInBits() > ri->getSizeInBits()) {
           rValue = ri->cast(li, rValue, ast);
           rType = lType;
@@ -2327,15 +2322,15 @@ BinaryOperatorAST::UsualArithmeticConversions(const Value &lhs,
           lType = rType;
           break;
         }
-      } else if (const auto *rf = dynamic_cast<const FloatingType *>(rType)) {
+      } else if (auto *rf = dynamic_cast< FloatingType *>(rType)) {
         lValue = li->cast(rf, lValue, ast);
         break;
       }
-    } else if (const auto *lf = dynamic_cast<const FloatingType *>(lType)) {
-      if (const auto *ri = dynamic_cast<const IntegerType *>(rType)) {
+    } else if (auto *lf = dynamic_cast< FloatingType *>(lType)) {
+      if (auto *ri = dynamic_cast< IntegerType *>(rType)) {
         rValue = ri->cast(lf, rValue, ast);
         break;
-      } else if (const auto *rf = dynamic_cast<const FloatingType *>(rType)) {
+      } else if (auto *rf = dynamic_cast< FloatingType *>(rType)) {
         if (lf->getSizeInBits() > rf->getSizeInBits()) {
           rValue = rf->cast(lf, rValue, ast);
           rType = lType;
@@ -2354,34 +2349,34 @@ BinaryOperatorAST::UsualArithmeticConversions(const Value &lhs,
   return {lType, lValue, rValue};
 
 }
-Value BinaryOperatorAST::codegen(const Value &lhs,
-                                 const Value &rhs,
+Value BinaryOperatorAST::codegen(Value &lhs,
+                                 Value &rhs,
                                  InfixOp op,
                                  const AST *lAST,
                                  const AST *rAST) {
-  const Type *type;
+  Type *type;
   llvm::Value *lValue = lhs.getValue();
   llvm::Value *rValue = rhs.getValue();
 
   switch (op) {
     case InfixOp::STAR:
-      if (!dynamic_cast<const ArithmeticType *>(lhs.getType())
-          && !dynamic_cast<const ArithmeticType *>(rhs.getType())) {
+      if (!dynamic_cast< ArithmeticType *>(lhs.getType())
+          && !dynamic_cast< ArithmeticType *>(rhs.getType())) {
         throw SemaException("Each of the operands shall have arithmetic type", lAST->involvedTokens());
       }
       std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
-      if (dynamic_cast<const IntegerType *>(type)) {
+      if (dynamic_cast< IntegerType *>(type)) {
         return Value(QualifiedType(type, {}), false, sBuilder.CreateMul(lValue, rValue));
       } else {
         return Value(QualifiedType(type, {}), false, sBuilder.CreateFMul(lValue, rValue));
       }
     case InfixOp::SLASH:
-      if (!dynamic_cast<const ArithmeticType *>(lhs.getType())
-          && !dynamic_cast<const ArithmeticType *>(rhs.getType())) {
+      if (!dynamic_cast< ArithmeticType *>(lhs.getType())
+          && !dynamic_cast< ArithmeticType *>(rhs.getType())) {
         throw SemaException("Each of the operands shall have arithmetic type", lAST->involvedTokens());
       }
       std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
-      if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+      if (auto *integerType = dynamic_cast< IntegerType *>(type)) {
         if (integerType->isSigned()) {
           return Value(QualifiedType(type, {}), false, sBuilder.CreateSDiv(lValue, rValue));
         } else {
@@ -2391,8 +2386,8 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
         return Value(QualifiedType(type, {}), false, sBuilder.CreateFMul(lValue, rValue));
       }
     case InfixOp::PERCENT:
-      if (!dynamic_cast<const IntegerType *>(lhs.getType())
-          && !dynamic_cast<const IntegerType *>(rhs.getType())) {
+      if (!dynamic_cast< IntegerType *>(lhs.getType())
+          && !dynamic_cast< IntegerType *>(rhs.getType())) {
         throw SemaException("Each of the operands shall have arithmetic type", lAST->involvedTokens());
       }
       std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
@@ -2402,11 +2397,11 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
         return Value(QualifiedType(type, {}), false, sBuilder.CreateURem(lValue, rValue));
       }
     case InfixOp::PLUS:
-      if (const auto *pointerType = dynamic_cast<const PointerType *> (lhs.getType())) {
+      if (auto *pointerType = dynamic_cast< PointerType *> (lhs.getType())) {
         if (!pointerType->complete()) {
           throw SemaException("Additive of pointer must be a complete type", lAST->involvedTokens());
         } else {
-          if (dynamic_cast<const IntegerType *>(rhs.getType())) {
+          if (dynamic_cast< IntegerType *>(rhs.getType())) {
             return Value(QualifiedType(pointerType, {}),
                          false,
                          sBuilder.CreateGEP(lhs.getValue(),
@@ -2415,8 +2410,8 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
           }
         }
       }
-      if (const auto *integerType = dynamic_cast<const IntegerType *>(lhs.getType())) {
-        if (const auto *pointerType = dynamic_cast<const PointerType *> (rhs.getType())) {
+      if (auto *integerType = dynamic_cast< IntegerType *>(lhs.getType())) {
+        if (auto *pointerType = dynamic_cast< PointerType *> (rhs.getType())) {
           if (!pointerType->complete()) {
             throw SemaException("Additive of pointer must be a complete type", lAST->involvedTokens());
           } else {
@@ -2428,10 +2423,10 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
           }
         }
       }
-      if (dynamic_cast<const ArithmeticType *>(lhs.getType())
-          || dynamic_cast<const ArithmeticType *>(rhs.getType())) {
+      if (dynamic_cast< ArithmeticType *>(lhs.getType())
+          || dynamic_cast< ArithmeticType *>(rhs.getType())) {
         std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
-        if (dynamic_cast<const IntegerType *>(type)) {
+        if (dynamic_cast< IntegerType *>(type)) {
           return Value(QualifiedType(type, {}), false, sBuilder.CreateAdd(lValue, rValue));
         } else {
           return Value(QualifiedType(type, {}), false, sBuilder.CreateFAdd(lValue, rValue));
@@ -2439,13 +2434,13 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
       }
       break;
     case InfixOp::SUB:
-      if (const auto *lp = dynamic_cast<const PointerType *> (lhs.getType())) {
-        const auto *obj1 = dynamic_cast<const ObjectType *>(lp->getReferencedQualifiedType().getType());
+      if (auto *lp = dynamic_cast< PointerType *> (lhs.getType())) {
+        auto *obj1 = dynamic_cast< ObjectType *>(lp->getReferencedQualifiedType().getType());
         if (!obj1) {
           throw SemaException("pointer in subtraction must point to object types", lAST->involvedTokens());
         }
-        if (const auto *rp = dynamic_cast<const PointerType *> (rhs.getType())) {
-          if (!dynamic_cast<const ObjectType *>(rp->getReferencedQualifiedType().getType())) {
+        if (auto *rp = dynamic_cast< PointerType *> (rhs.getType())) {
+          if (!dynamic_cast< ObjectType *>(rp->getReferencedQualifiedType().getType())) {
             throw SemaException("pointer in subtraction must point to object types", lAST->involvedTokens());
           }
           if (lp->complete() && lp->compatible(rp)) {
@@ -2457,7 +2452,7 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
                                                                   obj1->getSizeInBits()));
             return Value(QualifiedType(PointerType::sAddrType, {}), false, v4);
           }
-        } else if (const auto *rp = dynamic_cast<const IntegerType *>(rhs.getType())) {
+        } else if (auto *rp = dynamic_cast< IntegerType *>(rhs.getType())) {
           auto *const0 = llvm::ConstantInt::get(rp->getLLVMType(), 0, true);
           auto *negativeValue = sBuilder.CreateSub(const0, rhs.getValue());
           return Value(QualifiedType(lp, {}),
@@ -2465,10 +2460,10 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
                        sBuilder.CreateGEP(lhs.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
                                                            negativeValue}));
         }
-      } else if (dynamic_cast<const ArithmeticType *>(lhs.getType())
-          || dynamic_cast<const ArithmeticType *>(rhs.getType())) {
+      } else if (dynamic_cast< ArithmeticType *>(lhs.getType())
+          || dynamic_cast< ArithmeticType *>(rhs.getType())) {
         std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
-        if (dynamic_cast<const IntegerType *>(type)) {
+        if (dynamic_cast< IntegerType *>(type)) {
           return Value(QualifiedType(type, {}), false, sBuilder.CreateSub(lValue, rValue));
         } else {
           return Value(QualifiedType(type, {}), false, sBuilder.CreateFSub(lValue, rValue));
@@ -2477,8 +2472,8 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
       break;
     case InfixOp::LTLT:
     case InfixOp::GTGT: {
-      const auto *ltype = dynamic_cast<const IntegerType *>(lhs.getType());
-      const auto *rtype = dynamic_cast<const IntegerType *>(lhs.getType());
+      auto *ltype = dynamic_cast< IntegerType *>(lhs.getType());
+      auto *rtype = dynamic_cast< IntegerType *>(lhs.getType());
       if (!ltype) {
         throw SemaException("Each of the operands shall have integer type.", lAST->involvedTokens());
       }
@@ -2504,11 +2499,11 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
       llvm::ICmpInst::Predicate predicate;
       llvm::Value *cmpRes;
       bool isSigned;
-      if (const auto *lPointer = dynamic_cast<const PointerType *>(lhs.getType())) {
+      if (auto *lPointer = dynamic_cast< PointerType *>(lhs.getType())) {
         if (!lPointer->complete()) {
           throw SemaException("operand should be completed pointer type", lAST->involvedTokens());
         }
-        if (const auto *rPointer = dynamic_cast<const PointerType *>(rhs.getType())) {
+        if (auto *rPointer = dynamic_cast< PointerType *>(rhs.getType())) {
           if (!rPointer->complete()) {
             throw SemaException("operand should be completed pointer type", lAST->involvedTokens());
           }
@@ -2521,12 +2516,12 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
           throw SemaException("both operands should be completed pointer type", lAST->involvedTokens());
         }
       } else {
-        if (!dynamic_cast<const ArithmeticType *>(lhs.getType())
-            && !dynamic_cast<const ArithmeticType *>(rhs.getType())) {
+        if (!dynamic_cast< ArithmeticType *>(lhs.getType())
+            && !dynamic_cast< ArithmeticType *>(rhs.getType())) {
           throw SemaException("Each of the operands shall have real type", lAST->involvedTokens());
         }
         std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
-        if (const auto *intergerType = dynamic_cast<const IntegerType *>(type)) {
+        if (auto *intergerType = dynamic_cast< IntegerType *>(type)) {
           isSigned = intergerType->isSigned();
           goto icmp;
         } else {
@@ -2588,10 +2583,10 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
     case InfixOp::EQEQ:
     case InfixOp::BANGEQ: {
       llvm::Value *result;
-      if (dynamic_cast<const ArithmeticType *>(lhs.getType())
-          && dynamic_cast<const ArithmeticType *>(lhs.getType())) {
+      if (dynamic_cast< ArithmeticType *>(lhs.getType())
+          && dynamic_cast< ArithmeticType *>(lhs.getType())) {
         std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
-        if (dynamic_cast<const IntegerType *>(type)) {
+        if (dynamic_cast< IntegerType *>(type)) {
           if (op == InfixOp::EQEQ) {
             result = sBuilder.CreateICmpEQ(lValue, rValue);
           } else {
@@ -2604,8 +2599,8 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
             result = sBuilder.CreateFCmpONE(lValue, rValue);
           }
         }
-      } else if (const auto *ltype = dynamic_cast<const PointerType *>(lhs.getType())) {
-        if (const auto *rtype = dynamic_cast<const PointerType *>(rhs.getType())) {
+      } else if (auto *ltype = dynamic_cast< PointerType *>(lhs.getType())) {
+        if (auto *rtype = dynamic_cast< PointerType *>(rhs.getType())) {
           if (!ltype->compatible(rtype)) {
             if (ltype->getReferencedQualifiedType().getType() == &VoidType::sVoidType) {
               lValue = sBuilder.CreateBitCast(lValue, rtype->getLLVMType());
@@ -2634,8 +2629,8 @@ Value BinaryOperatorAST::codegen(const Value &lhs,
     case InfixOp::AMP:
     case InfixOp::CARET:
     case InfixOp::BAR: {
-      const auto *integer1 = dynamic_cast<const IntegerType *>(lhs.getType());
-      const auto *integer2 = dynamic_cast<const IntegerType *>(rhs.getType());
+      auto *integer1 = dynamic_cast< IntegerType *>(lhs.getType());
+      auto *integer2 = dynamic_cast< IntegerType *>(rhs.getType());
       if (!integer1 || !integer2) {
         throw SemaException("both operands must be integer type", lAST->involvedTokens());
       }
@@ -2662,13 +2657,13 @@ Value LogicalBinaryOperatorAST::codegen() {
   llvm::Value *cond1;
   llvm::Value *cond2;
   auto lhs = mLeft->codegen();
-  if (const auto *ltype = dynamic_cast<const IntegerType *> (lhs.getType())) {
+  if (auto *ltype = dynamic_cast< IntegerType *> (lhs.getType())) {
     auto *const0 = llvm::ConstantInt::get(ltype->getLLVMType(), 0);
     cond1 = sBuilder.CreateICmpNE(lhs.getValue(), const0);
-  } else if (const auto *ltype = dynamic_cast<const FloatingType *> (lhs.getType())) {
+  } else if (auto *ltype = dynamic_cast< FloatingType *> (lhs.getType())) {
     auto *const0 = llvm::ConstantFP::get(ltype->getLLVMType(), 0.0);
     cond1 = sBuilder.CreateFCmpONE(lhs.getValue(), const0);
-  } else if (const auto *ltype = dynamic_cast<const PointerType *> (lhs.getType())) {
+  } else if (auto *ltype = dynamic_cast< PointerType *> (lhs.getType())) {
     auto *const0 = llvm::ConstantPointerNull::get(ltype->getLLVMType());
     cond1 = sBuilder.CreateICmpNE(lhs.getValue(), const0);
   } else {
@@ -2684,13 +2679,13 @@ Value LogicalBinaryOperatorAST::codegen() {
   currentFunction->getBasicBlockList().push_back(otherBlock);
   sBuilder.SetInsertPoint(otherBlock);
   auto rhs = mRight->codegen();
-  if (const auto *rtype = dynamic_cast<const IntegerType *> (rhs.getType())) {
+  if (auto *rtype = dynamic_cast< IntegerType *> (rhs.getType())) {
     auto *const0 = llvm::ConstantInt::get(rtype->getLLVMType(), 0);
     cond2 = sBuilder.CreateICmpNE(rhs.getValue(), const0);
-  } else if (const auto *rtype = dynamic_cast<const FloatingType *> (rhs.getType())) {
+  } else if (auto *rtype = dynamic_cast< FloatingType *> (rhs.getType())) {
     auto *const0 = llvm::ConstantFP::get(rtype->getLLVMType(), 0.0);
     cond2 = sBuilder.CreateFCmpONE(rhs.getValue(), const0);
-  } else if (const auto *rtype = dynamic_cast<const PointerType *> (rhs.getType())) {
+  } else if (auto *rtype = dynamic_cast< PointerType *> (rhs.getType())) {
     auto *const0 = llvm::ConstantPointerNull::get(rtype->getLLVMType());
     cond2 = sBuilder.CreateICmpNE(rhs.getValue(), const0);
   } else {
@@ -2727,11 +2722,11 @@ void IfSelectionStatementAST::print(int indent) {
 void IfSelectionStatementAST::codegen(StatementContexts &contexts) {
   auto exp = mExpression->codegen();
   llvm::Value *cond;
-  if (auto *integerTy = dynamic_cast<const IntegerType *>(exp.getType())) {
+  if (auto *integerTy = dynamic_cast< IntegerType *>(exp.getType())) {
     cond = sBuilder.CreateICmpNE(exp.getValue(), integerTy->getDefaultValue());
-  } else if (auto *floatTy = dynamic_cast<const FloatingType *>(exp.getType())) {
+  } else if (auto *floatTy = dynamic_cast< FloatingType *>(exp.getType())) {
     cond = sBuilder.CreateFCmpONE(exp.getValue(), floatTy->getDefaultValue());
-  } else if (auto *pointerTy = dynamic_cast<const PointerType *>(exp.getType())) {
+  } else if (auto *pointerTy = dynamic_cast< PointerType *>(exp.getType())) {
     cond = sBuilder.CreateICmpNE(exp.getValue(), pointerTy->getDefaultValue());
   } else {
     throw SemaException("The controlling expression of an if statement shall have scalar type.",
@@ -2909,7 +2904,7 @@ void ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
   if (!function) {
     throw SemaException("return statement should only appear in functions", involvedTokens());
   }
-  const auto *type = function->getFunctionType()->getReturnType().getType();
+  auto *type = function->getFunctionType()->getReturnType().getType();
   auto *returnAlloca = function->getReturnAlloca();
   if (!mExpression && returnAlloca) {
     throw SemaException(
@@ -2941,11 +2936,11 @@ void WhileIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.SetInsertPoint(conditionBB);
   auto value = mExpression->codegen();
   llvm::Value *cond;
-  if (auto *integerTy = dynamic_cast<const IntegerType *>(value.getType())) {
+  if (auto *integerTy = dynamic_cast< IntegerType *>(value.getType())) {
     cond = sBuilder.CreateICmpNE(value.getValue(), integerTy->getDefaultValue());
-  } else if (auto *floatTy = dynamic_cast<const FloatingType *>(value.getType())) {
+  } else if (auto *floatTy = dynamic_cast< FloatingType *>(value.getType())) {
     cond = sBuilder.CreateFCmpONE(value.getValue(), floatTy->getDefaultValue());
-  } else if (auto *pointerTy = dynamic_cast<const PointerType *>(value.getType())) {
+  } else if (auto *pointerTy = dynamic_cast< PointerType *>(value.getType())) {
     cond = sBuilder.CreateICmpNE(value.getValue(), pointerTy->getDefaultValue());
   } else {
     throw SemaException("The controlling expression of an iteration statement shall have scalar type.",
@@ -2976,11 +2971,11 @@ void DoIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.SetInsertPoint(conditionBB);
   auto value = mExpression->codegen();
   llvm::Value *cond;
-  if (auto *integerTy = dynamic_cast<const IntegerType *>(value.getType())) {
+  if (auto *integerTy = dynamic_cast< IntegerType *>(value.getType())) {
     cond = sBuilder.CreateICmpNE(value.getValue(), integerTy->getDefaultValue());
-  } else if (auto *floatTy = dynamic_cast<const FloatingType *>(value.getType())) {
+  } else if (auto *floatTy = dynamic_cast< FloatingType *>(value.getType())) {
     cond = sBuilder.CreateFCmpONE(value.getValue(), floatTy->getDefaultValue());
-  } else if (auto *pointerTy = dynamic_cast<const PointerType *>(value.getType())) {
+  } else if (auto *pointerTy = dynamic_cast< PointerType *>(value.getType())) {
     cond = sBuilder.CreateICmpNE(value.getValue(), pointerTy->getDefaultValue());
   } else {
     throw SemaException("The controlling expression of an iteration statement shall have scalar type.",
@@ -3005,11 +3000,11 @@ void ForIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.SetInsertPoint(conditionBB);
   auto value = mExpression->codegen();
   llvm::Value *cond;
-  if (auto *integerTy = dynamic_cast<const IntegerType *>(value.getType())) {
+  if (auto *integerTy = dynamic_cast< IntegerType *>(value.getType())) {
     cond = sBuilder.CreateICmpNE(value.getValue(), integerTy->getDefaultValue());
-  } else if (auto *floatTy = dynamic_cast<const FloatingType *>(value.getType())) {
+  } else if (auto *floatTy = dynamic_cast< FloatingType *>(value.getType())) {
     cond = sBuilder.CreateFCmpONE(value.getValue(), floatTy->getDefaultValue());
-  } else if (auto *pointerTy = dynamic_cast<const PointerType *>(value.getType())) {
+  } else if (auto *pointerTy = dynamic_cast< PointerType *>(value.getType())) {
     cond = sBuilder.CreateICmpNE(value.getValue(), pointerTy->getDefaultValue());
   } else {
     throw SemaException("The controlling expression of an iteration statement shall have scalar type.",

@@ -2,13 +2,13 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <sema/ast.h>
 #include <sema/qualifiedType.h>
-bool Type::compatible(const Type *type) const {
+bool Type::compatible(Type *type) {
   return this == type;
 }
-bool Type::complete() const {
+bool Type::complete() {
   return true;
 }
-llvm::Value *Type::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+llvm::Value *Type::cast(Type *type, llvm::Value *value, const AST *ast) {
   if (type != this) {
     throw SemaException("cannot cast type", ast->involvedTokens());
   } else {
@@ -16,23 +16,23 @@ llvm::Value *Type::cast(const Type *type, llvm::Value *value, const AST *ast) co
   }
 
 }
-unsigned int IntegerType::getSizeInBits() const {
+unsigned int IntegerType::getSizeInBits() {
   return mSizeInBits;
 }
 
-const IntegerType IntegerType::sShortIntType(16, true);
-const IntegerType IntegerType::sIntType(32, true);
-const IntegerType IntegerType::sLongIntType(64, true);
-const IntegerType IntegerType::sLongLongIntType(64, true);
-const IntegerType IntegerType::sUnsignedCharType(8, false);
-const IntegerType &IntegerType::sCharType(sUnsignedCharType);
-const IntegerType IntegerType::sUnsignedShortIntType(16, false);
-const IntegerType IntegerType::sUnsignedIntType(32, false);
-const IntegerType IntegerType::sUnsignedLongIntType(64, false);
-const IntegerType IntegerType::sUnsignedLongLongIntType(64, false);
-const IntegerType IntegerType::sOneBitBoolIntType(1, false);
+IntegerType IntegerType::sShortIntType(16, true);
+IntegerType IntegerType::sIntType(32, true);
+IntegerType IntegerType::sLongIntType(64, true);
+IntegerType IntegerType::sLongLongIntType(64, true);
+IntegerType IntegerType::sUnsignedCharType(8, false);
+IntegerType &IntegerType::sCharType(sUnsignedCharType);
+IntegerType IntegerType::sUnsignedShortIntType(16, false);
+IntegerType IntegerType::sUnsignedIntType(32, false);
+IntegerType IntegerType::sUnsignedLongIntType(64, false);
+IntegerType IntegerType::sUnsignedLongLongIntType(64, false);
+IntegerType IntegerType::sOneBitBoolIntType(1, false);
 IntegerType::IntegerType(unsigned int mSizeInBits, bool bSigned) : mSizeInBits(mSizeInBits), mSigned(bSigned) {}
-llvm::IntegerType *IntegerType::getLLVMType() const {
+llvm::IntegerType *IntegerType::getLLVMType() {
   return llvm::IntegerType::get(AST::getContext(), mSizeInBits);
 }
 llvm::APInt IntegerType::getAPInt(uint64_t value) const {
@@ -42,14 +42,14 @@ bool IntegerType::isSigned() const {
   return mSigned;
 }
 
-llvm::Value *IntegerType::cast(const Type *targetTy, llvm::Value *value, const AST *ast) const {
+llvm::Value *IntegerType::cast(Type *targetTy, llvm::Value *value, const AST *ast) {
   auto &builder = AST::getBuilder();
   auto *module = AST::getModule();
   if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
     return llvm::ConstantInt::get(getLLVMType(), constantInt->getSExtValue());
   } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
     return llvm::ConstantInt::get(getLLVMType(), constantFp->getValueAPF().bitcastToAPInt());
-  } else if (const auto *integerType = dynamic_cast<const IntegerType *>(targetTy)) {
+  } else if (auto *integerType = dynamic_cast<IntegerType *>(targetTy)) {
     if (integerType->mSizeInBits > mSizeInBits) {
       if (integerType->mSizeInBits) {
         return builder.CreateSExt(value, targetTy->getLLVMType());
@@ -62,36 +62,36 @@ llvm::Value *IntegerType::cast(const Type *targetTy, llvm::Value *value, const A
     } else {
       return builder.CreateTrunc(value, targetTy->getLLVMType());
     }
-  } else if (dynamic_cast<const FloatingType * >(targetTy)) {
+  } else if (dynamic_cast<FloatingType * >(targetTy)) {
     if (isSigned()) {
       return builder.CreateSIToFP(value, targetTy->getLLVMType());
     } else {
       return builder.CreateUIToFP(value, targetTy->getLLVMType());
     }
-  } else if (dynamic_cast<const PointerType *>(targetTy)) {
+  } else if (dynamic_cast<PointerType *>(targetTy)) {
     return builder.CreateIntToPtr(value, targetTy->getLLVMType());
     //TODO do I need extend the size?
-  } else if (dynamic_cast<const VoidType *>(targetTy)) {
+  } else if (dynamic_cast<VoidType *>(targetTy)) {
     return nullptr;
   } else {
     throw SemaException("cannot cast to integer type", ast->involvedTokens());
   }
 }
-std::pair<const IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *value, AST *ast) const {
+std::pair<IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *value, AST *ast) {
   if (mSizeInBits < sIntType.mSizeInBits) {
-    return std::make_pair<const IntegerType *, llvm::Value *>(this, cast(&IntegerType::sIntType, value, ast));
+    return std::make_pair<IntegerType *, llvm::Value *>(this, cast(&IntegerType::sIntType, value, ast));
   } else {
-    return std::make_pair<const IntegerType *, llvm::Value *>(this, std::move(value));
+    return std::make_pair<IntegerType *, llvm::Value *>(this, std::move(value));
   }
 }
-llvm::Constant *IntegerType::getDefaultValue() const {
+llvm::Constant *IntegerType::getDefaultValue() {
   return llvm::ConstantInt::get(AST::getContext(), llvm::APInt(mSizeInBits, 0));
 }
-const FloatingType FloatingType::sFloatType(32);
-const FloatingType FloatingType::sDoubleType(64);
-const FloatingType FloatingType::sLongDoubleType(128);
+FloatingType FloatingType::sFloatType(32);
+FloatingType FloatingType::sDoubleType(64);
+FloatingType FloatingType::sLongDoubleType(128);
 FloatingType::FloatingType(unsigned int mSizeInBits) : mSizeInBits(mSizeInBits) {}
-llvm::Type *FloatingType::getLLVMType() const {
+llvm::Type *FloatingType::getLLVMType() {
   if (mSizeInBits <= 32) {
     return llvm::Type::getFloatTy(AST::getContext());
   } else if (mSizeInBits <= 64) {
@@ -100,7 +100,7 @@ llvm::Type *FloatingType::getLLVMType() const {
     return llvm::Type::getFP128Ty(AST::getContext());
   }
 }
-unsigned int FloatingType::getSizeInBits() const {
+unsigned int FloatingType::getSizeInBits() {
   return mSizeInBits;
 }
 llvm::APFloat FloatingType::getAPFloat(long double n) const {
@@ -111,7 +111,7 @@ llvm::APFloat FloatingType::getAPFloat(long double n) const {
   }
   //TODO implement long double
 }
-llvm::Value *FloatingType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+llvm::Value *FloatingType::cast(Type *type, llvm::Value *value, const AST *ast) {
   auto &builder = AST::getBuilder();
   auto *module = AST::getModule();
   if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
@@ -136,7 +136,7 @@ llvm::Value *FloatingType::cast(const Type *type, llvm::Value *value, const AST 
     throw SemaException("cannot cast to float type", ast->involvedTokens());
   }
 }
-llvm::Constant *FloatingType::getDefaultValue() const {
+llvm::Constant *FloatingType::getDefaultValue() {
   return llvm::ConstantFP::get(getLLVMType(), 0.0);
 }
 FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg)
@@ -144,23 +144,23 @@ FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> 
       mParameters(parameters),
       mVarArg(varArg),
       mReferencedQualifiedType{this, {}} {}
-QualifiedType FunctionType::getReturnType() const {
+QualifiedType FunctionType::getReturnType() {
   return mReturnType;
 }
-const std::vector<QualifiedType> &FunctionType::getParameters() const {
+std::vector<QualifiedType> &FunctionType::getParameters() {
   return mParameters;
 }
-llvm::FunctionType *FunctionType::getLLVMType() const {
+llvm::FunctionType *FunctionType::getLLVMType() {
   std::vector<llvm::Type *> args;
   for (auto &paramter : mParameters) {
     args.push_back(paramter.getType()->getLLVMType());
   }
   return llvm::FunctionType::get(mReturnType.getType()->getLLVMType(), args, mVarArg);
 }
-bool FunctionType::compatible(const Type *type) const {
+bool FunctionType::compatible(Type *type) {
   if (Type::compatible(type)) {
     return true;
-  } else if (const auto *functionType = dynamic_cast<const FunctionType *>(type)) {
+  } else if (auto *functionType = dynamic_cast<FunctionType *>(type)) {
     if (functionType->getReturnType().compatible(mReturnType)) {
       if (functionType->getParameters().size() == mParameters.size() && mVarArg == functionType->mVarArg) {
         auto si = mParameters.begin();
@@ -182,12 +182,12 @@ bool FunctionType::compatible(const Type *type) const {
 bool FunctionType::hasVarArg() const {
   return mVarArg;
 }
-const QualifiedType &FunctionType::getReferencedQualifiedType() const {
+QualifiedType &FunctionType::getReferencedQualifiedType() {
   return mReferencedQualifiedType;
 }
-ArrayType::ArrayType(const QualifiedType elementType, unsigned int size)
+ArrayType::ArrayType(QualifiedType elementType, unsigned int size)
     : mSize(size), mElementType(elementType) {}
-bool ArrayType::complete() const {
+bool ArrayType::complete() {
   return mSize > 0;
 }
 void ArrayType::setSize(unsigned int size) {
@@ -197,24 +197,24 @@ void ArrayType::setSize(unsigned int size) {
     throw std::runtime_error("WTF: set size to complete array");
   }
 }
-llvm::ArrayType *ArrayType::getLLVMType() const {
+llvm::ArrayType *ArrayType::getLLVMType() {
   return llvm::ArrayType::get(mElementType.getType()->getLLVMType(), mSize);
 }
-bool ArrayType::compatible(const Type *type) const {
+bool ArrayType::compatible(Type *type) {
   if (Type::compatible(type)) {
     return true;
-  } else if (const auto *arrayType = dynamic_cast<const ArrayType *>(type)) {
+  } else if (auto *arrayType = dynamic_cast<ArrayType *>(type)) {
     return arrayType->getReferencedQualifiedType().compatible(mElementType) && mSize == arrayType->mSize;
-  } else if (const auto *pointerType = dynamic_cast<const PointerType *> (type)) {
+  } else if (auto *pointerType = dynamic_cast<PointerType *> (type)) {
     return pointerType->getReferencedQualifiedType().compatible(mElementType);
   } else {
     return false;
   }
 }
-const QualifiedType &ArrayType::getReferencedQualifiedType() const {
+QualifiedType &ArrayType::getReferencedQualifiedType() {
   return mElementType;
 }
-Value ArrayType::initializerCodegen(InitializerAST *ast) const {
+Value ArrayType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
   if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
     const auto &initializers = list->initializers;
@@ -228,7 +228,7 @@ Value ArrayType::initializerCodegen(InitializerAST *ast) const {
     std::vector<llvm::Value *> values;
     for (const auto &initializer : initializers) {
       auto *v =
-          static_cast<const ObjectType *>(mElementType.getType())->initializerCodegen(initializer.get()).getValue();
+          static_cast<ObjectType *>(mElementType.getType())->initializerCodegen(initializer.get()).getValue();
       if (!llvm::dyn_cast<llvm::Constant>(v)) {
         isAllConstant = false;
       }
@@ -243,7 +243,7 @@ Value ArrayType::initializerCodegen(InitializerAST *ast) const {
         constants.push_back(static_cast<llvm::Constant *>(value));
       }
       for (int i = 0; i < difference; ++i) {
-        constants.push_back(static_cast<const ObjectType *>(mElementType.getType())->getDefaultValue());
+        constants.push_back(static_cast<ObjectType *>(mElementType.getType())->getDefaultValue());
       }
       result = llvm::ConstantArray::get(llvm::ArrayType::get(mElementType.getType()->getLLVMType(), values.size()),
                                         constants);
@@ -264,84 +264,84 @@ Value ArrayType::initializerCodegen(InitializerAST *ast) const {
   }
   return Value(QualifiedType(this, {}), false, result);
 }
-llvm::Constant *ArrayType::getDefaultValue() const {
+llvm::Constant *ArrayType::getDefaultValue() {
   if (!complete()) {
     throw std::runtime_error("WTF: cannot set default values to incomplete array");
   }
   std::vector<llvm::Constant *>
-      values(mSize, static_cast<const ObjectType *>(mElementType.getType())->getDefaultValue());
+      values(mSize, static_cast<ObjectType *>(mElementType.getType())->getDefaultValue());
   return llvm::ConstantArray::get(getLLVMType(), values);
 }
-unsigned int ArrayType::getSizeInBits() const {
-  return mSize * static_cast<const ObjectType *>(mElementType.getType())->getSizeInBits();
+unsigned int ArrayType::getSizeInBits() {
+  return mSize * static_cast<ObjectType *>(mElementType.getType())->getSizeInBits();
 }
-llvm::Value *ArrayType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+llvm::Value *ArrayType::cast(Type *type, llvm::Value *value, const AST *ast) {
   if (this->compatible(type)) {
     return value;
   } else {
     throw SemaException("cannot cast array type to target type", ast->involvedTokens());
   }
 }
-const Type *PointerType::getReferencedType() const {
+Type *PointerType::getReferencedType() {
   return mReferencedQualifiedType.getType();
 }
-const IntegerType *const PointerType::sAddrType = &IntegerType::sUnsignedLongIntType;
-llvm::PointerType *PointerType::getLLVMType() const {
+IntegerType *PointerType::sAddrType = &IntegerType::sUnsignedLongIntType;
+llvm::PointerType *PointerType::getLLVMType() {
   return llvm::PointerType::get(mReferencedQualifiedType.getType()->getLLVMType(), 0);
 }
-unsigned int PointerType::getSizeInBits() const {
+unsigned int PointerType::getSizeInBits() {
   //TODO 32 or 64?
   return 64;
 }
 PointerType::PointerType(QualifiedType referencedQualifiedType) : mReferencedQualifiedType(std::move(
     referencedQualifiedType)) {}
-const QualifiedType &PointerType::getReferencedQualifiedType() const {
+QualifiedType &PointerType::getReferencedQualifiedType() {
   return mReferencedQualifiedType;
 }
-bool PointerType::complete() const {
+bool PointerType::complete() {
   return mReferencedQualifiedType.getType()->complete();
 }
-bool PointerType::compatible(const Type *type) const {
+bool PointerType::compatible(Type *type) {
   if (Type::compatible(type)) {
     return true;
-  } else if (const auto *pointerType = dynamic_cast<const PointerType *>(type)) {
+  } else if (auto *pointerType = dynamic_cast<PointerType *>(type)) {
     return pointerType->getReferencedQualifiedType().compatible(mReferencedQualifiedType);
-  } else if (const auto *arrayType = dynamic_cast<const ArrayType *>(type)) {
+  } else if (auto *arrayType = dynamic_cast<ArrayType *>(type)) {
     return arrayType->getReferencedQualifiedType().compatible(mReferencedQualifiedType);
   } else {
     return false;
   }
 }
-llvm::Value *PointerType::cast(const Type *type, llvm::Value *value, const AST *ast) const {
+llvm::Value *PointerType::cast(Type *type, llvm::Value *value, const AST *ast) {
   auto &builder = AST::getBuilder();
   auto *module = AST::getModule();
-  if (dynamic_cast<const IntegerType *>(type)) {
+  if (dynamic_cast<IntegerType *>(type)) {
     return builder.CreatePtrToInt(value, type->getLLVMType());
-  } else if (dynamic_cast<const PointerType *>(type)) {
+  } else if (dynamic_cast<PointerType *>(type)) {
     return builder.CreateBitCast(value, type->getLLVMType());
-  } else if (dynamic_cast<const VoidType *>(type)) {
+  } else if (dynamic_cast<VoidType *>(type)) {
     return nullptr;
   } else {
     throw SemaException("cannot cast to pointer type", ast->involvedTokens());
   }
 }
-llvm::Constant *PointerType::getDefaultValue() const {
+llvm::Constant *PointerType::getDefaultValue() {
   return llvm::ConstantPointerNull::get(getLLVMType());
 }
-const VoidType VoidType::sVoidType;
-bool VoidType::complete() const {
+VoidType VoidType::sVoidType;
+bool VoidType::complete() {
   return false;
 }
-llvm::Type *VoidType::getLLVMType() const {
+llvm::Type *VoidType::getLLVMType() {
   return llvm::Type::getVoidTy(AST::getContext());
 }
-unsigned int VoidType::getSizeInBits() const {
+unsigned int VoidType::getSizeInBits() {
   return 0;
 }
-Value VoidType::initializerCodegen(InitializerAST *ast) const {
+Value VoidType::initializerCodegen(InitializerAST *ast) {
   throw std::runtime_error("WTF: initializer to a void type?!");
 }
-llvm::Constant *VoidType::getDefaultValue() const {
+llvm::Constant *VoidType::getDefaultValue() {
   throw std::runtime_error("WTF: get default value for void type");
 }
 CompoundType::CompoundType()
@@ -355,7 +355,7 @@ const std::string &CompoundType::getTagName() const {
 StructType::StructType(const std::string &tag)
     : mLLVMType(llvm::StructType::create(AST::getContext(), tag)), CompoundType(tag) {}
 
-llvm::StructType *StructType::getLLVMType() const {
+llvm::StructType *StructType::getLLVMType() {
   return mLLVMType;
 }
 void StructType::setBody(SymbolTable &&table) {
@@ -364,8 +364,8 @@ void StructType::setBody(SymbolTable &&table) {
   std::vector<llvm::Type *> fields(mTable.size());
   mOrderedFields.resize(mTable.size());
   for (const auto &pair : mTable) {
-    if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
-      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
+    if (auto *obj = dynamic_cast<ObjectSymbol *>(pair.second)) {
+      if (auto *type = dynamic_cast<ObjectType *>(obj->getQualifiedType().getType())) {
         mOrderedFields.at(obj->getIndex()) = obj->getQualifiedType();
         fields.at(obj->getIndex()) = type->getLLVMType();
         mSizeInBits += type->getSizeInBits();
@@ -375,8 +375,8 @@ void StructType::setBody(SymbolTable &&table) {
   mLLVMType->setBody(fields);
   mComplete = true;
 }
-bool StructType::compatible(const Type *type) const {
-  const auto *st = dynamic_cast<const StructType *>(type);
+bool StructType::compatible(Type *type) {
+  auto *st = dynamic_cast<StructType *>(type);
   if (!Type::compatible(type) || !st || st->mTagName.empty() || mTagName.empty() || st->mTagName != mTagName
       || !st->complete() || !complete() || mTable.size() != st->mTable.size()) {
     return false;
@@ -400,7 +400,7 @@ bool StructType::compatible(const Type *type) const {
     return true;
   }
 }
-Value StructType::initializerCodegen(InitializerAST *ast) const {
+Value StructType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
   if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
     const auto &initializers = list->initializers;
@@ -411,7 +411,7 @@ Value StructType::initializerCodegen(InitializerAST *ast) const {
     std::vector<llvm::Value *> values;
     auto iter = mOrderedFields.begin();
     for (const auto &initializer : initializers) {
-      auto *v = static_cast<const ObjectType *>(iter->getType())->initializerCodegen(initializer.get()).getValue();
+      auto *v = static_cast<ObjectType *>(iter->getType())->initializerCodegen(initializer.get()).getValue();
       if (!llvm::dyn_cast<llvm::Constant>(v)) {
         isAllConstant = false;
       }
@@ -425,7 +425,7 @@ Value StructType::initializerCodegen(InitializerAST *ast) const {
         constants.push_back(static_cast<llvm::Constant *>(value));
       }
       while (iter != mOrderedFields.end()) {
-        constants.push_back(static_cast<const ObjectType *>(iter++->getType())->getDefaultValue());
+        constants.push_back(static_cast<ObjectType *>(iter++->getType())->getDefaultValue());
       }
       result = llvm::ConstantStruct::get(getLLVMType(), constants);
     } else {
@@ -444,36 +444,36 @@ Value StructType::initializerCodegen(InitializerAST *ast) const {
   }
   return Value(QualifiedType(this, {}), false, result);
 }
-bool StructType::complete() const {
+bool StructType::complete() {
   return mComplete;
 }
-unsigned int StructType::getSizeInBits() const {
+unsigned int StructType::getSizeInBits() {
   return mSizeInBits;
 }
-llvm::Constant *StructType::getDefaultValue() const {
+llvm::Constant *StructType::getDefaultValue() {
   if (!complete()) {
     throw std::runtime_error("WTF: cannot set default values to imcompleted array");
   }
   std::vector<llvm::Constant *> values;
   values.reserve(mOrderedFields.size());
-  for (const auto &qualifiedType : mOrderedFields) {
-    values.push_back(static_cast<const ObjectType *>(qualifiedType.getType())->getDefaultValue());
+  for (auto &qualifiedType : mOrderedFields) {
+    values.push_back(static_cast<ObjectType *>(qualifiedType.getType())->getDefaultValue());
   }
   return llvm::ConstantStruct::get(getLLVMType(), values);
 }
 UnionType::UnionType(const std::string &tag)
     : mLLVMType(llvm::StructType::create(AST::getContext(), tag)), CompoundType(tag) {}
 
-llvm::StructType *UnionType::getLLVMType() const {
+llvm::StructType *UnionType::getLLVMType() {
   return mLLVMType;
 }
 void UnionType::setBody(SymbolTable &&table) {
   if (table.empty()) return;
   mTable = std::move(table);
   mOrderedFields.resize(mTable.size());
-  for (const auto &pair : mTable) {
-    if (const auto *obj = dynamic_cast<const ObjectSymbol *>(pair.second)) {
-      if (const auto *type = dynamic_cast<const ObjectType *>(obj->getQualifiedType().getType())) {
+  for (auto &pair : mTable) {
+    if (auto *obj = dynamic_cast<ObjectSymbol *>(pair.second)) {
+      if (auto *type = dynamic_cast<ObjectType *>(obj->getQualifiedType().getType())) {
         mOrderedFields.insert(mOrderedFields.begin() + obj->getIndex(), obj->getQualifiedType());
         auto size = type->getSizeInBits();
         if (size > mSizeInBits) {
@@ -486,8 +486,8 @@ void UnionType::setBody(SymbolTable &&table) {
   mLLVMType->setBody({mBigestType->getLLVMType()});
   mComplete = true;
 }
-bool UnionType::compatible(const Type *type) const {
-  const auto *st = dynamic_cast<const UnionType *>(type);
+bool UnionType::compatible(Type *type) {
+  auto *st = dynamic_cast<UnionType *>(type);
   if (!Type::compatible(type) || !st || st->mTagName.empty() || mTagName.empty() || st->mTagName != mTagName
       || !st->complete() || !complete() || mTable.size() != st->mTable.size()) {
     return false;
@@ -510,10 +510,10 @@ bool UnionType::compatible(const Type *type) const {
     return true;
   }
 }
-unsigned int UnionType::getSizeInBits() const {
+unsigned int UnionType::getSizeInBits() {
   return mSizeInBits;
 }
-Value UnionType::initializerCodegen(InitializerAST *ast) const {
+Value UnionType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
   if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
     const auto &initializers = list->initializers;
@@ -529,33 +529,33 @@ Value UnionType::initializerCodegen(InitializerAST *ast) const {
   }
   return Value(QualifiedType(this, {}), false, result);
 }
-bool UnionType::complete() const {
+bool UnionType::complete() {
   return mComplete;
 }
-llvm::Constant *UnionType::getDefaultValue() const {
+llvm::Constant *UnionType::getDefaultValue() {
   return llvm::ConstantStruct::get(getLLVMType(), {mBigestType->getDefaultValue()});
 }
 void EnumerationType::setBody(SymbolTable &&table) {
   mTable = std::move(table);
 }
 EnumerationType::EnumerationType(const std::string &tag) : CompoundType(tag) {}
-llvm::Type *EnumerationType::getLLVMType() const {
+llvm::Type *EnumerationType::getLLVMType() {
   return nullptr;
 }
-bool EnumerationType::complete() const {
+bool EnumerationType::complete() {
   return mComplete;
 }
-unsigned int EnumerationType::getSizeInBits() const {
+unsigned int EnumerationType::getSizeInBits() {
   throw std::runtime_error("WTF: get size in bits of enumeration type");
 }
-Value EnumerationType::initializerCodegen(InitializerAST *ast) const {
+Value EnumerationType::initializerCodegen(InitializerAST *ast) {
   throw std::runtime_error("WTF: initializerCodegen of enumeration type");
 }
-llvm::Constant *EnumerationType::getDefaultValue() const {
+llvm::Constant *EnumerationType::getDefaultValue() {
   throw std::runtime_error("WTF: getDefaultValue of enumeration type");
 }
 
-Value ScalarType::initializerCodegen(InitializerAST *ast) const {
+Value ScalarType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
   if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(ast->ast.get())) {
     auto v = exp->codegen();

@@ -1,8 +1,8 @@
 #include <sema/types.h>
 #include <sema/qualifiedType.h>
-QualifiedType::QualifiedType(const Type *type, std::set<TypeQualifier> qualifiers)
+QualifiedType::QualifiedType(Type *type, std::set<TypeQualifier> qualifiers)
     : mType(type), mQualifiers(move(qualifiers)) {}
-const Type *QualifiedType::getType() const {
+Type * QualifiedType::getType() {
   return mType;
 }
 const std::set<TypeQualifier> &QualifiedType::getQualifiers() const {
@@ -29,7 +29,7 @@ bool QualifiedType::isVolatile() const {
 bool QualifiedType::isConst() const {
   return contains(TypeQualifier::kCONST);
 }
-bool QualifiedType::compatible(const QualifiedType &qualifiedType) const {
+bool QualifiedType::compatible(QualifiedType &qualifiedType) const {
   return qualifiedType.getType()->compatible(mType) && qualifiedType.getQualifiers() == mQualifiers;
 }
 const bool QualifiedType::isSub(const std::set<TypeQualifier> &set) const {

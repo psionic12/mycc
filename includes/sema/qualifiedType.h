@@ -32,11 +32,11 @@ class EnumerationMemberType;
 
 class QualifiedType {
  private:
-  const Type *mType = nullptr;
+  Type *mType = nullptr;
   std::set<TypeQualifier> mQualifiers{};
  public:
   QualifiedType() = default;
-  const Type *getType() const;
+  Type * getType();
   const std::set<TypeQualifier> &getQualifiers() const;
   const bool contains(TypeQualifier qualifier) const;
   const bool isSub(const std::set<TypeQualifier> &set) const;
@@ -44,9 +44,9 @@ class QualifiedType {
   void addQualifiers(const std::set<TypeQualifier> &typeQualifers);
   bool isConst() const;
   bool isVolatile() const;
-  QualifiedType(const Type *type, std::set<TypeQualifier> qualifiers);
+  QualifiedType(Type *type, std::set<TypeQualifier> qualifiers);
   bool operator==(const QualifiedType &qualifiedType) const;
   bool operator!=(const QualifiedType &qualifiedType) const;
-  bool compatible(const QualifiedType &qualifiedType) const;
+  bool compatible(QualifiedType &qualifiedType) const;
 };
 #endif //MYCCPILER_QUALIFIEDTYPE_H

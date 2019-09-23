@@ -15,49 +15,48 @@ class AST;
 class InitializerAST;
 
 class Type {
- private:
  public:
   virtual ~Type() = default;
-  virtual bool compatible(const Type *type) const;
-  virtual bool complete() const;
-  virtual llvm::Type *getLLVMType() const = 0;
-  virtual llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const;
+  virtual bool compatible(Type *type);
+  virtual bool complete();
+  virtual llvm::Type *getLLVMType() = 0;
+  virtual llvm::Value *cast(Type *type, llvm::Value *value, const AST *ast);
 };
 
 class ObjectType : public Type {
  public:
-  virtual unsigned int getSizeInBits() const = 0;
-  virtual Value initializerCodegen(InitializerAST *ast) const = 0;
-  virtual llvm::Constant *getDefaultValue() const = 0;
+  virtual unsigned int getSizeInBits() = 0;
+  virtual Value initializerCodegen(InitializerAST *ast) = 0;
+  virtual llvm::Constant *getDefaultValue() = 0;
 };
 
 class ScalarType : public ObjectType {
  public:
-  Value initializerCodegen(InitializerAST *ast) const override;
+  Value initializerCodegen(InitializerAST *ast) override;
 };
 class ArithmeticType : public ScalarType {};
 class AggregateType : public ObjectType {};
 
 class IntegerType : public ArithmeticType {
  public:
-  unsigned int getSizeInBits() const;
-  static const IntegerType &sCharType;
-  static const IntegerType sShortIntType;
-  static const IntegerType sIntType;
-  static const IntegerType sLongIntType;
-  static const IntegerType sLongLongIntType;
-  static const IntegerType sUnsignedCharType;
-  static const IntegerType sUnsignedShortIntType;
-  static const IntegerType sUnsignedIntType;
-  static const IntegerType sUnsignedLongIntType;
-  static const IntegerType sUnsignedLongLongIntType;
-  static const IntegerType sOneBitBoolIntType;// used for llvm i1 only
-  llvm::IntegerType *getLLVMType() const override;
+  unsigned int getSizeInBits();
+  static IntegerType &sCharType;
+  static IntegerType sShortIntType;
+  static IntegerType sIntType;
+  static IntegerType sLongIntType;
+  static IntegerType sLongLongIntType;
+  static IntegerType sUnsignedCharType;
+  static IntegerType sUnsignedShortIntType;
+  static IntegerType sUnsignedIntType;
+  static IntegerType sUnsignedLongIntType;
+  static IntegerType sUnsignedLongLongIntType;
+  static IntegerType sOneBitBoolIntType;// used for llvm i1 only
+  llvm::IntegerType *getLLVMType() override;
   llvm::APInt getAPInt(uint64_t value) const;
   bool isSigned() const;
-  llvm::Value *cast(const Type *targetTy, llvm::Value *value, const AST *ast) const;
-  std::pair<const IntegerType *, llvm::Value *> promote(llvm::Value *value, AST *ast) const;
-  llvm::Constant *getDefaultValue() const override;
+  llvm::Value *cast(Type *targetTy, llvm::Value *value, const AST *ast);
+  std::pair<IntegerType *, llvm::Value *> promote(llvm::Value *value, AST *ast);
+  llvm::Constant *getDefaultValue() override;
  private:
   unsigned int mSizeInBits;
   bool mSigned;
@@ -67,16 +66,16 @@ class IntegerType : public ArithmeticType {
 
 class FloatingType : public ArithmeticType {
  public:
-  static const FloatingType sFloatType;
-  static const FloatingType sDoubleType;
-  static const FloatingType sLongDoubleType;
-  llvm::Type *getLLVMType() const override;
-  unsigned int getSizeInBits() const override;
+  static FloatingType sFloatType;
+  static FloatingType sDoubleType;
+  static FloatingType sLongDoubleType;
+  llvm::Type *getLLVMType() override;
+  unsigned int getSizeInBits() override;
   llvm::APFloat getAPFloat(long double) const;
-  llvm::Value *cast(const Type *type,
+  llvm::Value *cast(Type *type,
                     llvm::Value *value,
-                    const AST *ast) const;
-  llvm::Constant *getDefaultValue() const override;
+                    const AST *ast);
+  llvm::Constant *getDefaultValue() override;
  private:
   FloatingType(unsigned int mSizeInBits);
   unsigned int mSizeInBits;
@@ -84,34 +83,34 @@ class FloatingType : public ArithmeticType {
 
 class VoidType : public ObjectType {
  public:
-  static const VoidType sVoidType;
-  bool complete() const override;
-  llvm::Type *getLLVMType() const override;
-  unsigned int getSizeInBits() const override;
-  Value initializerCodegen(InitializerAST *ast) const override;
-  llvm::Constant *getDefaultValue() const override;
+  static VoidType sVoidType;
+  bool complete() override;
+  llvm::Type *getLLVMType() override;
+  unsigned int getSizeInBits() override;
+  Value initializerCodegen(InitializerAST *ast) override;
+  llvm::Constant *getDefaultValue() override;
 };
 
 class ImplicitPointerType {
  public:
   virtual ~ImplicitPointerType() = default;
-  virtual const QualifiedType &getReferencedQualifiedType() const = 0;
+  virtual QualifiedType &getReferencedQualifiedType() = 0;
 };
 
 class PointerType : public ScalarType, public ImplicitPointerType {
  public:
   PointerType(QualifiedType referencedQualifiedType);
-  const Type *getReferencedType() const;
-  llvm::PointerType *getLLVMType() const override;
-  unsigned int getSizeInBits() const override;
-  const QualifiedType &getReferencedQualifiedType() const override;
-  llvm::Value *cast(const Type *type,
+  Type *getReferencedType();
+  llvm::PointerType *getLLVMType() override;
+  unsigned int getSizeInBits() override;
+  QualifiedType &getReferencedQualifiedType() override;
+  llvm::Value *cast(Type *type,
                     llvm::Value *value,
-                    const AST *ast) const;
-  bool complete() const override;
-  bool compatible(const Type *type) const override;
-  const static IntegerType *const sAddrType;
-  llvm::Constant *getDefaultValue() const override;
+                    const AST *ast);
+  bool complete() override;
+  bool compatible(Type *type) override;
+  static IntegerType * sAddrType;
+  llvm::Constant *getDefaultValue() override;
  protected:
   QualifiedType mReferencedQualifiedType;
 };
@@ -119,12 +118,12 @@ class PointerType : public ScalarType, public ImplicitPointerType {
 class FunctionType : public Type, public ImplicitPointerType {
  public:
   FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg);
-  QualifiedType getReturnType() const;
-  const std::vector<QualifiedType> &getParameters() const;
-  llvm::FunctionType *getLLVMType() const override;
-  bool compatible(const Type *type) const override;
+  QualifiedType getReturnType();
+  std::vector<QualifiedType> &getParameters();
+  llvm::FunctionType *getLLVMType() override;
+  bool compatible(Type *type) override;
   bool hasVarArg() const;
-  const QualifiedType &getReferencedQualifiedType() const override;
+  QualifiedType &getReferencedQualifiedType() override;
  private:
   bool mVarArg;
   QualifiedType mReturnType;
@@ -135,18 +134,18 @@ class FunctionType : public Type, public ImplicitPointerType {
 class ArrayType : public AggregateType, public ImplicitPointerType {
  public:
   ArrayType(QualifiedType elementType, unsigned int size);
-  bool complete() const override;
+  bool complete() override;
   void setSize(unsigned int size);
-  llvm::ArrayType *getLLVMType() const override;
-  bool compatible(const Type *type) const override;
-  const QualifiedType &getReferencedQualifiedType() const;
-  Value initializerCodegen(InitializerAST *ast) const override;
-  llvm::Constant *getDefaultValue() const override;
-  unsigned int getSizeInBits() const override;
-  llvm::Value *cast(const Type *type, llvm::Value *value, const AST *ast) const override;
+  llvm::ArrayType *getLLVMType() override;
+  bool compatible(Type *type) override;
+  QualifiedType &getReferencedQualifiedType();
+  Value initializerCodegen(InitializerAST *ast) override;
+  llvm::Constant *getDefaultValue() override;
+  unsigned int getSizeInBits() override;
+  llvm::Value *cast(Type *type, llvm::Value *value, const AST *ast) override;
  private:
   int64_t mSize = 0; // same with llvm
-  const QualifiedType mElementType;
+  QualifiedType mElementType;
 };
 
 class CompoundType {
@@ -166,13 +165,13 @@ class StructType : public CompoundType, public AggregateType {
  public:
   StructType() = default;
   StructType(const std::string &tag);
-  llvm::StructType *getLLVMType() const override;
+  llvm::StructType *getLLVMType() override;
   void setBody(SymbolTable &&table) override;
-  bool compatible(const Type *type) const override;
-  Value initializerCodegen(InitializerAST *ast) const override;
-  bool complete() const override;
-  unsigned int getSizeInBits() const override;
-  llvm::Constant *getDefaultValue() const override;
+  bool compatible(Type *type) override;
+  Value initializerCodegen(InitializerAST *ast) override;
+  bool complete() override;
+  unsigned int getSizeInBits() override;
+  llvm::Constant *getDefaultValue() override;
  private:
   llvm::StructType *mLLVMType;
   std::vector<QualifiedType> mOrderedFields;
@@ -182,16 +181,16 @@ class UnionType : public CompoundType, public ObjectType {
  public:
   UnionType() = default;
   UnionType(const std::string &tag);
-  llvm::StructType *getLLVMType() const override;
+  llvm::StructType *getLLVMType() override;
   void setBody(SymbolTable &&table) override;
-  bool compatible(const Type *type) const override;
-  unsigned int getSizeInBits() const override;
-  bool complete() const override;
-  Value initializerCodegen(InitializerAST *ast) const override;
-  llvm::Constant *getDefaultValue() const override;
+  bool compatible(Type *type) override;
+  unsigned int getSizeInBits() override;
+  bool complete() override;
+  Value initializerCodegen(InitializerAST *ast) override;
+  llvm::Constant *getDefaultValue() override;
  private:
   llvm::StructType *mLLVMType;
-  const ObjectType *mBigestType;
+  ObjectType *mBigestType;
   std::vector<QualifiedType> mOrderedFields;
 };
 
@@ -200,18 +199,18 @@ class EnumerationType : public CompoundType, public ObjectType {
   EnumerationType() = default;
   EnumerationType(const std::string &tag);
   void setBody(SymbolTable &&table) override;
-  llvm::Type *getLLVMType() const override;
-  bool complete() const override;
-  unsigned int getSizeInBits() const override;
-  Value initializerCodegen(InitializerAST *ast) const override;
-  llvm::Constant *getDefaultValue() const override;
+  llvm::Type *getLLVMType() override;
+  bool complete() override;
+  unsigned int getSizeInBits() override;
+  Value initializerCodegen(InitializerAST *ast) override;
+  llvm::Constant *getDefaultValue() override;
 };
 
 class EnumerationMemberType : public IntegerType {
  public:
-  EnumerationMemberType(const EnumerationType *enumType) : mEnumerationType(enumType), IntegerType(32, true) {}
+  EnumerationMemberType(EnumerationType *enumType) : mEnumerationType(enumType), IntegerType(32, true) {}
  private:
-  const EnumerationType *mEnumerationType;
+  EnumerationType *mEnumerationType;
 };
 #endif //MYCCPILER_TYPES_H
 

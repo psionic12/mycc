@@ -89,7 +89,7 @@ class ObjectSymbol : public ISymbol {
     }
   }
   void setValue(llvm::Value *value);
-  const QualifiedType &getQualifiedType() const {
+  QualifiedType &getQualifiedType() {
     return mQualifiedType;
   }
   unsigned getIndex() const {
@@ -106,12 +106,12 @@ class ObjectSymbol : public ISymbol {
 
 class FunctionSymbol : public ISymbol {
  public:
-  FunctionSymbol(const FunctionType *type, llvm::Function *value, const Token *token)
+  FunctionSymbol(FunctionType *type, llvm::Function *value, const Token *token)
       : mFunctionType(type), mFunction(value), ISymbol(token) {}
   SymbolKind getKind() const override {
     return SymbolKind::FUNCTION;
   }
-  const FunctionType *getType() const {
+  FunctionType * getType() const {
     return mFunctionType;
   }
   llvm::Function *getValue() override {
@@ -121,7 +121,7 @@ class FunctionSymbol : public ISymbol {
     mFunction = value;
   }
  private:
-  const FunctionType *mFunctionType;
+  FunctionType *mFunctionType;
   llvm::Function *mFunction;
 };
 
@@ -193,7 +193,7 @@ class EnumConstSymbol : public ISymbol {
   EnumConstSymbol(std::unique_ptr<EnumerationMemberType> &&enumType,
                   const Token *token, llvm::ConstantInt *index)
       : ISymbol(token), mEnumType(std::move(enumType)), mIndex(index) {}
-  const EnumerationMemberType *getType() const {
+  EnumerationMemberType * getType() const {
     return mEnumType.get();
   }
   int64_t getIndex() const {

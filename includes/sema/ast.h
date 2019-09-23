@@ -181,7 +181,7 @@ class IExpression : public AST {
 class StringAST : public AST {
  public:
   StringAST(const Token &token);
-  const ArrayType * getType() const;
+  ArrayType * getType() const;
   const Token &getToken() const;
  private:
   std::unique_ptr<ArrayType> mType;
@@ -377,7 +377,7 @@ class EnumeratorAST : public AST {
   const nt<IdentifierAST> id;
   const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
-  EnumConstSymbol *codegen(const EnumerationType *enumerationType, int64_t index);
+  EnumConstSymbol *codegen(EnumerationType *enumerationType, int64_t index);
  private:
   std::unique_ptr<EnumConstSymbol> mSymbol;
 };
@@ -386,7 +386,7 @@ class EnumeratorListAST : public AST {
   EnumeratorListAST(nts<EnumeratorAST> enumerator);
   const nts<EnumeratorAST> enumerators;
   void print(int indent) override;
-  std::vector<EnumConstSymbol *> codegen(const EnumerationType *enumType);
+  std::vector<EnumConstSymbol *> codegen(EnumerationType *enumType);
 };
 class ParameterDeclarationAST : public AST {
  public:
@@ -462,7 +462,7 @@ class AssignmentExpressionAST : public IExpression {
   const nt<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
   Value codegen() override;
-  static llvm::Value *eqCodegen(const Value &lhs, const Value &rhs, AST *lhsAST, AST *rhsAST);
+  static llvm::Value *eqCodegen(Value &lhs, Value &rhs, AST *lhsAST, AST *rhsAST);
 };
 class PrimaryExpressionAST : public IExpression {
  public:
@@ -719,12 +719,10 @@ class BinaryOperatorAST : public IBinaryOperationAST {
       : mLeft(std::move(left)), mOp(op), mRight(std::move(right)) {}
   void print(int indent) override;
   Value codegen() override;
-  static Value codegen(const Value &lhs, const Value &rhs, InfixOp op, const AST *lAST, const AST *rAST);
-  static std::tuple<const Type *,
-                    llvm::Value *,
-                    llvm::Value *> UsualArithmeticConversions(const Value &lhs,
-                                                              const Value &rhs,
-                                                              const AST *ast);
+  static Value codegen(Value &lhs, Value &rhs, InfixOp op, const AST *lAST, const AST *rAST);
+  static std::tuple<Type *, llvm::Value *, llvm::Value *> UsualArithmeticConversions(Value &lhs,
+                                                                                     Value &rhs,
+                                                                                     AST *ast);
  protected:
   nt<IBinaryOperationAST> mLeft;
   Terminal<InfixOp> mOp;
@@ -752,7 +750,7 @@ class DirectDeclaratorAST : public AST {
  public:
   DirectDeclaratorAST();
   virtual const Token *getIdentifier() = 0;
-  virtual ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) = 0;
+  virtual ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) = 0;
 };
 
 class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
@@ -761,7 +759,7 @@ class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
   const nt<IdentifierAST> identifier;
   void print(int indent) override;
   const Token *getIdentifier() override;
-  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
+  ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) override;
  private:
   std::unique_ptr<ISymbol> mSymbol;
 };
@@ -772,7 +770,7 @@ class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
   const nt<DeclaratorAST> declarator;
   void print(int indent) override;
   const Token *getIdentifier() override;
-  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
+  ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) override;
 };
 
 class ArrayDeclaratorAST : public DirectDeclaratorAST {
@@ -782,7 +780,7 @@ class ArrayDeclaratorAST : public DirectDeclaratorAST {
   const nt<ConstantExpressionAST> constantExpression;
   void print(int indent) override;
   const Token *getIdentifier() override;
-  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
+  ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) override;
  private:
   std::unique_ptr<ArrayType> mArrayType;
 };
@@ -795,7 +793,7 @@ class FunctionDeclaratorAST : public DirectDeclaratorAST {
   const nt<ParameterListAST> parameterList;
   void print(int indent) override;
   const Token *getIdentifier() override;
-  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType) override;
+  ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) override;
  private:
   std::unique_ptr<FunctionType> mFunctionType;
 };
@@ -806,7 +804,7 @@ class PointerAST : public AST {
   const nts<TypeQualifierAST> type_qualifiers;
   const nt<PointerAST> pointer;
   void print(int indent) override;
-  const QualifiedType codegen(const QualifiedType &derivedType);
+  QualifiedType codegen(QualifiedType derivedType);
  private:
   std::unique_ptr<PointerType> mPointerType;
 };
@@ -862,7 +860,7 @@ class StructOrUnionSpecifierAST : public AST {
   const nts<StructDeclarationAST> declarations;
   void print(int indent) override;
   const ObjectType *type;
-  const ObjectType *codegen();
+  ObjectType * codegen();
  private:
   std::unique_ptr<TagSymbol> mSymbol;
 };
@@ -888,7 +886,7 @@ class TypeSpecifiersAST : public AST {
   nts<TypeSpecifierAST> type_specifiers;
   bool empty();
   void print(int indent) override;
-  const ObjectType *type;
+  ObjectType *type;
   QualifiedType codegen();
 };
 class SpecifierQualifierAST : public AST {
@@ -909,11 +907,11 @@ class StorageClassSpecifierAST : public AST {
 class DeclaratorAST : public AST {
  public:
   DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator);
-  const nt<PointerAST> pointer;
+  nt<PointerAST> pointer;
   const nt<DirectDeclaratorAST> direct_declarator;
   void print(int indent) override;
   const Token *getIdentifier() const;
-  ISymbol *codegen(StorageSpecifier storageSpecifier, const QualifiedType &derivedType);
+  ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType);
 };
 class DeclarationSpecifiersAST : public AST {
  public:
