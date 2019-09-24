@@ -4,7 +4,7 @@ Value::Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
     : mQualifiedType(std::move(qualifiedType)), mLValue(lvalue), mValue(value) {
 }
 llvm::Value *Value::getValue() {
-  if (isLValue() && !dynamic_cast<PointerType *>(getType())) {
+  if (isLValue()) {
     return AST::getBuilder().CreateLoad(mValue, isVolatile());
   } else {
     return mValue;

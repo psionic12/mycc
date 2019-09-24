@@ -1813,9 +1813,10 @@ void StringPrimaryExpressionAST::print(int indent) {
 }
 Value StringPrimaryExpressionAST::codegen() {
   mPointerType = std::make_unique<PointerType>(string->getType()->getReferencedQualifiedType());
-  return Value(QualifiedType(mPointerType.get(), {}),
-               true,
-               sBuilder.CreateGlobalStringPtr(string->getToken().getValue()));
+  auto *ptr = sBuilder.CreateGlobalStringPtr(string->getToken().getValue());
+  auto *alloca = sBuilder.CreateAlloca(ptr->getType());
+  sBuilder.CreateStore(ptr, alloca);
+  return Value(QualifiedType(mPointerType.get(), {}), true, alloca);
 }
 StringPrimaryExpressionAST::StringPrimaryExpressionAST(nt<StringAST>
                                                        string) : string(std::move(string)) {}
@@ -1870,25 +1871,13 @@ Value ArrayPostfixExpressionAST::codegen() {
   llvm::Value *value = nullptr;
   auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(rhs.getValue());
   auto index = constantInt->getSExtValue();
-  if (index < 0) {
-    //TODO Warning index is before 0
-    value = nullptr;
-  } else if (const auto *globalVariable = llvm::dyn_cast<llvm::GlobalVariable>(lhs.getValue())) {
-    if (globalVariable->hasInitializer()) {
-      if (const auto *constantArray = llvm::dyn_cast<llvm::ConstantArray>(globalVariable->getInitializer())) {
-        value = constantArray->getAggregateElement(constantInt);
-      }
-    }
-  }
 
-  if (!value) {
-    if (sObjectTable->getScopeKind() == ScopeKind::BLOCK) {
-      value = sBuilder.CreateGEP(lhs.getType()->getLLVMType(),
-                                 lhs.getPtr(),
-                                 {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)), constantInt});
-    } else {
-      throw std::runtime_error("WTF: array position query in other scope? we may need global constructor here");
-    }
+  if (sObjectTable->getScopeKind() == ScopeKind::BLOCK) {
+    value = sBuilder.CreateGEP(lhs.getType()->getLLVMType(),
+                               lhs.getPtr(),
+                               {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)), constantInt});
+  } else {
+    throw std::runtime_error("WTF: array position query in other scope? we may need global constructor here");
   }
   return Value(pointerType->getReferencedQualifiedType(), true, value);
 }
@@ -2162,17 +2151,20 @@ Value UnaryOperatorExpressionAST::codegen() {
   Type *type = value.getType();
   llvm::Value *newVal = value.getValue();
   switch (mOp.type) {
-    case UnaryOp::AMP:
+    case UnaryOp::AMP: {
       //TODO is checking lvalue fit constaints of 6.5.3.2 Address and indirection operators?
       if (!value.isLValue()) {
         throw SemaException("only lvalue can access address", mOp.token);
       }
       mPointerType = std::make_unique<PointerType>(value.getQualifiedType());
       type = mPointerType.get();
-      if (!llvm::cast<llvm::PointerType>(newVal->getType())) {
+      if (!llvm::cast<llvm::PointerType>(value.getPtr()->getType())) {
         throw std::runtime_error("WTF: expression value is not llvm::PointerType");
       }
-      break;
+      auto *alloca = sBuilder.CreateAlloca(type->getLLVMType());
+      sBuilder.CreateStore(value.getPtr(), alloca);
+      return Value(QualifiedType(type, {}), true, alloca);
+    }
     case UnaryOp::STAR:
       if (auto *pointerType = dynamic_cast< PointerType *>(type)) {
         return Value(pointerType->getReferencedQualifiedType(), true, newVal);
@@ -2307,7 +2299,7 @@ Value BinaryOperatorAST::codegen() {
   return codegen(lhs, rhs, mOp.type, mLeft.get(), mRight.get());
 }
 std::tuple<Type *, llvm::Value *, llvm::Value *>
-BinaryOperatorAST::UsualArithmeticConversions(Value &lhs, Value &rhs, AST *ast) {
+BinaryOperatorAST::UsualArithmeticConversions(Value &lhs, Value &rhs, const AST *ast) {
   Type *lType = lhs.getType();
   Type *rType = rhs.getType();
   llvm::Value *lValue = lhs.getValue();
@@ -2352,7 +2344,7 @@ BinaryOperatorAST::UsualArithmeticConversions(Value &lhs, Value &rhs, AST *ast) 
         }
       }
     }
-    throw SemaException("operands must be integer of float type", ast->involvedTokens());
+    throw SemaException("operands must be integer or float type", ast->involvedTokens());
   }
   return {lType, lValue, rValue};
 
@@ -2372,7 +2364,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
           && !dynamic_cast< ArithmeticType *>(rhs.getType())) {
         throw SemaException("Each of the operands shall have arithmetic type", lAST->involvedTokens());
       }
-      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
+      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
       if (dynamic_cast< IntegerType *>(type)) {
         return Value(QualifiedType(type, {}), false, sBuilder.CreateMul(lValue, rValue));
       } else {
@@ -2383,7 +2375,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
           && !dynamic_cast< ArithmeticType *>(rhs.getType())) {
         throw SemaException("Each of the operands shall have arithmetic type", lAST->involvedTokens());
       }
-      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
+      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
       if (auto *integerType = dynamic_cast< IntegerType *>(type)) {
         if (integerType->isSigned()) {
           return Value(QualifiedType(type, {}), false, sBuilder.CreateSDiv(lValue, rValue));
@@ -2398,7 +2390,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
           && !dynamic_cast< IntegerType *>(rhs.getType())) {
         throw SemaException("Each of the operands shall have arithmetic type", lAST->involvedTokens());
       }
-      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
+      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
       if (static_cast<const IntegerType *>(type)->isSigned()) {
         return Value(QualifiedType(type, {}), false, sBuilder.CreateSRem(lValue, rValue));
       } else {
@@ -2432,8 +2424,8 @@ Value BinaryOperatorAST::codegen(Value &lhs,
         }
       }
       if (dynamic_cast< ArithmeticType *>(lhs.getType())
-          || dynamic_cast< ArithmeticType *>(rhs.getType())) {
-        std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
+          && dynamic_cast< ArithmeticType *>(rhs.getType())) {
+        std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
         if (dynamic_cast< IntegerType *>(type)) {
           return Value(QualifiedType(type, {}), false, sBuilder.CreateAdd(lValue, rValue));
         } else {
@@ -2469,8 +2461,8 @@ Value BinaryOperatorAST::codegen(Value &lhs,
                                                            negativeValue}));
         }
       } else if (dynamic_cast< ArithmeticType *>(lhs.getType())
-          || dynamic_cast< ArithmeticType *>(rhs.getType())) {
-        std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
+          && dynamic_cast< ArithmeticType *>(rhs.getType())) {
+        std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
         if (dynamic_cast< IntegerType *>(type)) {
           return Value(QualifiedType(type, {}), false, sBuilder.CreateSub(lValue, rValue));
         } else {
@@ -2528,7 +2520,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
             && !dynamic_cast< ArithmeticType *>(rhs.getType())) {
           throw SemaException("Each of the operands shall have real type", lAST->involvedTokens());
         }
-        std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
+        std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
         if (auto *intergerType = dynamic_cast< IntegerType *>(type)) {
           isSigned = intergerType->isSigned();
           goto icmp;
@@ -2593,7 +2585,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
       llvm::Value *result;
       if (dynamic_cast< ArithmeticType *>(lhs.getType())
           && dynamic_cast< ArithmeticType *>(lhs.getType())) {
-        std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
+        std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
         if (dynamic_cast< IntegerType *>(type)) {
           if (op == InfixOp::EQEQ) {
             result = sBuilder.CreateICmpEQ(lValue, rValue);
@@ -2642,7 +2634,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
       if (!integer1 || !integer2) {
         throw SemaException("both operands must be integer type", lAST->involvedTokens());
       }
-      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, nullptr);
+      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
       llvm::Value *result;
       if (op == InfixOp::AMP) {
         result = sBuilder.CreateAnd(lValue, rValue);

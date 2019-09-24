@@ -726,7 +726,7 @@ class BinaryOperatorAST : public IBinaryOperationAST {
   static Value codegen(Value &lhs, Value &rhs, InfixOp op, const AST *lAST, const AST *rAST);
   static std::tuple<Type *, llvm::Value *, llvm::Value *> UsualArithmeticConversions(Value &lhs,
                                                                                      Value &rhs,
-                                                                                     AST *ast);
+                                                                                     const AST *ast);
  protected:
   nt<IBinaryOperationAST> mLeft;
   Terminal<InfixOp> mOp;
