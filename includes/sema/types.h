@@ -20,7 +20,7 @@ class Type {
   virtual bool compatible(Type *type);
   virtual bool complete();
   virtual llvm::Type *getLLVMType() = 0;
-  virtual llvm::Value *cast(Type *type, llvm::Value *value, const AST *ast);
+  virtual llvm::Value *cast(Type *toType, llvm::Value *value, const AST *ast);
 };
 
 class ObjectType : public Type {
@@ -72,7 +72,7 @@ class FloatingType : public ArithmeticType {
   llvm::Type *getLLVMType() override;
   unsigned int getSizeInBits() override;
   llvm::APFloat getAPFloat(long double) const;
-  llvm::Value *cast(Type *type,
+  llvm::Value *cast(Type *toType,
                     llvm::Value *value,
                     const AST *ast);
   llvm::Constant *getDefaultValue() override;
@@ -98,7 +98,7 @@ class PointerType : public ScalarType {
   llvm::PointerType *getLLVMType() override;
   unsigned int getSizeInBits() override;
   QualifiedType &getReferencedQualifiedType();
-  llvm::Value *cast(Type *type,
+  llvm::Value *cast(Type *toType,
                     llvm::Value *value,
                     const AST *ast);
   bool complete() override;
@@ -136,7 +136,7 @@ class ArrayType : public AggregateType {
   Value initializerCodegen(InitializerAST *ast) override;
   llvm::Constant *getDefaultValue() override;
   unsigned int getSizeInBits() override;
-  llvm::Value *cast(Type *type, llvm::Value *value, const AST *ast) override;
+  llvm::Value *cast(Type *toType, llvm::Value *value, const AST *ast) override;
  private:
   int64_t mSize = 0; // same with llvm
   QualifiedType mElementType;

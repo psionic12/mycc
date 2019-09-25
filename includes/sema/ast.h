@@ -462,7 +462,11 @@ class AssignmentExpressionAST : public IExpression {
   const nt<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
   Value codegen() override;
-  static llvm::Value *eqCodegen(Value &lhs, Value &rhs, AST *lhsAST, AST *rhsAST);
+  static llvm::Value *eqCodegen(Value &lhs,
+                                 Value &rhs,
+                                 AST *lhsAST,
+                                 AST *rhsAST,
+                                 bool isInitialization);
 };
 class PrimaryExpressionAST : public IExpression {
  public:

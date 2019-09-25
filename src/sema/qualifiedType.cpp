@@ -35,7 +35,7 @@ bool QualifiedType::compatible(QualifiedType &qualifiedType) const {
 const bool QualifiedType::isSub(const std::set<TypeQualifier> &set) const {
   auto i1 = mQualifiers.begin();
   auto i2 = set.begin();
-  while (i2 != set.end() || i1 != set.end()) {
+  while (i2 != set.end() && i1 != mQualifiers.end()) {
     if (*i2 != *i1) {
       ++i1;
     } else {

@@ -13,8 +13,8 @@ class Value {
   // this checks if the qualifiers has type "const" (lvalue aspect)
   bool isConst() const;
   bool isVolatile() const;
-  // this checks if the llvm value is a constant (rvalue aspect)
-  llvm::Constant * isConatant();
+  // this checks if the llvm value is a constant data (rvalue aspect)
+  llvm::Constant * isConatantData();
   llvm::GlobalVariable* isGlobalVariable();
   bool isLValue() const;
   bool modifiable();

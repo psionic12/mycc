@@ -8,8 +8,8 @@ bool Type::compatible(Type *type) {
 bool Type::complete() {
   return true;
 }
-llvm::Value *Type::cast(Type *type, llvm::Value *value, const AST *ast) {
-  if (type != this) {
+llvm::Value *Type::cast(Type *toType, llvm::Value *value, const AST *ast) {
+  if (toType != this) {
     throw SemaException("cannot cast type", ast->involvedTokens());
   } else {
     return value;
@@ -111,26 +111,26 @@ llvm::APFloat FloatingType::getAPFloat(long double n) const {
   }
   //TODO implement long double
 }
-llvm::Value *FloatingType::cast(Type *type, llvm::Value *value, const AST *ast) {
+llvm::Value *FloatingType::cast(Type *toType, llvm::Value *value, const AST *ast) {
   auto &builder = AST::getBuilder();
   auto *module = AST::getModule();
   if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
     return llvm::ConstantFP::get(getLLVMType(), constantInt->getSExtValue());
   } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
     return llvm::ConstantFP::get(getLLVMType(), constantFp->getValueAPF().convertToDouble());
-  } else if (const auto *integerType = dynamic_cast<const IntegerType *>(type)) {
+  } else if (const auto *integerType = dynamic_cast<const IntegerType *>(toType)) {
     if (integerType->isSigned()) {
-      return builder.CreateFPToSI(value, type->getLLVMType());
+      return builder.CreateFPToSI(value, toType->getLLVMType());
     } else {
-      return builder.CreateFPToUI(value, type->getLLVMType());
+      return builder.CreateFPToUI(value, toType->getLLVMType());
     }
-  } else if (const auto *floatType = dynamic_cast<const FloatingType * >(type)) {
+  } else if (const auto *floatType = dynamic_cast<const FloatingType * >(toType)) {
     if (mSizeInBits > floatType->mSizeInBits) {
-      return builder.CreateFPTrunc(value, type->getLLVMType());
+      return builder.CreateFPTrunc(value, toType->getLLVMType());
     } else {
-      return builder.CreateFPExt(value, type->getLLVMType());
+      return builder.CreateFPExt(value, toType->getLLVMType());
     }
-  } else if (dynamic_cast<const VoidType *>(type)) {
+  } else if (dynamic_cast<const VoidType *>(toType)) {
     return nullptr;
   } else {
     throw SemaException("cannot cast to float type", ast->involvedTokens());
@@ -228,7 +228,7 @@ Value ArrayType::initializerCodegen(InitializerAST *ast) {
     std::vector<llvm::Value *> values;
     for (const auto &initializer : initializers) {
       auto *v = static_cast<ObjectType *>(mElementType.getType())->initializerCodegen(initializer.get()).getValue();
-      if (!llvm::dyn_cast<llvm::Constant>(v)) {
+      if (!llvm::dyn_cast<llvm::ConstantData>(v)) {
         isAllConstant = false;
       }
       values.push_back(v);
@@ -274,8 +274,8 @@ llvm::Constant *ArrayType::getDefaultValue() {
 unsigned int ArrayType::getSizeInBits() {
   return mSize * static_cast<ObjectType *>(mElementType.getType())->getSizeInBits();
 }
-llvm::Value *ArrayType::cast(Type *type, llvm::Value *value, const AST *ast) {
-  if (this->compatible(type)) {
+llvm::Value *ArrayType::cast(Type *toType, llvm::Value *value, const AST *ast) {
+  if (this->compatible(toType)) {
     return value;
   } else {
     throw SemaException("cannot cast array type to target type", ast->involvedTokens());
@@ -311,14 +311,14 @@ bool PointerType::compatible(Type *type) {
     return false;
   }
 }
-llvm::Value *PointerType::cast(Type *type, llvm::Value *value, const AST *ast) {
+llvm::Value *PointerType::cast(Type *toType, llvm::Value *value, const AST *ast) {
   auto &builder = AST::getBuilder();
   auto *module = AST::getModule();
-  if (dynamic_cast<IntegerType *>(type)) {
-    return builder.CreatePtrToInt(value, type->getLLVMType());
-  } else if (dynamic_cast<PointerType *>(type)) {
-    return builder.CreateBitCast(value, type->getLLVMType());
-  } else if (dynamic_cast<VoidType *>(type)) {
+  if (dynamic_cast<IntegerType *>(toType)) {
+    return builder.CreatePtrToInt(value, toType->getLLVMType());
+  } else if (dynamic_cast<PointerType *>(toType)) {
+    return builder.CreateBitCast(value, toType->getLLVMType());
+  } else if (dynamic_cast<VoidType *>(toType)) {
     return nullptr;
   } else {
     throw SemaException("cannot cast to pointer type", ast->involvedTokens());
@@ -411,7 +411,7 @@ Value StructType::initializerCodegen(InitializerAST *ast) {
     auto iter = mOrderedFields.begin();
     for (const auto &initializer : initializers) {
       auto *v = static_cast<ObjectType *>(iter->getType())->initializerCodegen(initializer.get()).getValue();
-      if (!llvm::dyn_cast<llvm::Constant>(v)) {
+      if (!llvm::dyn_cast<llvm::ConstantData>(v)) {
         isAllConstant = false;
       }
       values.push_back(v);
@@ -558,7 +558,7 @@ Value ScalarType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
   if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(ast->ast.get())) {
     auto v = exp->codegen();
-    result = cast(v.getType(), v.getValue(), ast);
+    result = v.getType()->cast(this, v.getValue(), ast);
   } else {
     const auto &initializers = static_cast<InitializerListAST *>(ast->ast.get())->initializers;
     if (initializers.size() > 1) {

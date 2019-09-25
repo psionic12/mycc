@@ -54,11 +54,11 @@ bool Value::isConst() const {
 bool Value::isVolatile() const {
   return mQualifiedType.isVolatile();
 }
-llvm::Constant *Value::isConatant() {
+llvm::Constant *Value::isConatantData() {
   if (mLValue) {
     throw std::runtime_error("WTF: constant llvm value is a lvalue");
   }
-  return llvm::dyn_cast<llvm::Constant>(mValue);
+  return llvm::dyn_cast<llvm::ConstantData>(mValue);
 }
 llvm::GlobalVariable *Value::isGlobalVariable() {
   if (!mLValue) {

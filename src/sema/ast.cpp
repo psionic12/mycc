@@ -47,7 +47,7 @@ void TranslationUnitAST::codegen() {
     ds->codegen();
   }
   if (!globalVarInitBB->empty()) {
-    throw std::runtime_error("WTF: globalVarInitBB is not empty");
+//    throw std::runtime_error("WTF: globalVarInitBB is not empty");
   } else {
     globalVarInit->eraseFromParent();
   }
@@ -254,25 +254,12 @@ void DeclarationAST::codegen() {
               throw std::runtime_error("WTF: array type has non-global value");
             }
           }
-          if (auto *constantInitValue = llvm::dyn_cast<llvm::Constant>(initValue.getValue())) {
-            if (auto *global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
-              global->setInitializer(constantInitValue);
-            } else {
-//              sBuilder.CreateMemCpy(value,
-//                                    initValue,
-//                                    objtype->getSizeInBits() / 8,
-//                                    0,
-//                                    objSymbol->getQualifiedType().isVolatile());
-              sBuilder.CreateStore(initValue.getValue(), value);
-            }
-          } else {
-            if (llvm::dyn_cast<llvm::GlobalVariable>(value)) {
-              throw SemaException("initializer element is not a compile-time constant",
-                                  initPair.second->involvedTokens());
-            } else {
-              sBuilder.CreateStore(initValue.getValue(), value);
-            }
-          }
+          Value lhs = Value(objSymbol->getQualifiedType(), true, value);
+          AssignmentExpressionAST::eqCodegen(lhs,
+                                             initValue,
+                                             initPair.first.get(),
+                                             initPair.second.get(),
+                                             true);
         } else {
           throw SemaException("only object types can be initialized", initPair.first->involvedTokens());
         }
@@ -570,7 +557,7 @@ void ConstantExpressionAST::print(int indent) {
 }
 Value ConstantExpressionAST::codegen() {
   Value result = conditional_expression->codegen();
-  if (!llvm::dyn_cast<llvm::Constant>(result.getValue())) {
+  if (!result.isConatantData()) {
     throw SemaException("cannot envalue on compile time", conditional_expression->involvedTokens());
   }
   return result;
@@ -781,7 +768,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::SLASHEQ: {
@@ -791,7 +778,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::PERCENTEQ: {
@@ -801,7 +788,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::PLUSEQ: {
@@ -811,7 +798,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::SUBEQ: {
@@ -821,7 +808,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::LTLTEQ: {
@@ -831,7 +818,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::GTGTEQ: {
@@ -841,7 +828,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::AMPEQ: {
@@ -851,7 +838,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::CARETEQ: {
@@ -861,7 +848,7 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
         case AssignmentOp::BAREQ: {
@@ -871,10 +858,12 @@ Value AssignmentExpressionAST::codegen() {
                                                conditional_expression.get(),
                                                assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get());
+          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
           break;
         }
-        case AssignmentOp::EQ:result = eqCodegen(lhs, rhs, conditional_expression.get(), assignment_expression.get());
+        case AssignmentOp::EQ:
+          result =
+              eqCodegen(lhs, rhs, conditional_expression.get(), assignment_expression.get(), false);
           break;
       }
     }
@@ -889,14 +878,18 @@ Value AssignmentExpressionAST::codegen() {
 llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
                                                 Value &rhs,
                                                 AST *lhsAST,
-                                                AST *rhsAST) {
-  llvm::Value *rhsValue = lhs.getValue();
+                                                AST *rhsAST,
+                                                bool isInitialization) {
+  if (sObjectTable->getScopeKind() == ScopeKind::FILE) {
+    if (!rhs.isConatantData()) {
+      throw SemaException("initializer element is not a compile-time constant", rhsAST->involvedTokens());
+    }
+  }
+
+  llvm::Value *rhsValue = rhs.getValue();
   if (dynamic_cast<ArithmeticType *> (lhs.getType())
       && dynamic_cast<ArithmeticType *> (rhs.getType())) {
-    rhsValue =
-        static_cast<ArithmeticType *>(rhs.getType())->cast(lhs.getType(),
-                                                           rhsValue,
-                                                           rhsAST);
+    rhsValue = static_cast<ArithmeticType *>(rhs.getType())->cast(lhs.getType(), rhsValue, rhsAST);
   } else if (dynamic_cast< StructType *>(lhs.getType())
       && lhs.getQualifiedType().compatible(rhs.getQualifiedType())) {
   } else if (dynamic_cast< PointerType *>(lhs.getType())
@@ -918,11 +911,28 @@ llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
     } else {
       throw SemaException("pointers are not compatible", lhsAST->involvedTokens());
     }
+  } else if (dynamic_cast<ArrayType *> (lhs.getType())
+      && dynamic_cast<ArrayType *> (rhs.getType())) {
+    rhsValue = rhs.getValue();
   } else {
     throw SemaException("cannot assign", lhsAST->involvedTokens());
   }
-
-  sBuilder.CreateStore(rhs.getValue(), lhs.getPtr(), lhs.isVolatile());
+  auto *constantInitValue = rhs.isConatantData();
+  if (isInitialization && constantInitValue) {
+    if (auto *global = llvm::dyn_cast<llvm::GlobalVariable>(lhs.getPtr())) {
+      global->setInitializer(constantInitValue);
+      return nullptr;
+    } else {
+//              sBuilder.CreateMemCpy(value,
+//                                    initValue,
+//                                    objtype->getSizeInBits() / 8,
+//                                    0,
+//                                    objSymbol->getQualifiedType().isVolatile());
+      sBuilder.CreateStore(rhsValue, lhs.getPtr(), lhs.isVolatile());
+    }
+  } else {
+    sBuilder.CreateStore(rhsValue, lhs.getPtr(), lhs.isVolatile());
+  }
   return sBuilder.CreateLoad(lhs.getPtr(), lhs.isVolatile());
 }
 CharacterConstantAST::CharacterConstantAST(
@@ -2445,7 +2455,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
           }
           if (lp->complete() && lp->compatible(rp)) {
             auto *v1 = lp->cast(PointerType::sAddrType, lhs.getValue(), lAST);
-            auto *v2 = lp->cast(PointerType::sAddrType, rhs.getValue(), lAST);
+            auto *v2 = rp->cast(PointerType::sAddrType, rhs.getValue(), rAST);
             auto *v3 = sBuilder.CreateSub(v1, v2);
             auto *v4 = sBuilder.CreateUDiv(v3,
                                            llvm::ConstantInt::get(PointerType::sAddrType->getLLVMType(),
