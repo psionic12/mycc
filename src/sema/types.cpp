@@ -68,8 +68,17 @@ llvm::Value *IntegerType::cast(Type *targetTy, llvm::Value *value, const AST *as
     } else {
       return builder.CreateUIToFP(value, targetTy->getLLVMType());
     }
-  } else if (dynamic_cast<PointerType *>(targetTy)) {
-    return builder.CreateIntToPtr(value, targetTy->getLLVMType());
+  } else if (auto *pointerType = dynamic_cast<PointerType *>(targetTy)) {
+
+    if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
+      if (constInt->getSExtValue() == 0) {
+        return pointerType->getDefaultValue();
+      }
+    } else {
+//      return builder.CreateIntToPtr(value, targetTy->getLLVMType());
+      throw SemaException("you are setting an integer to a pointer directly, we usually don't do this",
+                          ast->involvedTokens());
+    }
     //TODO do I need extend the size?
   } else if (dynamic_cast<VoidType *>(targetTy)) {
     return nullptr;

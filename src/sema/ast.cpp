@@ -2712,12 +2712,9 @@ Value LogicalBinaryOperatorAST::codegen() {
       IntegerType::sOneBitBoolIntType.cast(&IntegerType::sIntType, phi, mRight.get());
   return Value(QualifiedType(&IntegerType::sIntType, {}), false, result);
 }
-IfSelectionStatementAST::IfSelectionStatementAST(nt<ExpressionAST>
-                                                 expression,
-                                                 nt<StatementAST>
-                                                 statement,
-                                                 nt<StatementAST>
-                                                 elseStatement)
+IfSelectionStatementAST::IfSelectionStatementAST(nt<ExpressionAST> expression,
+                                                 nt<StatementAST> statement,
+                                                 nt<StatementAST> elseStatement)
     : mExpression(std::move(expression)), mStatement(std::move(statement)),
       mElseStatement(std::move(elseStatement)) {}
 void IfSelectionStatementAST::print(int indent) {
