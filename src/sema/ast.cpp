@@ -889,7 +889,7 @@ llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
   llvm::Value *rhsValue = rhs.getValue();
   if (dynamic_cast<ArithmeticType *> (lhs.getType())
       && dynamic_cast<ArithmeticType *> (rhs.getType())) {
-    rhsValue = static_cast<ArithmeticType *>(rhs.getType())->cast(lhs.getType(), rhsValue, rhsAST);
+    rhsValue = static_cast<ArithmeticType *>(rhs.getType())->castTo(lhs.getType(), rhsValue, rhsAST);
   } else if (dynamic_cast< StructType *>(lhs.getType())
       && lhs.getQualifiedType().compatible(rhs.getQualifiedType())) {
   } else if (dynamic_cast< PointerType *>(lhs.getType())
@@ -907,7 +907,7 @@ llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
         && p2->getReferencedQualifiedType().getType() == &VoidType::sVoidType) ||
         (dynamic_cast< ObjectType *>(p2->getReferencedQualifiedType().getType())
             && p1->getReferencedQualifiedType().getType() == &VoidType::sVoidType)) {
-      rhsValue = p2->cast(p1->getReferencedQualifiedType().getType(), rhsValue, rhsAST);
+      rhsValue = p2->castTo(p1->getReferencedQualifiedType().getType(), rhsValue, rhsAST);
     } else {
       throw SemaException("pointers are not compatible", lhsAST->involvedTokens());
     }
@@ -1927,6 +1927,7 @@ Value FunctionPostfixExpressionAST::codegen() {
   auto para = tFunction->getParameters().begin();
   auto arg = arguments.begin();
   std::vector<llvm::Value *> argumentValues;
+  llvm::Value* argumentValue = arg->getValue();
   while (arg != arguments.end()) {
     auto *argType = dynamic_cast< ObjectType *>(arg->getType());
     if (!argType) {
@@ -1940,8 +1941,14 @@ Value FunctionPostfixExpressionAST::codegen() {
         throw SemaException("arguments do not match function proto type", postfix_expression->involvedTokens());
       }
       ++para;
+    } else {
+      //default argument promotions
+      if (auto* arithmeticType = dynamic_cast<ArithmeticType*>(arg->getType())) {
+        argumentValue = arithmeticType->promote(arg->getValue(), argument_expression_list.get()).second;
+      }
     }
-    argumentValues.push_back(arg++->getValue());
+    argumentValues.push_back(argumentValue);
+    ++arg;
   }
   return Value(tFunction->getReturnType(), false, sBuilder.CreateCall(lhs.getPtr(), argumentValues));
 }
@@ -2276,15 +2283,15 @@ Value RealCastExpressionAST::codegen() {
   if (auto *integerType = dynamic_cast< IntegerType *>(operand.getType())) {
     return Value(QualifiedType(castType, {}),
                  false,
-                 integerType->cast(castType, operand.getValue(), mCastExpression.get()));
+                 integerType->castTo(castType, operand.getValue(), mCastExpression.get()));
   } else if (auto *floatType = dynamic_cast< FloatingType * >(operand.getType())) {
     return Value(QualifiedType(castType, {}),
                  false,
-                 floatType->cast(castType, operand.getValue(), mCastExpression.get()));
+                 floatType->castTo(castType, operand.getValue(), mCastExpression.get()));
   } else if (auto *pointerType = dynamic_cast< PointerType *>(operand.getType())) {
     return Value(QualifiedType(castType, {}),
                  false,
-                 pointerType->cast(castType, operand.getValue(), mCastExpression.get()));
+                 pointerType->castTo(castType, operand.getValue(), mCastExpression.get()));
   }
   throw SemaException(std::string("illegel cast"), involvedTokens());
   //TODO Conversions that involve pointers, other than where permitted by the constraints of 6.5.16.1, shall be specified by means of an explicit cast.
@@ -2319,7 +2326,7 @@ BinaryOperatorAST::UsualArithmeticConversions(Value &lhs, Value &rhs, const AST 
     if (auto *li = dynamic_cast< IntegerType *>(lType)) {
       if (auto *ri = dynamic_cast< IntegerType *>(rType)) {
         if (li->getSizeInBits() > ri->getSizeInBits()) {
-          rValue = ri->cast(li, rValue, ast);
+          rValue = ri->castTo(li, rValue, ast);
           rType = lType;
           break;
         } else if (li->getSizeInBits() == ri->getSizeInBits()) {
@@ -2328,27 +2335,27 @@ BinaryOperatorAST::UsualArithmeticConversions(Value &lhs, Value &rhs, const AST 
           }
           break;
         } else {
-          lValue = li->cast(ri, lValue, ast);
+          lValue = li->castTo(ri, lValue, ast);
           lType = rType;
           break;
         }
       } else if (auto *rf = dynamic_cast< FloatingType *>(rType)) {
-        lValue = li->cast(rf, lValue, ast);
+        lValue = li->castTo(rf, lValue, ast);
         break;
       }
     } else if (auto *lf = dynamic_cast< FloatingType *>(lType)) {
       if (auto *ri = dynamic_cast< IntegerType *>(rType)) {
-        rValue = ri->cast(lf, rValue, ast);
+        rValue = ri->castTo(lf, rValue, ast);
         break;
       } else if (auto *rf = dynamic_cast< FloatingType *>(rType)) {
         if (lf->getSizeInBits() > rf->getSizeInBits()) {
-          rValue = rf->cast(lf, rValue, ast);
+          rValue = rf->castTo(lf, rValue, ast);
           rType = lType;
           break;
         } else if (lf->getSizeInBits() == rf->getSizeInBits()) {
           break;
         } else {
-          lValue = lf->cast(rf, lValue, ast);
+          lValue = lf->castTo(rf, lValue, ast);
           lType = rType;
           break;
         }
@@ -2454,8 +2461,8 @@ Value BinaryOperatorAST::codegen(Value &lhs,
             throw SemaException("pointer in subtraction must point to object types", lAST->involvedTokens());
           }
           if (lp->complete() && lp->compatible(rp)) {
-            auto *v1 = lp->cast(PointerType::sAddrType, lhs.getValue(), lAST);
-            auto *v2 = rp->cast(PointerType::sAddrType, rhs.getValue(), rAST);
+            auto *v1 = lp->castTo(PointerType::sAddrType, lhs.getValue(), lAST);
+            auto *v2 = rp->castTo(PointerType::sAddrType, rhs.getValue(), rAST);
             auto *v3 = sBuilder.CreateSub(v1, v2);
             auto *v4 = sBuilder.CreateUDiv(v3,
                                            llvm::ConstantInt::get(PointerType::sAddrType->getLLVMType(),
@@ -2490,7 +2497,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
       if (!rtype) {
         throw SemaException("Each of the operands shall have integer type.", lAST->involvedTokens());
       }
-      rValue = rtype->cast(ltype, rhs.getValue(), lAST);
+      rValue = rtype->castTo(ltype, rhs.getValue(), lAST);
       if (op == InfixOp::LTLT) {
         lValue = sBuilder.CreateShl(lhs.getValue(), rValue);
       } else {
@@ -2587,7 +2594,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
       cmpRes = sBuilder.CreateFCmp(predicate, lValue, rValue);
       codegen:
       cmpRes =
-          IntegerType::sOneBitBoolIntType.cast(&IntegerType::sIntType, cmpRes, lAST);
+          IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sIntType, cmpRes, lAST);
       return Value(QualifiedType(&IntegerType::sIntType, {}), false, cmpRes);
     }
     case InfixOp::EQEQ:
@@ -2633,7 +2640,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
         throw SemaException("invalid operands to binary expression", lAST->involvedTokens());
       }
       result =
-          IntegerType::sOneBitBoolIntType.cast(&IntegerType::sIntType, result, lAST);
+          IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sIntType, result, lAST);
       return Value(QualifiedType(&IntegerType::sIntType, {}), false, result);
     }
     case InfixOp::AMP:
@@ -2709,7 +2716,7 @@ Value LogicalBinaryOperatorAST::codegen() {
   phi->addIncoming(cond1, thisBlock);
   phi->addIncoming(cond2, otherBlock);
   auto *result =
-      IntegerType::sOneBitBoolIntType.cast(&IntegerType::sIntType, phi, mRight.get());
+      IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sIntType, phi, mRight.get());
   return Value(QualifiedType(&IntegerType::sIntType, {}), false, result);
 }
 IfSelectionStatementAST::IfSelectionStatementAST(nt<ExpressionAST> expression,
@@ -2924,7 +2931,7 @@ void ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
           involvedTokens());
     } else {
       auto v = mExpression->codegen();
-      sBuilder.CreateStore(v.getType()->cast(type, v.getValue(), this), returnAlloca);
+      sBuilder.CreateStore(v.getType()->castTo(type, v.getValue(), this), returnAlloca);
     }
   }
   sBuilder.CreateBr(function->getReturnBlock());

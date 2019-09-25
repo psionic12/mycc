@@ -8,11 +8,11 @@ bool Type::compatible(Type *type) {
 bool Type::complete() {
   return true;
 }
-llvm::Value *Type::cast(Type *toType, llvm::Value *value, const AST *ast) {
+llvm::Value *Type::castTo(Type *toType, llvm::Value *fromValue, const AST *ast) {
   if (toType != this) {
     throw SemaException("cannot cast type", ast->involvedTokens());
   } else {
-    return value;
+    return fromValue;
   }
 
 }
@@ -42,55 +42,68 @@ bool IntegerType::isSigned() const {
   return mSigned;
 }
 
-llvm::Value *IntegerType::cast(Type *targetTy, llvm::Value *value, const AST *ast) {
+llvm::Value *IntegerType::castTo(Type *toType, llvm::Value *fromValue, const AST *ast) {
   auto &builder = AST::getBuilder();
   auto *module = AST::getModule();
-  if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
-    return llvm::ConstantInt::get(getLLVMType(), constantInt->getSExtValue());
-  } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
-    return llvm::ConstantInt::get(getLLVMType(), constantFp->getValueAPF().bitcastToAPInt());
-  } else if (auto *integerType = dynamic_cast<IntegerType *>(targetTy)) {
-    if (integerType->mSizeInBits > mSizeInBits) {
-      if (integerType->mSizeInBits) {
-        return builder.CreateSExt(value, targetTy->getLLVMType());
+  if (getLLVMType() != fromValue->getType()) {
+    throw std::runtime_error("WTF: casting: source type does not match value type");
+  }
+
+  auto *fromConstantInt = llvm::dyn_cast<llvm::ConstantInt>(fromValue);
+
+  if (auto *toIntegerType = dynamic_cast<IntegerType *>(toType)) {
+    if (fromConstantInt) {
+      return llvm::ConstantInt::get(toType->getLLVMType(), fromConstantInt->getSExtValue());
+    } else {
+      if (toIntegerType->getSizeInBits() > getSizeInBits()) {
+        if (toIntegerType->isSigned()) {
+          return builder.CreateSExt(fromValue, toType->getLLVMType());
+        } else {
+          return builder.CreateZExt(fromValue, toType->getLLVMType());
+        }
+      } else if (toIntegerType->getSizeInBits() == getSizeInBits()) {
+        if (toIntegerType->isSigned() != isSigned()) {
+          if (toIntegerType->isSigned()) {
+            return builder.CreateSExt(fromValue, toType->getLLVMType());
+          } else {
+            return builder.CreateZExt(fromValue, toType->getLLVMType());
+          }
+        } else {
+          return fromValue;
+        }
       } else {
-        return builder.CreateZExt(value, targetTy->getLLVMType());
+        return builder.CreateTrunc(fromValue, toType->getLLVMType());
       }
-    } else if (mSizeInBits == integerType->mSizeInBits) {
-
-      return value;
-    } else {
-      return builder.CreateTrunc(value, targetTy->getLLVMType());
     }
-  } else if (dynamic_cast<FloatingType * >(targetTy)) {
-    if (isSigned()) {
-      return builder.CreateSIToFP(value, targetTy->getLLVMType());
+  } else if (dynamic_cast<FloatingType * >(toType)) {
+    if (fromConstantInt) {
+      return llvm::ConstantFP::get(getLLVMType(), fromConstantInt->getSExtValue());
     } else {
-      return builder.CreateUIToFP(value, targetTy->getLLVMType());
-    }
-  } else if (auto *pointerType = dynamic_cast<PointerType *>(targetTy)) {
-
-    if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
-      if (constInt->getSExtValue() == 0) {
-        return pointerType->getDefaultValue();
+      if (isSigned()) {
+        return builder.CreateFPToSI(fromValue, toType->getLLVMType());
+      } else {
+        return builder.CreateFPToUI(fromValue, toType->getLLVMType());
       }
+    }
+  } else if (auto *pointerType = dynamic_cast<PointerType *>(toType)) {
+    if (fromConstantInt && (fromConstantInt->getSExtValue() == 0)) {
+      return pointerType->getDefaultValue();
     } else {
 //      return builder.CreateIntToPtr(value, targetTy->getLLVMType());
       throw SemaException("you are setting an integer to a pointer directly, we usually don't do this",
                           ast->involvedTokens());
     }
-    //TODO do I need extend the size?
-  } else if (dynamic_cast<VoidType *>(targetTy)) {
+  } else if (dynamic_cast<VoidType *>(toType)) {
     return nullptr;
   } else {
-    throw SemaException("cannot cast to integer type", ast->involvedTokens());
+    throw SemaException("cannot cast form integer type", ast->involvedTokens());
   }
 }
-std::pair<IntegerType *, llvm::Value *> IntegerType::promote(llvm::Value *value, AST *ast) {
+std::pair<ArithmeticType *, llvm::Value *> IntegerType::promote(llvm::Value *value, AST *ast) {
   if (mSizeInBits < sIntType.mSizeInBits) {
-    return std::make_pair<IntegerType *, llvm::Value *>(this, cast(&IntegerType::sIntType, value, ast));
+    return {this, castTo(&IntegerType::sIntType, value, ast)};
   } else {
-    return std::make_pair<IntegerType *, llvm::Value *>(this, std::move(value));
+    return {this, std::move(value)};
   }
 }
 llvm::Constant *IntegerType::getDefaultValue() {
@@ -120,33 +133,51 @@ llvm::APFloat FloatingType::getAPFloat(long double n) const {
   }
   //TODO implement long double
 }
-llvm::Value *FloatingType::cast(Type *toType, llvm::Value *value, const AST *ast) {
+llvm::Value *FloatingType::castTo(Type *toType, llvm::Value *fromValue, const AST *ast) {
   auto &builder = AST::getBuilder();
   auto *module = AST::getModule();
-  if (auto *constantInt = llvm::dyn_cast<llvm::ConstantInt>(value)) {
-    return llvm::ConstantFP::get(getLLVMType(), constantInt->getSExtValue());
-  } else if (auto *constantFp = llvm::dyn_cast<llvm::ConstantFP>(value)) {
-    return llvm::ConstantFP::get(getLLVMType(), constantFp->getValueAPF().convertToDouble());
-  } else if (const auto *integerType = dynamic_cast<const IntegerType *>(toType)) {
-    if (integerType->isSigned()) {
-      return builder.CreateFPToSI(value, toType->getLLVMType());
+  if (getLLVMType() != fromValue->getType()) {
+    throw std::runtime_error("WTF: casting: source type does not match value type");
+  }
+
+  auto *fromConstantFp = llvm::dyn_cast<llvm::ConstantFP>(fromValue);
+
+  if (auto *toIntegerType = dynamic_cast<IntegerType *>(toType)) {
+    if (fromConstantFp) {
+      return llvm::ConstantInt::get(getLLVMType(), fromConstantFp->getValueAPF().bitcastToAPInt());
     } else {
-      return builder.CreateFPToUI(value, toType->getLLVMType());
+      if (toIntegerType->isSigned()) {
+        return builder.CreateFPToSI(fromValue, toType->getLLVMType());
+      } else {
+        return builder.CreateFPToUI(fromValue, toType->getLLVMType());
+      }
     }
-  } else if (const auto *floatType = dynamic_cast<const FloatingType * >(toType)) {
-    if (mSizeInBits > floatType->mSizeInBits) {
-      return builder.CreateFPTrunc(value, toType->getLLVMType());
+  } else if (auto *toFloatType = dynamic_cast<FloatingType * >(toType)) {
+    if (fromConstantFp) {
+      if (toFloatType->getSizeInBits() == sFloatType.getSizeInBits()) {
+        return llvm::ConstantFP::get(getLLVMType(), fromConstantFp->getValueAPF().convertToFloat());
+      } else {
+        return llvm::ConstantFP::get(getLLVMType(), fromConstantFp->getValueAPF().convertToDouble());
+      }
     } else {
-      return builder.CreateFPExt(value, toType->getLLVMType());
+      if (getSizeInBits() > toFloatType->getSizeInBits()) {
+        return builder.CreateFPTrunc(fromValue, toType->getLLVMType());
+      } else {
+        return builder.CreateFPExt(fromValue, toType->getLLVMType());
+      }
     }
   } else if (dynamic_cast<const VoidType *>(toType)) {
     return nullptr;
   } else {
-    throw SemaException("cannot cast to float type", ast->involvedTokens());
+    throw SemaException("cannot cast from float type", ast->involvedTokens());
   }
 }
 llvm::Constant *FloatingType::getDefaultValue() {
   return llvm::ConstantFP::get(getLLVMType(), 0.0);
+}
+std::pair<ArithmeticType *, llvm::Value *> FloatingType::promote(llvm::Value *value, AST *ast) {
+  auto *v = this->castTo(&FloatingType::sDoubleType, value, ast);
+  return {&FloatingType::sDoubleType, v};
 }
 FunctionType::FunctionType(QualifiedType returnType, std::vector<QualifiedType> &&parameters, bool varArg)
     : mReturnType(std::move(returnType)),
@@ -283,9 +314,9 @@ llvm::Constant *ArrayType::getDefaultValue() {
 unsigned int ArrayType::getSizeInBits() {
   return mSize * static_cast<ObjectType *>(mElementType.getType())->getSizeInBits();
 }
-llvm::Value *ArrayType::cast(Type *toType, llvm::Value *value, const AST *ast) {
+llvm::Value *ArrayType::castTo(Type *toType, llvm::Value *fromValue, const AST *ast) {
   if (this->compatible(toType)) {
-    return value;
+    return fromValue;
   } else {
     throw SemaException("cannot cast array type to target type", ast->involvedTokens());
   }
@@ -320,13 +351,13 @@ bool PointerType::compatible(Type *type) {
     return false;
   }
 }
-llvm::Value *PointerType::cast(Type *toType, llvm::Value *value, const AST *ast) {
+llvm::Value *PointerType::castTo(Type *toType, llvm::Value *fromValue, const AST *ast) {
   auto &builder = AST::getBuilder();
   auto *module = AST::getModule();
   if (dynamic_cast<IntegerType *>(toType)) {
-    return builder.CreatePtrToInt(value, toType->getLLVMType());
+    return builder.CreatePtrToInt(fromValue, toType->getLLVMType());
   } else if (dynamic_cast<PointerType *>(toType)) {
-    return builder.CreateBitCast(value, toType->getLLVMType());
+    return builder.CreateBitCast(fromValue, toType->getLLVMType());
   } else if (dynamic_cast<VoidType *>(toType)) {
     return nullptr;
   } else {
@@ -567,7 +598,7 @@ Value ScalarType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
   if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(ast->ast.get())) {
     auto v = exp->codegen();
-    result = v.getType()->cast(this, v.getValue(), ast);
+    result = v.getType()->castTo(this, v.getValue(), ast);
   } else {
     const auto &initializers = static_cast<InitializerListAST *>(ast->ast.get())->initializers;
     if (initializers.size() > 1) {
