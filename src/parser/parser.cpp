@@ -1232,7 +1232,7 @@ nt<CastExpressionAST> Parser::parseCastExpression() {
 ///                     | -- <unary-expression>
 ///                     | <unary-operator> <cast-expression>
 ///                     | sizeof <unary-expression>
-///                     | sizeof <type-name>
+///                     | sizeof ( <type-name> )
 nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
   mStartToken = &lex.peek();
   if (expect(TokenKind::TOKEN_PLUSPLUS)) {
@@ -1240,7 +1240,35 @@ nt<UnaryExpressionAST> Parser::parseUnaryExpression() {
   } else if (expect(TokenKind::TOKEN_SUBSUB)) {
     return make_ast<PrefixDecrementExpressionAST>(parseUnaryExpression());
   } else if (expect(TokenKind::TOKEN_SIZEOF)) {
-    return make_ast<SizeofUnaryExpressionAST>(parseUnaryExpression());
+    if (expect(TokenKind::TOKEN_LPAREN)) {
+      nt<SizeofUnaryExpressionAST> ast;
+      switch (lex.peek().getKind()) {
+        case TokenKind::TOKEN_CHAR:
+        case TokenKind::TOKEN_DOUBLE:
+        case TokenKind::TOKEN_INT:
+        case TokenKind::TOKEN_LONG:
+        case TokenKind::TOKEN_SHORT:
+        case TokenKind::TOKEN_SIGNED:
+        case TokenKind::TOKEN_UNSIGNED:
+        case TokenKind::TOKEN_VOID:
+        case TokenKind::TOKEN_STRUCT:
+        case TokenKind::TOKEN_UNION:
+        case TokenKind::TOKEN_ENUM:
+        case TokenKind::TOKEN_FLOAT:
+        case TokenKind::TOKEN_CONST:
+        case TokenKind::TOKEN_VOLATILE:ast = make_ast<SizeofUnaryExpressionAST>(parseTypeName());
+          break;
+        case TokenKind::TOKEN_IDENTIFIER:
+          if (table->isTypedef(lex.peek())) {
+            ast = make_ast<SizeofUnaryExpressionAST>(parseTypeName());
+          }
+        default:ast = make_ast<SizeofUnaryExpressionAST>(parseUnaryExpression());
+      }
+      accept(TokenKind::TOKEN_RPAREN);
+      return ast;
+    } else {
+      return make_ast<SizeofUnaryExpressionAST>(parseUnaryExpression());
+    }
   } else if (lex.peek() == TokenKind::TOKEN_BANG
       || lex.peek() == TokenKind::TOKEN_AMP
       || lex.peek() == TokenKind::TOKEN_STAR
@@ -1273,7 +1301,7 @@ nt<PostfixExpressionAST> Parser::parsePostfixExpression() {
       case TokenKind::TOKEN_LPAREN: {
         lex.consumeToken();
         nts<AssignmentExpressionAST> arguments;
-        if (lex.peek().getKind() != TokenKind ::TOKEN_RPAREN) {
+        if (lex.peek().getKind() != TokenKind::TOKEN_RPAREN) {
           do {
             arguments.emplace_back(parseAssignmentExpression());
           } while (expect(TokenKind::TOKEN_COMMA));

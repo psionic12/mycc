@@ -719,11 +719,16 @@ void TypeNameAST::print(int indent) {
   if (declarator) declarator->print(indent);
 }
 QualifiedType TypeNameAST::codegen() {
-  auto *symbol = declarator->codegen(StorageSpecifier::kNone, specifiers->codegen());
-  if (auto *obj = dynamic_cast<ObjectSymbol *>(symbol)) {
-    return obj->getQualifiedType();
+  auto qualifiedType = specifiers->codegen();
+  if (declarator) {
+    auto *symbol = declarator->codegen(StorageSpecifier::kNone, qualifiedType);
+    if (auto *obj = dynamic_cast<ObjectSymbol *>(symbol)) {
+      return obj->getQualifiedType();
+    } else {
+      throw std::runtime_error("WTF: type name is not an object symbol");
+    }
   } else {
-    throw std::runtime_error("WTF: type name is not an object symbol");
+    return qualifiedType;
   }
 }
 AssignmentExpressionAST::AssignmentExpressionAST(nt<ConditionalExpressionAST>
@@ -2243,23 +2248,35 @@ Value UnaryOperatorExpressionAST::codegen() {
   return Value(QualifiedType(type, value.getQualifiers()), false, newVal);
 }
 Value SizeofUnaryExpressionAST::codegen() {
-  auto value = mUnaryExpression->codegen();
-  if (dynamic_cast< FunctionType *>(value.getType())) {
+  Type *type;
+  if (auto *ue = dynamic_cast<UnaryExpressionAST *>(mAST.get())) {
+    auto value = ue->codegen();
+    type = value.getType();
+  } else {
+    type = static_cast<TypeNameAST *>(mAST.get())->codegen().getType();
+  }
+
+  if (dynamic_cast< FunctionType *>(type)) {
     throw SemaException("The sizeof operator shall not be applied to an expression that has function type",
-                        mUnaryExpression->involvedTokens());
-  } else if (!value.getType()->complete()) {
+                        mAST->involvedTokens());
+  } else if (!type->complete()) {
     throw SemaException("The sizeof operator shall not be applied to an expression that has an incomplete type",
-                        mUnaryExpression->involvedTokens());
+                        mAST->involvedTokens());
   } // or a bit field
+
+  auto *objectType = dynamic_cast<ObjectType *>(type);
+  if (!objectType) {
+    throw std::runtime_error("WTF: sizeof on a non-object type");
+  }
   return Value(QualifiedType(&IntegerType::sIntType, {TypeQualifier::kCONST}),
                false,
                llvm::ConstantInt::get(getContext(),
                                       llvm::APInt(IntegerType::sIntType.getSizeInBits(),
-                                                  IntegerType::sIntType.getSizeInBits() / 8)));
+                                                  objectType->getSizeInBits() / 8)));
 }
 void SizeofUnaryExpressionAST::print(int indent) {
   AST::print(indent);
-  mUnaryExpression->print(++indent);
+  mAST->print(++indent);
 }
 void SimpleCastExpressionAST::print(int indent) {
   AST::print(indent);

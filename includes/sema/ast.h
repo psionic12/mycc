@@ -661,11 +661,13 @@ class UnaryOperatorExpressionAST : public UnaryExpressionAST {
 class SizeofUnaryExpressionAST : public UnaryExpressionAST {
  public:
   SizeofUnaryExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST)
-      : mUnaryExpression(std::move(unaryExpressionAST)) {}
+      : mAST(std::move(unaryExpressionAST)) {}
+  SizeofUnaryExpressionAST(nt<TypeNameAST> typeNameAST)
+      : mAST(std::move(typeNameAST)) {}
   void print(int indent) override;
   Value codegen() override;
  private:
-  nt<UnaryExpressionAST> mUnaryExpression;
+  nt<AST> mAST;
 };
 
 class CastExpressionAST : public IExpression {
