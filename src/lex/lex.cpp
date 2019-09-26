@@ -190,6 +190,7 @@ void Lex::getToken() {
           in.ignore();
           return makeToken(TokenKind::TOKEN_SUBEQ, "-=");
         } else if (in.peek() == '>') {
+          in.ignore();
           return makeToken(TokenKind::TOKEN_ARROW, "->");
         } else {
           tokenEnd = tokenStart;

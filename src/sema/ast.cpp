@@ -1987,9 +1987,11 @@ Value MemberPostfixExpressionAST::codegen() {
   } else {
     index = 0;
   }
-  llvm::Value *value = sBuilder.CreateConstGEP1_32(lhs.getType()->getLLVMType(),
-                                                   lhs.getValue(),
-                                                   index);
+  llvm::APInt apint(32, index);
+  llvm::Value *value = sBuilder.CreateGEP(lhs.getType()->getLLVMType(),
+                                          lhs.getPtr(),
+                                          {llvm::ConstantInt::get(AST::getContext(), llvm::APInt(32, 0)),
+                                           llvm::ConstantInt::get(AST::getContext(), apint)});
   return Value(qualifiedType, lhs.isLValue(), value);
 }
 void PointerMemberPostfixExpressionAST::print(int indent) {
@@ -2002,7 +2004,8 @@ Value PointerMemberPostfixExpressionAST::codegen() {
   //6.5.2.3 Structure and union members
   Value lhs = postfix_expression->codegen();
   const CompoundType *compoundTy;
-  if (auto *p = dynamic_cast< PointerType *>(lhs.getType())) {
+  auto *p = dynamic_cast< PointerType *>(lhs.getType());
+  if (p) {
     if (!dynamic_cast< StructType *>(p->getReferencedType())
         && !dynamic_cast< UnionType *>(p->getReferencedType())) {
       throw SemaException("left side must be a pointer to a struct type or union type",
@@ -2021,14 +2024,16 @@ Value PointerMemberPostfixExpressionAST::codegen() {
   QualifiedType qualifiedType(memberSymbol->getQualifiedType());
   qualifiedType.addQualifiers(lhs.getQualifiers());
   unsigned int index;
-  if (dynamic_cast< StructType *>(lhs.getType())) {
+  if (dynamic_cast< StructType *>(p->getReferencedQualifiedType().getType())) {
     index = memberSymbol->getIndex();
   } else {
     index = 0;
   }
-  llvm::Value *value = sBuilder.CreateConstGEP1_32(lhs.getType()->getLLVMType(),
-                                                   lhs.getValue(),
-                                                   index);
+  llvm::APInt apint(32, index);
+  llvm::Value *value = sBuilder.CreateGEP(p->getReferencedQualifiedType().getType()->getLLVMType(),
+                                          lhs.getValue(),
+                                          {llvm::ConstantInt::get(AST::getContext(), llvm::APInt(32, 0)),
+                                           llvm::ConstantInt::get(AST::getContext(), apint)});
   return Value(qualifiedType, true, value);
 }
 void IncrementPostfixExpression::print(int indent) {
