@@ -1786,17 +1786,22 @@ void FloatingConstantPrimaryExpressionAST::print(int indent) {
 }
 Value FloatingConstantPrimaryExpressionAST::codegen() {
   FloatingType *type;
+  llvm::ConstantFP *constantFp;
   switch (floating_constant->suffix) {
     case FloatingConstantAST::Suffix::None:type = &FloatingType::sDoubleType;
+      constantFp =
+          llvm::ConstantFP::get(AST::getContext(), llvm::APFloat(static_cast<double>(floating_constant->value)));
       break;
     case FloatingConstantAST::Suffix::F: type = &FloatingType::sFloatType;
+      constantFp =
+          llvm::ConstantFP::get(AST::getContext(), llvm::APFloat(static_cast<float>(floating_constant->value)));
       break;
     case FloatingConstantAST::Suffix::L: type = &FloatingType::sLongDoubleType;
+      constantFp =
+          llvm::ConstantFP::get(AST::getContext(), llvm::APFloat(static_cast<double>(floating_constant->value)));
       break;
   }
-  return Value(QualifiedType(type, {TypeQualifier::kCONST}),
-               false,
-               llvm::ConstantFP::get(sModule->getContext(), type->getAPFloat(floating_constant->value)));
+  return Value(QualifiedType(type, {TypeQualifier::kCONST}), false, constantFp);
 }
 FloatingConstantPrimaryExpressionAST::FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST>
                                                                            floating_constant)
@@ -1927,7 +1932,7 @@ Value FunctionPostfixExpressionAST::codegen() {
   auto para = tFunction->getParameters().begin();
   auto arg = arguments.begin();
   std::vector<llvm::Value *> argumentValues;
-  llvm::Value* argumentValue = arg->getValue();
+  llvm::Value *argumentValue = arg->getValue();
   while (arg != arguments.end()) {
     auto *argType = dynamic_cast< ObjectType *>(arg->getType());
     if (!argType) {
@@ -1943,7 +1948,7 @@ Value FunctionPostfixExpressionAST::codegen() {
       ++para;
     } else {
       //default argument promotions
-      if (auto* arithmeticType = dynamic_cast<ArithmeticType*>(arg->getType())) {
+      if (auto *arithmeticType = dynamic_cast<ArithmeticType *>(arg->getType())) {
         argumentValue = arithmeticType->promote(arg->getValue(), argument_expression_list.get()).second;
       }
     }

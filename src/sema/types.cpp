@@ -77,7 +77,7 @@ llvm::Value *IntegerType::castTo(Type *toType, llvm::Value *fromValue, const AST
     }
   } else if (dynamic_cast<FloatingType * >(toType)) {
     if (fromConstantInt) {
-      return llvm::ConstantFP::get(getLLVMType(), fromConstantInt->getSExtValue());
+      return llvm::ConstantFP::get(toType->getLLVMType(), fromConstantInt->getSExtValue());
     } else {
       if (isSigned()) {
         return builder.CreateFPToSI(fromValue, toType->getLLVMType());
@@ -144,7 +144,7 @@ llvm::Value *FloatingType::castTo(Type *toType, llvm::Value *fromValue, const AS
 
   if (auto *toIntegerType = dynamic_cast<IntegerType *>(toType)) {
     if (fromConstantFp) {
-      return llvm::ConstantInt::get(getLLVMType(), fromConstantFp->getValueAPF().bitcastToAPInt());
+      return llvm::ConstantInt::get(toType->getLLVMType(), fromConstantFp->getValueAPF().bitcastToAPInt());
     } else {
       if (toIntegerType->isSigned()) {
         return builder.CreateFPToSI(fromValue, toType->getLLVMType());
@@ -154,10 +154,10 @@ llvm::Value *FloatingType::castTo(Type *toType, llvm::Value *fromValue, const AS
     }
   } else if (auto *toFloatType = dynamic_cast<FloatingType * >(toType)) {
     if (fromConstantFp) {
-      if (toFloatType->getSizeInBits() == sFloatType.getSizeInBits()) {
-        return llvm::ConstantFP::get(getLLVMType(), fromConstantFp->getValueAPF().convertToFloat());
+      if (toFloatType->getSizeInBits() > getSizeInBits()) {
+        return llvm::ConstantExpr::getFPExtend(fromConstantFp, toFloatType->getLLVMType());
       } else {
-        return llvm::ConstantFP::get(getLLVMType(), fromConstantFp->getValueAPF().convertToDouble());
+        return llvm::ConstantExpr::getFPTrunc(fromConstantFp, toFloatType->getLLVMType());
       }
     } else {
       if (getSizeInBits() > toFloatType->getSizeInBits()) {
