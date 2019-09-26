@@ -2044,15 +2044,13 @@ Value IncrementPostfixExpression::codegen() {
   Type *type = value.getType();
   llvm::Value *result = sBuilder.CreateAlloca(value.getType()->getLLVMType());
   sBuilder.CreateStore(value.getValue(), result, value.isVolatile());
-  result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
   if (dynamic_cast< IntegerType *>(type)) {
     newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else if (dynamic_cast< FloatingType *>(type)) {
     newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
   } else if (dynamic_cast< PointerType *>(type)) {
-    newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
-                                                   llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1))});
+    newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else {
     throw SemaException(
         "The operand of the postfix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
@@ -2077,15 +2075,13 @@ Value DecrementPostfixExpression::codegen() {
   Type *type = value.getType();
   llvm::Value *result = sBuilder.CreateAlloca(value.getType()->getLLVMType());
   sBuilder.CreateStore(value.getValue(), result, value.isVolatile());
-  result = sBuilder.CreateLoad(result);
   llvm::Value *newVal;
   if (dynamic_cast< IntegerType *>(type)) {
     newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else if (dynamic_cast< FloatingType *>(type)) {
     newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
   } else if (dynamic_cast< PointerType *>(type)) {
-    newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
-                                                   llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true))});
+    newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true))});
   } else {
     throw SemaException(
         "The operand of the postfix increment or decrement operator shall have real or pointer type, and shall be a modifiable isLValue().",
@@ -2119,18 +2115,14 @@ Value PrefixIncrementExpressionAST::codegen() {
     newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else if (dynamic_cast< FloatingType *>(value.getType())) {
     newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
-  } else if (!dynamic_cast< PointerType *>(value.getType())) {
-    newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
-                                                   llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1))});
+  } else if (dynamic_cast< PointerType *>(value.getType())) {
+    newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1))});
   } else {
     throw SemaException(
         "The operand of the prefix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
         mUnaryExpression->involvedTokens());
   }
   sBuilder.CreateStore(newVal, value.getPtr(), value.isVolatile());
-  if (!value.isConst() || !value.isLValue()) {
-    throw SemaException("The operand shall be a modifiable lvalue", mUnaryExpression->involvedTokens());
-  }
   return value;
 }
 void PrefixDecrementExpressionAST::print(int indent) {
@@ -2148,18 +2140,14 @@ Value PrefixDecrementExpressionAST::codegen() {
     newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else if (dynamic_cast< FloatingType *>(value.getType())) {
     newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
-  } else if (!dynamic_cast< PointerType *>(value.getType())) {
-    newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
-                                                   llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true))});
+  } else if (dynamic_cast< PointerType *>(value.getType())) {
+    newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true))});
   } else {
     throw SemaException(
         "The operand of the prefix increment or decrement operator shall have real or pointer type, and shall be a modifiable lvalue.",
         mUnaryExpression->involvedTokens());
   }
   sBuilder.CreateStore(newVal, value.getPtr(), value.isVolatile());
-  if (!value.isConst() || !value.isLValue()) {
-    throw SemaException("The operand shall be a modifiable lvalue", mUnaryExpression->involvedTokens());
-  }
   return value;
 }
 void UnaryOperatorExpressionAST::print(int indent) {
@@ -2427,8 +2415,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
             return Value(QualifiedType(pointerType, {}),
                          false,
                          sBuilder.CreateGEP(lhs.getValue(),
-                                            {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
-                                             rhs.getValue()}));
+                                            {rhs.getValue()}));
           }
         }
       }
@@ -2440,8 +2427,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
             return Value(QualifiedType(pointerType, {}),
                          false,
                          sBuilder.CreateGEP(rhs.getValue(),
-                                            {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
-                                             lhs.getValue()}));
+                                            {lhs.getValue()}));
           }
         }
       }
@@ -2479,8 +2465,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
           auto *negativeValue = sBuilder.CreateSub(const0, rhs.getValue());
           return Value(QualifiedType(lp, {}),
                        false,
-                       sBuilder.CreateGEP(lhs.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(64, 0)),
-                                                           negativeValue}));
+                       sBuilder.CreateGEP(lhs.getValue(), {negativeValue}));
         }
       } else if (dynamic_cast< ArithmeticType *>(lhs.getType())
           && dynamic_cast< ArithmeticType *>(rhs.getType())) {
