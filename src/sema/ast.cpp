@@ -473,10 +473,13 @@ EnumerationType *EnumSpecifierAST::codegen() {
   mSymbol = std::make_unique<TagSymbol>(std::make_unique<EnumerationType>(), token);
   SymbolTable table(ScopeKind::TAG);
   auto *enumType = static_cast< EnumerationType *>(static_cast<TagSymbol *>(mSymbol.get())->getTagType());
-  for (auto *symbol : enum_list->codegen(enumType)) {
-    table.insert(*symbol->getToken(), symbol);
+  if (enum_list) {
+    for (auto *symbol : enum_list->codegen(enumType)) {
+      table.insert(*symbol->getToken(), symbol);
+      sObjectTable->insert(*symbol->getToken(), symbol);
+    }
+    dynamic_cast<CompoundType *>(mSymbol->getTagType())->setBody(std::move(table));
   }
-  dynamic_cast<CompoundType *>(mSymbol->getTagType())->setBody(std::move(table));
   return static_cast<EnumerationType *> (mSymbol->getTagType());
 }
 StructDeclarationAST::StructDeclarationAST(nt<SpecifierQualifierAST>

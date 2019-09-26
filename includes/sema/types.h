@@ -192,15 +192,12 @@ class UnionType : public CompoundType, public ObjectType {
   std::vector<QualifiedType> mOrderedFields;
 };
 
-class EnumerationType : public CompoundType, public ObjectType {
+class EnumerationType : public CompoundType, public IntegerType {
  public:
-  EnumerationType() = default;
+  EnumerationType();
   EnumerationType(const std::string &tag);
   void setBody(SymbolTable &&table) override;
-  llvm::Type *getLLVMType() override;
   bool complete() override;
-  unsigned int getSizeInBits() override;
-  Value initializerCodegen(InitializerAST *ast) override;
   llvm::Constant *getDefaultValue() override;
 };
 

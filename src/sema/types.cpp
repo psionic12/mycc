@@ -577,21 +577,16 @@ llvm::Constant *UnionType::getDefaultValue() {
 void EnumerationType::setBody(SymbolTable &&table) {
   mTable = std::move(table);
 }
-EnumerationType::EnumerationType(const std::string &tag) : CompoundType(tag) {}
-llvm::Type *EnumerationType::getLLVMType() {
-  return nullptr;
-}
+EnumerationType::EnumerationType(const std::string &tag)
+    : CompoundType(tag), IntegerType(sIntType.getSizeInBits(), sIntType.isSigned()) {}
 bool EnumerationType::complete() {
-  return mComplete;
-}
-unsigned int EnumerationType::getSizeInBits() {
-  throw std::runtime_error("WTF: get size in bits of enumeration type");
-}
-Value EnumerationType::initializerCodegen(InitializerAST *ast) {
-  throw std::runtime_error("WTF: initializerCodegen of enumeration type");
+  return true;
 }
 llvm::Constant *EnumerationType::getDefaultValue() {
   throw std::runtime_error("WTF: getDefaultValue of enumeration type");
+}
+EnumerationType::EnumerationType() : IntegerType(sIntType.getSizeInBits(), sIntType.isSigned()) {
+
 }
 
 Value ScalarType::initializerCodegen(InitializerAST *ast) {
