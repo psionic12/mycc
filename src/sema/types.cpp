@@ -556,17 +556,30 @@ Value UnionType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
   if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
     const auto &initializers = list->initializers;
-    if (initializers.size() == 1) {
-      result = mBigestType->initializerCodegen(initializers[0].get()).getValue();
-    } else if (initializers.size() > 1) {
+    auto *firstType = static_cast<ObjectType *> (mOrderedFields[0].getType());
+    if (initializers.size() > 1) {
       throw SemaException("excess elements", ast->involvedTokens());
-    } else {
-      result = llvm::ConstantStruct::get(getLLVMType(), {mBigestType->getDefaultValue()});
     }
+    if (initializers.empty()) {
+      result = firstType->getDefaultValue();
+    }
+    if (initializers.size() == 1) {
+      result = firstType->initializerCodegen(initializers[0].get()).getValue();
+    }
+    if (auto* constant = llvm::dyn_cast<llvm::Constant>(result)) {
+      result = llvm::ConstantStruct::get(getLLVMType(), {constant});
+    } else {
+      auto& builder = AST::getBuilder();
+      auto* alloca = builder.CreateAlloca(getLLVMType());
+      auto* bitCast = builder.CreateBitCast(alloca, firstType->getLLVMType());
+      builder.CreateStore(result, bitCast);
+      result = alloca;
+    }
+
+    return Value(QualifiedType(this, {}), false, result);
   } else {
     throw SemaException("union initializer must be an initializer list", ast->involvedTokens());
   }
-  return Value(QualifiedType(this, {}), false, result);
 }
 bool UnionType::complete() {
   return mComplete;

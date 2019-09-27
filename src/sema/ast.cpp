@@ -900,6 +900,7 @@ llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
     rhsValue = static_cast<ArithmeticType *>(rhs.getType())->castTo(lhs.getType(), rhsValue, rhsAST);
   } else if (dynamic_cast< StructType *>(lhs.getType())
       && lhs.getQualifiedType().compatible(rhs.getQualifiedType())) {
+    rhsValue = rhs.getValue();
   } else if (dynamic_cast< PointerType *>(lhs.getType())
       && dynamic_cast< PointerType *>(rhs.getType())) {
     auto *p1 = static_cast<PointerType *>(lhs.getType());
@@ -921,6 +922,8 @@ llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
     }
   } else if (dynamic_cast<ArrayType *> (lhs.getType())
       && dynamic_cast<ArrayType *> (rhs.getType())) {
+    rhsValue = rhs.getValue();
+  } else if (dynamic_cast<UnionType *>(lhs.getType()) && lhs.getQualifiedType().compatible(rhs.getQualifiedType())) {
     rhsValue = rhs.getValue();
   } else {
     throw SemaException("cannot assign", lhsAST->involvedTokens());
@@ -1974,7 +1977,7 @@ void MemberPostfixExpressionAST::print(int indent) {
 Value MemberPostfixExpressionAST::codegen() {
   //6.5.2.3 Structure and union members
   Value lhs = postfix_expression->codegen();
-  const CompoundType *compoundTy;
+  CompoundType *compoundTy;
   if (!dynamic_cast< StructType *>(lhs.getType())
       && !dynamic_cast< UnionType *>(lhs.getType())) {
     throw SemaException("left side must be a struct type or union type", postfix_expression->involvedTokens());
@@ -1989,17 +1992,22 @@ Value MemberPostfixExpressionAST::codegen() {
   }
   QualifiedType qualifiedType(memberSymbol->getQualifiedType());
   qualifiedType.addQualifiers(lhs.getQualifiers());
-  unsigned int index;
-  if (dynamic_cast< StructType *>(lhs.getType())) {
+
+  llvm::Value *value;
+  if (dynamic_cast<StructType *>(compoundTy)) {
+    unsigned int index;
     index = memberSymbol->getIndex();
-  } else {
-    index = 0;
-  }
-  llvm::APInt apint(32, index);
-  llvm::Value *value = sBuilder.CreateGEP(lhs.getType()->getLLVMType(),
-                                          lhs.getPtr(),
-                                          {llvm::ConstantInt::get(AST::getContext(), llvm::APInt(32, 0)),
-                                           llvm::ConstantInt::get(AST::getContext(), apint)});
+
+    llvm::APInt apint(32, index);
+    value = sBuilder.CreateGEP(lhs.getType()->getLLVMType(),
+                               lhs.getPtr(),
+                               {llvm::ConstantInt::get(AST::getContext(), llvm::APInt(32, 0)),
+                                llvm::ConstantInt::get(AST::getContext(), apint)});
+  } else if (dynamic_cast<UnionType *>(compoundTy)) {
+    auto *pointerType = llvm::PointerType::get(memberSymbol->getQualifiedType().getType()->getLLVMType(), 0);
+    value = sBuilder.CreateBitCast(lhs.getPtr(), pointerType);
+  } else throw std::runtime_error("WTF: member access other than union and struct");
+
   return Value(qualifiedType, lhs.isLValue(), value);
 }
 void PointerMemberPostfixExpressionAST::print(int indent) {
@@ -2011,7 +2019,7 @@ void PointerMemberPostfixExpressionAST::print(int indent) {
 Value PointerMemberPostfixExpressionAST::codegen() {
   //6.5.2.3 Structure and union members
   Value lhs = postfix_expression->codegen();
-  const CompoundType *compoundTy;
+  CompoundType *compoundTy;
   auto *p = dynamic_cast< PointerType *>(lhs.getType());
   if (p) {
     if (!dynamic_cast< StructType *>(p->getReferencedType())
@@ -2032,16 +2040,19 @@ Value PointerMemberPostfixExpressionAST::codegen() {
   QualifiedType qualifiedType(memberSymbol->getQualifiedType());
   qualifiedType.addQualifiers(lhs.getQualifiers());
   unsigned int index;
-  if (dynamic_cast< StructType *>(p->getReferencedQualifiedType().getType())) {
+  llvm::Value *value;
+  if (dynamic_cast< StructType *>(compoundTy)) {
     index = memberSymbol->getIndex();
-  } else {
-    index = 0;
-  }
-  llvm::APInt apint(32, index);
-  llvm::Value *value = sBuilder.CreateGEP(p->getReferencedQualifiedType().getType()->getLLVMType(),
-                                          lhs.getValue(),
-                                          {llvm::ConstantInt::get(AST::getContext(), llvm::APInt(32, 0)),
-                                           llvm::ConstantInt::get(AST::getContext(), apint)});
+
+    llvm::APInt apint(32, index);
+    value = sBuilder.CreateGEP(p->getReferencedQualifiedType().getType()->getLLVMType(),
+                               lhs.getValue(),
+                               {llvm::ConstantInt::get(AST::getContext(), llvm::APInt(32, 0)),
+                                llvm::ConstantInt::get(AST::getContext(), apint)});
+  } else if (dynamic_cast<UnionType *>(compoundTy)) {
+    auto *pointerType = llvm::PointerType::get(p->getReferencedQualifiedType().getType()->getLLVMType(), 0);
+    value = sBuilder.CreateBitCast(lhs.getPtr(), pointerType);
+  } else throw std::runtime_error("WTF: member access other than union and struct");
   return Value(qualifiedType, true, value);
 }
 void IncrementPostfixExpression::print(int indent) {
