@@ -1654,6 +1654,10 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, Quali
   QualifiedType qualifiedType(mFunctionType.get(), {});
   auto *symbol = directDeclarator->codegen(storageSpecifier, qualifiedType);
   auto functionSymbol = dynamic_cast<FunctionSymbol *>(symbol);
+  if (!functionSymbol) {
+    //this is a pointer to function
+    return symbol;
+  }
   auto *theFunction = functionSymbol->getValue();
   auto args = theFunction->arg_begin();
   if (parameterList) {
@@ -1916,16 +1920,16 @@ void FunctionPostfixExpressionAST::print(int indent) {
 Value FunctionPostfixExpressionAST::codegen() {
   //6.5.2.2 Function calls
   Value lhs = postfix_expression->codegen();
-  FunctionType *tFunction = nullptr;
+  FunctionType *functionType = nullptr;
   if (auto *p = dynamic_cast<PointerType *>(lhs.getType())) {
-    tFunction = dynamic_cast<FunctionType *>(p->getReferencedType());
+    functionType = dynamic_cast<FunctionType *>(p->getReferencedType());
   } else if (auto *f = dynamic_cast< FunctionType *>(lhs.getType())) {
-    tFunction = f;
+    functionType = f;
   } else {
     throw SemaException("The expression that denotes the called function92) shall have type pointer to function",
                         postfix_expression->involvedTokens());
   }
-  auto returnType = tFunction->getReturnType();
+  auto returnType = functionType->getReturnType();
   if (dynamic_cast< ArrayType *>(returnType.getType())) {
     throw SemaException("return type cannot be array type", postfix_expression->involvedTokens());
   }
@@ -1933,14 +1937,14 @@ Value FunctionPostfixExpressionAST::codegen() {
     throw SemaException("return type cannot be function type", postfix_expression->involvedTokens());
   }
   auto arguments = argument_expression_list->codegen();
-  auto paramtersSize = tFunction->getParameters().size();
+  auto paramtersSize = functionType->getParameters().size();
   auto argumentsSize = arguments.size();
-  if (!tFunction->hasVarArg() && paramtersSize != argumentsSize) {
+  if (!functionType->hasVarArg() && paramtersSize != argumentsSize) {
     throw SemaException("arguments do not match function proto type", postfix_expression->involvedTokens());
   } else if (paramtersSize > argumentsSize) {
     throw SemaException("arguments are less than function defined", postfix_expression->involvedTokens());
   }
-  auto para = tFunction->getParameters().begin();
+  auto para = functionType->getParameters().begin();
   auto arg = arguments.begin();
   std::vector<llvm::Value *> argumentValues;
   llvm::Value *argumentValue = arg->getValue();
@@ -1952,7 +1956,7 @@ Value FunctionPostfixExpressionAST::codegen() {
     if (!argType->complete()) {
       throw SemaException("arguments must be completed type", postfix_expression->involvedTokens());
     }
-    if (para != tFunction->getParameters().end()) {
+    if (para != functionType->getParameters().end()) {
       if (!argType->compatible(para->getType())) {
         throw SemaException("arguments do not match function proto type", postfix_expression->involvedTokens());
       }
@@ -1966,7 +1970,7 @@ Value FunctionPostfixExpressionAST::codegen() {
     argumentValues.push_back(argumentValue);
     ++arg;
   }
-  return Value(tFunction->getReturnType(), false, sBuilder.CreateCall(lhs.getPtr(), argumentValues));
+  return Value(functionType->getReturnType(), false, sBuilder.CreateCall(lhs.getPtr(), argumentValues));
 }
 void MemberPostfixExpressionAST::print(int indent) {
   AST::print(indent);
@@ -2122,7 +2126,15 @@ void SimpleUnaryExpressionAST::print(int indent) {
   mPostfixExpression->print(++indent);
 }
 Value SimpleUnaryExpressionAST::codegen() {
-  return mPostfixExpression->codegen();
+  auto v = mPostfixExpression->codegen();
+  if (dynamic_cast<FunctionType *>(v.getQualifiedType().getType())) {
+    // convert to pointer
+    mFuncitonConvertedPointer = std::make_unique<PointerType>(v.getQualifiedType());
+    return Value(QualifiedType(mFuncitonConvertedPointer.get(), v.getQualifiedType().getQualifiers()),
+                 false,
+                 v.getPtr());
+  }
+  return v;
 }
 void PrefixIncrementExpressionAST::print(int indent) {
   AST::print(indent);
