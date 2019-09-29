@@ -614,10 +614,10 @@ void ConditionalExpressionAST::print(int indent) {
 Value ConditionalExpressionAST::codegen() {
   auto condValue = logical_or_expression->codegen();
   auto *condType = dynamic_cast<ScalarType *> (condValue.getType());
-  if (!condType) {
-    throw SemaException("The first operand shall have scalar type.", logical_or_expression->involvedTokens());
-  }
   if (expression) {
+    if (!condType) {
+      throw SemaException("The first operand shall have scalar type.", logical_or_expression->involvedTokens());
+    }
     llvm::Value *cond;
     auto *currentFunction = sBuilder.GetInsertBlock()->getParent();
     auto *trueBlock = llvm::BasicBlock::Create(getContext(), "", currentFunction);
@@ -1921,10 +1921,13 @@ Value FunctionPostfixExpressionAST::codegen() {
   //6.5.2.2 Function calls
   Value lhs = postfix_expression->codegen();
   FunctionType *functionType = nullptr;
+  llvm::Value* callee;
   if (auto *p = dynamic_cast<PointerType *>(lhs.getType())) {
     functionType = dynamic_cast<FunctionType *>(p->getReferencedType());
+    callee = sBuilder.CreateLoad(lhs.getPtr());
   } else if (auto *f = dynamic_cast< FunctionType *>(lhs.getType())) {
     functionType = f;
+    callee = lhs.getPtr();
   } else {
     throw SemaException("The expression that denotes the called function92) shall have type pointer to function",
                         postfix_expression->involvedTokens());
@@ -1947,8 +1950,8 @@ Value FunctionPostfixExpressionAST::codegen() {
   auto para = functionType->getParameters().begin();
   auto arg = arguments.begin();
   std::vector<llvm::Value *> argumentValues;
-  llvm::Value *argumentValue = arg->getValue();
   while (arg != arguments.end()) {
+    llvm::Value *argumentValue = arg->getValue();
     auto *argType = dynamic_cast< ObjectType *>(arg->getType());
     if (!argType) {
       throw SemaException("arguments must be object type", postfix_expression->involvedTokens());
@@ -1970,7 +1973,7 @@ Value FunctionPostfixExpressionAST::codegen() {
     argumentValues.push_back(argumentValue);
     ++arg;
   }
-  return Value(functionType->getReturnType(), false, sBuilder.CreateCall(lhs.getPtr(), argumentValues));
+  return Value(functionType->getReturnType(), false, sBuilder.CreateCall(callee, argumentValues));
 }
 void MemberPostfixExpressionAST::print(int indent) {
   AST::print(indent);
