@@ -2256,18 +2256,18 @@ Value UnaryOperatorExpressionAST::codegen() {
       if (auto *integerType = dynamic_cast< IntegerType *>(type)) {
         newVal = sBuilder.CreateICmpEQ(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(32, 0)));
         type = &IntegerType::sIntType;
-        newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType());
+        newVal = sBuilder.CreateZExt(newVal, IntegerType::sIntType.getLLVMType());
       } else if (dynamic_cast< FloatingType *>(type)) {
         newVal = sBuilder.CreateFCmpUEQ(newVal, llvm::ConstantFP::get(getContext(), llvm::APFloat(0.0f)));
         newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(1, 1)));
         type = &IntegerType::sIntType;
-        newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType());
+        newVal = sBuilder.CreateZExt(newVal, IntegerType::sIntType.getLLVMType());
       } else if (dynamic_cast< PointerType *>(type)) {
         auto *pointerTy = llvm::PointerType::get(type->getLLVMType(), 0);
         auto *const_null = llvm::ConstantPointerNull::get(pointerTy);
         newVal = sBuilder.CreateICmpEQ(newVal, const_null);
         type = &IntegerType::sIntType;
-        newVal = sBuilder.CreateSExt(newVal, IntegerType::sIntType.getLLVMType());
+        newVal = sBuilder.CreateZExt(newVal, IntegerType::sIntType.getLLVMType());
       } else {
         throw SemaException("The operand of the unary ! operator shall have scalar type",
                             mCastExpression->involvedTokens());
