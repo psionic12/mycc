@@ -1454,6 +1454,11 @@ const Token *SimpleDirectDeclaratorAST::getIdentifier() {
 ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) {
   Linkage linkage = Linkage::kNone;
 
+  if (!identifier) {
+    mSymbol = std::make_unique<ObjectSymbol>(derivedType, nullptr, nullptr);
+    return mSymbol.get();
+  }
+
   ISymbol *priorDeclartion = sObjectTable->lookup(identifier->token);
 
   switch (storageSpecifier) {
@@ -1921,7 +1926,7 @@ Value FunctionPostfixExpressionAST::codegen() {
   //6.5.2.2 Function calls
   Value lhs = postfix_expression->codegen();
   FunctionType *functionType = nullptr;
-  llvm::Value* callee;
+  llvm::Value *callee;
   if (auto *p = dynamic_cast<PointerType *>(lhs.getType())) {
     functionType = dynamic_cast<FunctionType *>(p->getReferencedType());
     callee = sBuilder.CreateLoad(lhs.getPtr());
@@ -2262,9 +2267,8 @@ Value UnaryOperatorExpressionAST::codegen() {
         newVal = sBuilder.CreateXor(newVal, llvm::ConstantInt::get(getContext(), llvm::APInt(1, 1)));
         type = &IntegerType::sIntType;
         newVal = sBuilder.CreateZExt(newVal, IntegerType::sIntType.getLLVMType());
-      } else if (dynamic_cast< PointerType *>(type)) {
-        auto *pointerTy = llvm::PointerType::get(type->getLLVMType(), 0);
-        auto *const_null = llvm::ConstantPointerNull::get(pointerTy);
+      } else if (auto *pointerType = dynamic_cast< PointerType *>(type)) {
+        auto *const_null = llvm::ConstantPointerNull::get(pointerType->getLLVMType());
         newVal = sBuilder.CreateICmpEQ(newVal, const_null);
         type = &IntegerType::sIntType;
         newVal = sBuilder.CreateZExt(newVal, IntegerType::sIntType.getLLVMType());

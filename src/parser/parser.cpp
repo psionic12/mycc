@@ -577,10 +577,7 @@ nt<DeclaratorAST> Parser::parseDeclarator() {
   if (lex.peek() == TokenKind::TOKEN_STAR) {
     pointer = parsePointer();
   }
-  nt<DirectDeclaratorAST> dd = nullptr;
-  if (lex.peek() == TokenKind::TOKEN_IDENTIFIER || lex.peek() == TokenKind::TOKEN_LPAREN) {
-    dd = parseDirectDeclarator();
-  }
+  nt<DirectDeclaratorAST> dd = parseDirectDeclarator();
   return make_ast<DeclaratorAST>(std::move(pointer), std::move(dd));
 }
 
@@ -623,10 +620,18 @@ nt<DirectDeclaratorAST> Parser::parseDirectDeclarator() {
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     root = make_ast<SimpleDirectDeclaratorAST>(parseIdentifier());
   } else if (lex.peek() == TokenKind::TOKEN_LPAREN) {
-    lex.consumeToken();
-    auto declarator = parseDeclarator();
-    accept(TokenKind::TOKEN_RPAREN);
-    root = make_ast<ParenthesedDirectDeclaratorAST>(std::move(declarator));
+    if (lex.peek(1) == TokenKind::TOKEN_LPAREN
+        || lex.peek(1) == TokenKind::TOKEN_STAR
+        || lex.peek(1) == TokenKind::TOKEN_IDENTIFIER) {
+      lex.consumeToken();
+      auto declarator = parseDeclarator();
+      accept(TokenKind::TOKEN_RPAREN);
+      root = make_ast<ParenthesedDirectDeclaratorAST>(std::move(declarator));
+    } else {
+      root = make_ast<SimpleDirectDeclaratorAST>(nullptr);
+    }
+  } else {
+    root = make_ast<SimpleDirectDeclaratorAST>(nullptr);
   }
   while (lex.peek() == TokenKind::TOKEN_LPAREN
       || lex.peek() == TokenKind::TOKEN_LBRACKET) {
