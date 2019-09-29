@@ -80,9 +80,9 @@ llvm::Value *IntegerType::castTo(Type *toType, llvm::Value *fromValue, const AST
       return llvm::ConstantFP::get(toType->getLLVMType(), fromConstantInt->getSExtValue());
     } else {
       if (isSigned()) {
-        return builder.CreateFPToSI(fromValue, toType->getLLVMType());
+        return builder.CreateSIToFP(fromValue, toType->getLLVMType());
       } else {
-        return builder.CreateFPToUI(fromValue, toType->getLLVMType());
+        return builder.CreateUIToFP(fromValue, toType->getLLVMType());
       }
     }
   } else if (auto *pointerType = dynamic_cast<PointerType *>(toType)) {
