@@ -2389,6 +2389,7 @@ BinaryOperatorAST::UsualArithmeticConversions(Value &lhs, Value &rhs, const AST 
         }
       } else if (auto *rf = dynamic_cast< FloatingType *>(rType)) {
         lValue = li->castTo(rf, lValue, ast);
+        lType = rf;
         break;
       }
     } else if (auto *lf = dynamic_cast< FloatingType *>(lType)) {
@@ -2448,14 +2449,14 @@ Value BinaryOperatorAST::codegen(Value &lhs,
           return Value(QualifiedType(type, {}), false, sBuilder.CreateUDiv(lValue, rValue));
         }
       } else {
-        return Value(QualifiedType(type, {}), false, sBuilder.CreateFMul(lValue, rValue));
+        return Value(QualifiedType(type, {}), false, sBuilder.CreateFDiv(lValue, rValue));
       }
     case InfixOp::PERCENT:
-      if (!dynamic_cast< IntegerType *>(lhs.getType())
+      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
+      if (!dynamic_cast< IntegerType *>(type)
           && !dynamic_cast< IntegerType *>(rhs.getType())) {
         throw SemaException("Each of the operands shall have arithmetic type", lAST->involvedTokens());
       }
-      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
       if (static_cast<const IntegerType *>(type)->isSigned()) {
         return Value(QualifiedType(type, {}), false, sBuilder.CreateSRem(lValue, rValue));
       } else {
