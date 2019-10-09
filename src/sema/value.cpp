@@ -11,7 +11,7 @@ llvm::Value *Value::getValue() {
   }
 }
 llvm::Value *Value::getPtr() {
-  if (isLValue()) {
+  if (isLValue() || dynamic_cast<PointerType *>(mQualifiedType.getType())) {
     return mValue;
   } else {
     throw std::runtime_error("WTF: get addr for rvalue");

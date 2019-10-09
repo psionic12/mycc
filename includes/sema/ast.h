@@ -624,7 +624,7 @@ class SimpleUnaryExpressionAST : public UnaryExpressionAST {
   Value codegen() override;
  private:
   nt<PostfixExpressionAST> mPostfixExpression;
-  std::unique_ptr<PointerType> mFuncitonConvertedPointer;
+  std::unique_ptr<PointerType> mConvertedPointer;
 };
 
 class PrefixIncrementExpressionAST : public UnaryExpressionAST {

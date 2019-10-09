@@ -2137,12 +2137,22 @@ Value SimpleUnaryExpressionAST::codegen() {
   auto v = mPostfixExpression->codegen();
   if (dynamic_cast<FunctionType *>(v.getQualifiedType().getType())) {
     // convert to pointer
-    mFuncitonConvertedPointer = std::make_unique<PointerType>(v.getQualifiedType());
-    return Value(QualifiedType(mFuncitonConvertedPointer.get(), v.getQualifiedType().getQualifiers()),
+    mConvertedPointer = std::make_unique<PointerType>(v.getQualifiedType());
+    return Value(QualifiedType(mConvertedPointer.get(), v.getQualifiedType().getQualifiers()),
                  false,
                  v.getPtr());
+  } else if (auto *arrayType = dynamic_cast<ArrayType *>(v.getQualifiedType().getType())) {
+    auto *ptr =
+        sBuilder.CreateGEP(arrayType->getLLVMType(),
+                           v.getPtr(),
+                           {IntegerType::sIntType.getDefaultValue(), IntegerType::sIntType.getDefaultValue()});
+    mConvertedPointer = std::make_unique<PointerType>(arrayType->getReferencedQualifiedType());
+    return Value(QualifiedType(mConvertedPointer.get(), v.getQualifiedType().getQualifiers()),
+                 true,
+                 ptr);
+  } else {
+    return v;
   }
-  return v;
 }
 void PrefixIncrementExpressionAST::print(int indent) {
   AST::print(indent);
@@ -2221,7 +2231,8 @@ Value UnaryOperatorExpressionAST::codegen() {
     }
     case UnaryOp::STAR:
       if (auto *pointerType = dynamic_cast< PointerType *>(type)) {
-        return Value(pointerType->getReferencedQualifiedType(), true, newVal);
+        auto* v = sBuilder.CreateLoad(value.getPtr());
+        return Value(pointerType->getReferencedQualifiedType(), false, v);
       } else {
         throw SemaException("The operand of the unary * operator shall have pointer type.", mOp.token);
       }
@@ -2451,8 +2462,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
       } else {
         return Value(QualifiedType(type, {}), false, sBuilder.CreateFDiv(lValue, rValue));
       }
-    case InfixOp::PERCENT:
-      std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
+    case InfixOp::PERCENT:std::tie(type, lValue, rValue) = UsualArithmeticConversions(lhs, rhs, lAST);
       if (!dynamic_cast< IntegerType *>(type)
           && !dynamic_cast< IntegerType *>(rhs.getType())) {
         throw SemaException("Each of the operands shall have arithmetic type", lAST->involvedTokens());
@@ -2470,8 +2480,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
           if (dynamic_cast< IntegerType *>(rhs.getType())) {
             return Value(QualifiedType(pointerType, {}),
                          false,
-                         sBuilder.CreateGEP(lhs.getValue(),
-                                            {rhs.getValue()}));
+                         sBuilder.CreateGEP(lhs.getType()->getLLVMType(), lhs.getPtr(), rhs.getValue()));
           }
         }
       }
@@ -2482,8 +2491,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
           } else {
             return Value(QualifiedType(pointerType, {}),
                          false,
-                         sBuilder.CreateGEP(rhs.getValue(),
-                                            {lhs.getValue()}));
+                         sBuilder.CreateGEP(lhs.getType()->getLLVMType(), rhs.getPtr(), lhs.getValue()));
           }
         }
       }
