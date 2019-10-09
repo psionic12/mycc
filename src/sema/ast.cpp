@@ -2082,9 +2082,9 @@ Value IncrementPostfixExpression::codegen() {
   sBuilder.CreateStore(value.getValue(), result, value.isVolatile());
   llvm::Value *newVal;
   if (dynamic_cast< IntegerType *>(type)) {
-    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(type->getLLVMType(), 1));
   } else if (dynamic_cast< FloatingType *>(type)) {
-    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
+    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(type->getLLVMType(), 1.0));
   } else if (dynamic_cast< PointerType *>(type)) {
     newVal = sBuilder.CreateGEP(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
   } else {
@@ -2148,7 +2148,7 @@ Value SimpleUnaryExpressionAST::codegen() {
                            {IntegerType::sIntType.getDefaultValue(), IntegerType::sIntType.getDefaultValue()});
     mConvertedPointer = std::make_unique<PointerType>(arrayType->getReferencedQualifiedType());
     return Value(QualifiedType(mConvertedPointer.get(), v.getQualifiedType().getQualifiers()),
-                 true,
+                 false,
                  ptr);
   } else {
     return v;
@@ -2231,7 +2231,7 @@ Value UnaryOperatorExpressionAST::codegen() {
     }
     case UnaryOp::STAR:
       if (auto *pointerType = dynamic_cast< PointerType *>(type)) {
-        auto* v = sBuilder.CreateLoad(value.getPtr());
+        auto *v = sBuilder.CreateLoad(newVal);
         return Value(pointerType->getReferencedQualifiedType(), false, v);
       } else {
         throw SemaException("The operand of the unary * operator shall have pointer type.", mOp.token);
