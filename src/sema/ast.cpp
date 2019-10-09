@@ -2648,7 +2648,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
       cmpRes = sBuilder.CreateFCmp(predicate, lValue, rValue);
       codegen:
       cmpRes =
-          IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sIntType, cmpRes, lAST);
+          IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sUnsignedIntType, cmpRes, lAST);
       return Value(QualifiedType(&IntegerType::sIntType, {}), false, cmpRes);
     }
     case InfixOp::EQEQ:
@@ -2694,7 +2694,7 @@ Value BinaryOperatorAST::codegen(Value &lhs,
         throw SemaException("invalid operands to binary expression", lAST->involvedTokens());
       }
       result =
-          IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sIntType, result, lAST);
+          IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sUnsignedIntType, result, lAST);
       return Value(QualifiedType(&IntegerType::sIntType, {}), false, result);
     }
     case InfixOp::AMP:
@@ -2770,7 +2770,7 @@ Value LogicalBinaryOperatorAST::codegen() {
   phi->addIncoming(cond1, thisBlock);
   phi->addIncoming(cond2, otherBlock);
   auto *result =
-      IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sIntType, phi, mRight.get());
+      IntegerType::sOneBitBoolIntType.castTo(&IntegerType::sUnsignedIntType, phi, mRight.get());
   return Value(QualifiedType(&IntegerType::sIntType, {}), false, result);
 }
 IfSelectionStatementAST::IfSelectionStatementAST(nt<ExpressionAST> expression,
