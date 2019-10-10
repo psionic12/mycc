@@ -151,7 +151,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
           ++it;
         }
         compound_statement->codegen(contexts);
-        if (!BB->getTerminator()) {
+        if (!sBuilder.GetInsertBlock()->getTerminator()) {
           sBuilder.CreateBr(returnBB);
         }
         theFunction->getBasicBlockList().push_back(returnBB);
@@ -164,7 +164,7 @@ llvm::Value *FunctionDefinitionAST::codegen() {
           throw SemaException("function missing return statement", *mRightMost);
         }
       } else {
-        throw SemaException("Function cannot redifined", declarator->involvedTokens());
+        throw SemaException("Function cannot redefined", declarator->involvedTokens());
       }
     } else {
       throw std::runtime_error("WTF: function definition is not a function type");
@@ -182,6 +182,7 @@ void CompoundStatementAST::print(int indent) {
   mASTs.print(indent);
 }
 void CompoundStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   SymbolScope s1(sObjectTable, &mObjectTable);
   SymbolScope s2(sTagTable, &mTagTable);
   for (auto &ast : mASTs) {
@@ -640,13 +641,15 @@ Value ConditionalExpressionAST::codegen() {
     // true block
     sBuilder.SetInsertPoint(trueBlock);
     auto exp1 = expression->codegen();
-    sBuilder.CreateBr(endBlock);
+    if (!sBuilder.GetInsertBlock()->getTerminator())
+      sBuilder.CreateBr(endBlock);
 
     // false block
     currentFunction->getBasicBlockList().push_back(falseBlock);
     sBuilder.SetInsertPoint(falseBlock);
     auto exp2 = conditional_expression->codegen();
-    sBuilder.CreateBr(endBlock);
+    if (!sBuilder.GetInsertBlock()->getTerminator())
+      sBuilder.CreateBr(endBlock);
 
     // end block
     currentFunction->getBasicBlockList().push_back(endBlock);
@@ -1118,6 +1121,7 @@ void ExpressionStatementAST::print(int indent) {
   expression->print(++indent);
 }
 void ExpressionStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   expression->codegen();
 }
 SelectionStatementAST::SelectionStatementAST() : StatementAST(AST::Kind::SELECTION_STATEMENT) {}
@@ -2788,6 +2792,7 @@ void IfSelectionStatementAST::print(int indent) {
   }
 }
 void IfSelectionStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto exp = mExpression->codegen();
   llvm::Value *cond;
   if (auto *integerTy = dynamic_cast< IntegerType *>(exp.getType())) {
@@ -2810,14 +2815,16 @@ void IfSelectionStatementAST::codegen(StatementContexts &contexts) {
     function->getBasicBlockList().push_back(falseBB);
     sBuilder.SetInsertPoint(falseBB);
     mElseStatement->codegen(contexts);
-    sBuilder.CreateBr(endBB);
+    if (!sBuilder.GetInsertBlock()->getTerminator())
+      sBuilder.CreateBr(endBB);
   } else {
     sBuilder.CreateCondBr(cond, trueBB, endBB);
   }
   // ture BB
   sBuilder.SetInsertPoint(trueBB);
   mStatement->codegen(contexts);
-  sBuilder.CreateBr(endBB);
+  if (!sBuilder.GetInsertBlock()->getTerminator())
+    sBuilder.CreateBr(endBB);
   // endBB
   function->getBasicBlockList().push_back(endBB);
   sBuilder.SetInsertPoint(endBB);
@@ -2833,6 +2840,7 @@ void SwitchSelectionStatementAST::print(int indent) {
   mStatement->print(indent);
 }
 void SwitchSelectionStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto exp = mExpression->codegen();
   if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(exp.getValue())) {
     auto *switchInst = sBuilder.CreateSwitch(constInt, nullptr);
@@ -2857,6 +2865,7 @@ IdentifierLabeledStatementAST::IdentifierLabeledStatementAST(nt<IdentifierAST>
                                                              statement)
     : LabeledStatementAST(std::move(statement)) {}
 void IdentifierLabeledStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
     if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
       if (label->isDefinedByGoto()) {
@@ -2889,6 +2898,7 @@ CaseLabeledStatementAST::CaseLabeledStatementAST(nt<ConstantExpressionAST>
                                                  statement)
     : LabeledStatementAST(std::move(statement)) {}
 void CaseLabeledStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *switchContext = contexts.getLastContext<SwitchContext>();
   if (switchContext) {
     auto *switchInst = switchContext->getSwitchInst();
@@ -2921,6 +2931,7 @@ void DefaultLabeledStatementAST::print(int indent) {
   mStatement->print(indent);
 }
 void DefaultLabeledStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *switchContext = contexts.getLastContext<SwitchContext>();
   if (switchContext) {
     auto *switchInst = switchContext->getSwitchInst();
@@ -2948,6 +2959,7 @@ void GotoJumpStatementAST::print(int indent) {
 GotoJumpStatementAST::GotoJumpStatementAST(nt<IdentifierAST>
                                            identifier) : mIdentifier(std::move(identifier)) {}
 void GotoJumpStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   llvm::BasicBlock *BB;
   if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
     if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
@@ -2968,6 +2980,7 @@ void ReturnJumpStatementAST::print(int indent) {
 ReturnJumpStatementAST::ReturnJumpStatementAST(nt<ExpressionAST>
                                                expression) : mExpression(std::move(expression)) {}
 void ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *function = contexts.getLastContext<FunctionContext>();
   if (!function) {
     throw SemaException("return statement should only appear in functions", involvedTokens());
@@ -2996,6 +3009,7 @@ WhileIterationStatementAST::WhileIterationStatementAST(nt<ExpressionAST>
                                                        statement)
     : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
 void WhileIterationStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *conditionBB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
   auto *loopBB = llvm::BasicBlock::Create(getContext());
   auto *endBB = llvm::BasicBlock::Create(getContext());
@@ -3020,12 +3034,14 @@ void WhileIterationStatementAST::codegen(StatementContexts &contexts) {
   contexts.getContainingFunction()->getBasicBlockList().push_back(loopBB);
   sBuilder.SetInsertPoint(loopBB);
   mStatement->codegen(contexts);
-  sBuilder.CreateBr(conditionBB);
+  if (!sBuilder.GetInsertBlock()->getTerminator())
+    sBuilder.CreateBr(conditionBB);
   // end body
   contexts.getContainingFunction()->getBasicBlockList().push_back(endBB);
   sBuilder.SetInsertPoint(endBB);
 }
 void DoIterationStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *conditionBB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
   auto *loopBB = llvm::BasicBlock::Create(getContext());
   auto *endBB = llvm::BasicBlock::Create(getContext());
@@ -3034,7 +3050,8 @@ void DoIterationStatementAST::codegen(StatementContexts &contexts) {
   contexts.getContainingFunction()->getBasicBlockList().push_back(loopBB);
   sBuilder.SetInsertPoint(loopBB);
   mStatement->codegen(contexts);
-  sBuilder.CreateBr(conditionBB);
+  if (!sBuilder.GetInsertBlock()->getTerminator())
+    sBuilder.CreateBr(conditionBB);
   //condition bb
   sBuilder.SetInsertPoint(conditionBB);
   auto value = mExpression->codegen();
@@ -3056,6 +3073,7 @@ void DoIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.SetInsertPoint(endBB);
 }
 void ForIterationStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   if (mExpression) {
     mExpression->codegen();
   }
@@ -3084,22 +3102,26 @@ void ForIterationStatementAST::codegen(StatementContexts &contexts) {
   contexts.getContainingFunction()->getBasicBlockList().push_back(loopBB);
   sBuilder.SetInsertPoint(loopBB);
   mStatement->codegen(contexts);
-  sBuilder.CreateBr(afterLoopBB);
+  if (!sBuilder.GetInsertBlock()->getTerminator())
+    sBuilder.CreateBr(afterLoopBB);
   //after loop
   contexts.getContainingFunction()->getBasicBlockList().push_back(afterLoopBB);
   sBuilder.SetInsertPoint(afterLoopBB);
   mStepExpression->codegen();
-  sBuilder.CreateBr(conditionBB);
+  if (!sBuilder.GetInsertBlock()->getTerminator())
+    sBuilder.CreateBr(conditionBB);
   // end body
   contexts.getContainingFunction()->getBasicBlockList().push_back(endBB);
   sBuilder.SetInsertPoint(endBB);
 }
 void ContinueJumpStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   if (auto *context = contexts.getLastContext<LoopContext>()) {
     sBuilder.CreateBr(context->getContinueBB());
   }
 }
 void BreakJumpStatementAST::codegen(StatementContexts &contexts) {
+  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   if (auto *context = contexts.getLastContext<LoopContext>()) {
     sBuilder.CreateBr(context->getBreakBB());
   } else if (auto *context = contexts.getLastContext<SwitchContext>()) {
