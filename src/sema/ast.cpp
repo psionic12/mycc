@@ -648,12 +648,6 @@ Value ConditionalExpressionAST::codegen() {
     currentFunction->getBasicBlockList().push_back(falseBlock);
     sBuilder.SetInsertPoint(falseBlock);
     auto exp2 = conditional_expression->codegen();
-    if (!sBuilder.GetInsertBlock()->getTerminator())
-      sBuilder.CreateBr(endBlock);
-
-    // end block
-    currentFunction->getBasicBlockList().push_back(endBlock);
-    sBuilder.SetInsertPoint(endBlock);
     Type *type;
     llvm::Value *trueValue = exp1.getValue();
     llvm::Value *falseValue = exp2.getValue();
@@ -690,6 +684,12 @@ Value ConditionalExpressionAST::codegen() {
     } else {
       throw SemaException("incompatible operand types", involvedTokens());
     }
+    if (!sBuilder.GetInsertBlock()->getTerminator())
+      sBuilder.CreateBr(endBlock);
+
+    // end block
+    currentFunction->getBasicBlockList().push_back(endBlock);
+    sBuilder.SetInsertPoint(endBlock);
     auto *phi = sBuilder.CreatePHI(type->getLLVMType(), 2);
     phi->addIncoming(trueValue, trueBlock);
     phi->addIncoming(falseValue, falseBlock);
