@@ -1125,11 +1125,11 @@ ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST>
     : StatementAST(AST::Kind::EXPRESSION_STATEMENT), expression(std::move(expression)) {}
 void ExpressionStatementAST::print(int indent) {
   AST::print(indent);
-  expression->print(++indent);
+  if(expression) expression->print(++indent);
 }
 void ExpressionStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
-  expression->codegen();
+  if(expression) expression->codegen();
 }
 SelectionStatementAST::SelectionStatementAST() : StatementAST(AST::Kind::SELECTION_STATEMENT) {}
 IterationStatementAST::IterationStatementAST() : StatementAST(AST::Kind::ITERATION_STATEMENT) {}
@@ -2836,9 +2836,7 @@ void IfSelectionStatementAST::codegen(StatementContexts &contexts) {
   function->getBasicBlockList().push_back(endBB);
   sBuilder.SetInsertPoint(endBB);
 }
-SwitchSelectionStatementAST::SwitchSelectionStatementAST(nt<ExpressionAST>
-                                                         expression, nt<StatementAST>
-                                                         statement)
+SwitchSelectionStatementAST::SwitchSelectionStatementAST(nt<ExpressionAST> expression, nt<StatementAST> statement)
     : mExpression(std::move(expression)), mStatement(std::move(statement)) {}
 void SwitchSelectionStatementAST::print(int indent) {
   AST::print(indent);
@@ -2849,11 +2847,14 @@ void SwitchSelectionStatementAST::print(int indent) {
 void SwitchSelectionStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto exp = mExpression->codegen();
-  if (auto *constInt = llvm::dyn_cast<llvm::ConstantInt>(exp.getValue())) {
-    auto *switchInst = sBuilder.CreateSwitch(constInt, nullptr);
+  if (dynamic_cast<IntegerType*>(exp.getType())) {
+    auto *switchInst = sBuilder.CreateSwitch(exp.getValue(), nullptr);
     auto *endBB = llvm::BasicBlock::Create(getContext());
     contexts.add(std::make_unique<SwitchContext>(switchInst, endBB));
     mStatement->codegen(contexts);
+//    if (switchInst->getNumCases() == 0) {
+//      throw SemaException("switch body is empty", involvedTokens());
+//    }
     contexts.getContainingFunction()->getBasicBlockList().push_back(endBB);
     sBuilder.SetInsertPoint(endBB);
   } else {
