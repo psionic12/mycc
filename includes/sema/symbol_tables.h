@@ -180,9 +180,16 @@ class LabelSymbol : public ISymbol {
   llvm::BasicBlock *getBasicBlock() const {
     return mBasicBlock;
   }
+  bool isImplemented() {
+    return mImplemented;
+  }
+  void setAsImplemented() {
+    mImplemented = true;
+  }
  private:
   llvm::BasicBlock *mBasicBlock;
   bool mDefinedByGoto;
+  bool mImplemented = false;
 };
 
 class EnumConstSymbol : public ISymbol {

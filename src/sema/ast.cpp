@@ -172,6 +172,13 @@ llvm::Value *FunctionDefinitionAST::codegen() {
   } else {
     throw std::runtime_error("WTF: function definition is not a function type");
   }
+  for (auto &pair : *sLabelTable) {
+    if (auto *labelSymbol = dynamic_cast<LabelSymbol *> (pair.second)) {
+      if (!labelSymbol->isImplemented()) {
+        throw SemaException("Label not implement", *labelSymbol->getToken());
+      }
+    }
+  }
   sLabelTable = nullptr;
   //TODO After adjustment, the parameters in a parameter type list in a function declarator that is part of a definition of that function shall not have incomplete type.
   return nullptr;
@@ -2865,22 +2872,20 @@ IdentifierLabeledStatementAST::IdentifierLabeledStatementAST(nt<IdentifierAST> i
 void IdentifierLabeledStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
   llvm::BasicBlock *BB;
-  if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
-    if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
-      if (label->isDefinedByGoto()) {
-        BB = label->getBasicBlock();
-        contexts.getContainingFunction()->getBasicBlockList().push_back(BB);
-      } else {
-        throw SemaException("WTF: redefined label", mIdentifier->involvedTokens());
-      }
+  auto *labelSymbol = dynamic_cast<LabelSymbol *>(sLabelTable->lookup(mIdentifier->token));
+  if (labelSymbol) {
+    if (labelSymbol->isDefinedByGoto()) {
+      BB = labelSymbol->getBasicBlock();
+      contexts.getContainingFunction()->getBasicBlockList().push_back(BB);
     } else {
-      throw std::runtime_error("WTF: label table has other symbol type");
+      throw SemaException("WTF: redefined label", mIdentifier->involvedTokens());
     }
   } else {
     BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
     mLabelSymbol = std::make_unique<LabelSymbol>(&mIdentifier->token, BB, false);
     sLabelTable->insert(mIdentifier->token, mLabelSymbol.get());
   }
+  labelSymbol->setAsImplemented();
   if (!sBuilder.GetInsertBlock()->getTerminator()) {
     // fall into label statement
     sBuilder.CreateBr(BB);
