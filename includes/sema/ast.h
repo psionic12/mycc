@@ -240,7 +240,7 @@ class CaseLabeledStatementAST : public LabeledStatementAST {
 };
 class DefaultLabeledStatementAST : public LabeledStatementAST {
  public:
-  DefaultLabeledStatementAST(nt<StatementAST> statement) : LabeledStatementAST(std::move(statement)) {}
+  DefaultLabeledStatementAST(nt<StatementAST> statement);
   void codegen(StatementContexts &contexts) override;
   void print(int indent) override;
 };
@@ -257,6 +257,7 @@ class GotoJumpStatementAST : public JumpStatementAST {
   void codegen(StatementContexts &contexts) override;
  private:
   nt<IdentifierAST> mIdentifier;
+  std::unique_ptr<LabelSymbol> mLabelSymbol;
 };
 
 class ContinueJumpStatementAST : public JumpStatementAST {

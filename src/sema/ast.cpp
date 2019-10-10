@@ -2860,31 +2860,33 @@ void IdentifierLabeledStatementAST::print(int indent) {
   mIdentifier->print(indent);
   mStatement->print(indent);
 }
-IdentifierLabeledStatementAST::IdentifierLabeledStatementAST(nt<IdentifierAST>
-                                                             id, nt<StatementAST>
-                                                             statement)
-    : LabeledStatementAST(std::move(statement)) {}
+IdentifierLabeledStatementAST::IdentifierLabeledStatementAST(nt<IdentifierAST> id, nt<StatementAST> statement)
+    : LabeledStatementAST(std::move(statement)), mIdentifier(std::move(id)) {}
 void IdentifierLabeledStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
+  llvm::BasicBlock *BB;
   if (auto *symbol = sLabelTable->lookup(mIdentifier->token)) {
     if (auto *label = dynamic_cast<LabelSymbol *>(symbol)) {
       if (label->isDefinedByGoto()) {
-        auto *BB = label->getBasicBlock();
-        sBuilder.SetInsertPoint(BB);
-        mStatement->codegen(contexts);
+        BB = label->getBasicBlock();
+        contexts.getContainingFunction()->getBasicBlockList().push_back(BB);
       } else {
-        throw SemaException("WTF: redifined label", mIdentifier->involvedTokens());
+        throw SemaException("WTF: redefined label", mIdentifier->involvedTokens());
       }
     } else {
       throw std::runtime_error("WTF: label table has other symbol type");
     }
   } else {
-    auto *BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
-    sBuilder.SetInsertPoint(BB);
-    mStatement->codegen(contexts);
+    BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
     mLabelSymbol = std::make_unique<LabelSymbol>(&mIdentifier->token, BB, false);
     sLabelTable->insert(mIdentifier->token, mLabelSymbol.get());
   }
+  if (!sBuilder.GetInsertBlock()->getTerminator()) {
+    // fall into label statement
+    sBuilder.CreateBr(BB);
+  }
+  sBuilder.SetInsertPoint(BB);
+  mStatement->codegen(contexts);
 }
 void CaseLabeledStatementAST::print(int indent) {
   AST::print(indent);
@@ -2892,11 +2894,9 @@ void CaseLabeledStatementAST::print(int indent) {
   mConstantExpression->print(indent);
   mStatement->print(indent);
 }
-CaseLabeledStatementAST::CaseLabeledStatementAST(nt<ConstantExpressionAST>
-                                                 constantExpression,
-                                                 nt<StatementAST>
-                                                 statement)
-    : LabeledStatementAST(std::move(statement)) {}
+CaseLabeledStatementAST::CaseLabeledStatementAST(nt<ConstantExpressionAST> constantExpression,
+                                                 nt<StatementAST> statement)
+    : LabeledStatementAST(std::move(statement)), mConstantExpression(std::move(constantExpression)) {}
 void CaseLabeledStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *switchContext = contexts.getLastContext<SwitchContext>();
@@ -2952,12 +2952,13 @@ void DefaultLabeledStatementAST::codegen(StatementContexts &contexts) {
     throw SemaException("A case or default label shall appear only in a switch statement.", involvedTokens());
   }
 }
+DefaultLabeledStatementAST::DefaultLabeledStatementAST(nt<StatementAST> statement) : LabeledStatementAST(std::move(
+    statement)) {}
 void GotoJumpStatementAST::print(int indent) {
   AST::print(indent);
   mIdentifier->print(++indent);
 }
-GotoJumpStatementAST::GotoJumpStatementAST(nt<IdentifierAST>
-                                           identifier) : mIdentifier(std::move(identifier)) {}
+GotoJumpStatementAST::GotoJumpStatementAST(nt<IdentifierAST> identifier) : mIdentifier(std::move(identifier)) {}
 void GotoJumpStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
   llvm::BasicBlock *BB;
@@ -2968,17 +2969,17 @@ void GotoJumpStatementAST::codegen(StatementContexts &contexts) {
       throw std::runtime_error("WTF: label table has other symbol type");
     }
   } else {
-    BB = llvm::BasicBlock::Create(getContext(), "", contexts.getContainingFunction());
+    BB = llvm::BasicBlock::Create(getContext(), "");
+    mLabelSymbol = std::make_unique<LabelSymbol>(&mIdentifier->token, BB, true);
+    sLabelTable->insert(mIdentifier->token, mLabelSymbol.get());
   }
-  sBuilder.SetInsertPoint(BB);
   sBuilder.CreateBr(BB);
 }
 void ReturnJumpStatementAST::print(int indent) {
   AST::print(indent);
   mExpression->print(++indent);
 }
-ReturnJumpStatementAST::ReturnJumpStatementAST(nt<ExpressionAST>
-                                               expression) : mExpression(std::move(expression)) {}
+ReturnJumpStatementAST::ReturnJumpStatementAST(nt<ExpressionAST> expression) : mExpression(std::move(expression)) {}
 void ReturnJumpStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *function = contexts.getLastContext<FunctionContext>();
