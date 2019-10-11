@@ -946,6 +946,8 @@ class DeclarationAST : public AST {
   const InitDeclarators init_declarators;
   void print(int indent) override;
   void codegen();
+ private:
+  static TypedefSymbol sFakeTypedef;
 };
 class CompoundStatementAST : public StatementAST {
  public:

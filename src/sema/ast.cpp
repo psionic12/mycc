@@ -204,6 +204,7 @@ CompoundStatementAST::CompoundStatementAST(nts<AST>
                                            asts, SymbolTable &objectTable, SymbolTable &tagTable)
     : StatementAST(AST::Kind::COMPOUND_STATEMENT),
       mASTs(std::move(asts)), mObjectTable(objectTable), mTagTable(tagTable) {}
+TypedefSymbol DeclarationAST::sFakeTypedef(nullptr);
 DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST>
                                declaration_specifiers,
                                InitDeclarators
@@ -216,7 +217,7 @@ DeclarationAST::DeclarationAST(nt<DeclarationSpecifiersAST>
     if (specifiers.type == StorageSpecifier::kTYPEDEF) {
       for (const auto &pair : this->init_declarators) {
         const DeclaratorAST *ast = pair.first.get();
-        table.insert(*ast->getIdentifier(), nullptr);
+        table.insert(*ast->getIdentifier(), &sFakeTypedef);
       }
       break;
     }
