@@ -1469,6 +1469,10 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, Q
     return mSymbol.get();
   }
 
+  if (derivedType.getType() == &VoidType::sVoidType) {
+    throw SemaException("cannot initialize a void type", involvedTokens());
+  }
+
   ISymbol *priorDeclartion = sObjectTable->lookup(identifier->token);
 
   switch (storageSpecifier) {
