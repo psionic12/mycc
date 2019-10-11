@@ -120,6 +120,7 @@ class AST {
   static SymbolTable *sLabelTable;
   const Token *mLeftMost;
   const Token *mRightMost;
+  static bool sIsInitializerList;
 };
 template<typename T>
 class Terminal {
@@ -132,7 +133,7 @@ class Terminal {
       std::cout << "\t";
     }
     std::cout << static_cast<int>(type) << " ";
-    std::cout << token.getValue() << std::endl;
+    std::cout << token.toString() << std::endl;
   }
 };
 template<typename T>
@@ -181,7 +182,7 @@ class IExpression : public AST {
 class StringAST : public AST {
  public:
   StringAST(const Token &token);
-  ArrayType * getType();
+  ArrayType *getType();
   const Token &getToken() const;
  private:
   std::unique_ptr<ArrayType> mType;
@@ -464,10 +465,10 @@ class AssignmentExpressionAST : public IExpression {
   void print(int indent) override;
   Value codegen() override;
   static llvm::Value *eqCodegen(Value &lhs,
-                                 Value &rhs,
-                                 AST *lhsAST,
-                                 AST *rhsAST,
-                                 bool isInitialization);
+                                Value &rhs,
+                                AST *lhsAST,
+                                AST *rhsAST,
+                                bool isInitialization);
 };
 class PrimaryExpressionAST : public IExpression {
  public:
@@ -872,7 +873,7 @@ class StructOrUnionSpecifierAST : public AST {
   const nts<StructDeclarationAST> declarations;
   void print(int indent) override;
   const ObjectType *type;
-  ObjectType * codegen();
+  ObjectType *codegen();
  private:
   std::unique_ptr<TagSymbol> mSymbol;
 };

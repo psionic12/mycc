@@ -298,6 +298,38 @@ Value ArrayType::initializerCodegen(InitializerAST *ast) {
       result = alloc;
     }
     mSize = initializers.size();
+  } else if (auto *assignmentAST = dynamic_cast<AssignmentExpressionAST *>(ast->ast.get())) {
+    Value value = assignmentAST->codegen();
+    auto *arrayType = dynamic_cast<ArrayType *>(value.getType());
+    if (!arrayType
+        || !arrayType->getReferencedQualifiedType().getType()->compatible(getReferencedQualifiedType().getType())) {
+      throw SemaException("initializer not compatible with target type", ast->involvedTokens());
+    }
+    auto *constantArray = llvm::dyn_cast<llvm::ConstantDataArray>(value.getValue());
+    if (!constantArray) {
+      throw SemaException("not a constant array in initializer", ast->involvedTokens());
+    }
+
+    int constantSize = constantArray->getNumElements();
+
+    if (this->complete() && constantSize < mSize) {
+      std::vector<llvm::Constant *> constants;
+      constants.reserve(mSize);
+      for (int i = 0; i < constantSize; i++) {
+        auto *v = constantArray->getAggregateElement(i);
+        constants.push_back(v);
+      }
+      for (int i = 0; i < mSize - constantSize; ++i) {
+        constants.push_back(static_cast<ObjectType *>(mElementType.getType())->getDefaultValue());
+      }
+      result = llvm::ConstantArray::get(llvm::ArrayType::get(mElementType.getType()->getLLVMType(), mSize), constants);
+    } else if (this->complete() && constantSize > mSize) {
+      throw SemaException("excess elements", ast->involvedTokens());
+    } else {
+      mSize = constantSize;
+      return value;
+    }
+
   } else {
     throw SemaException("array initializer must be an initializer list", ast->involvedTokens());
   }
@@ -566,12 +598,12 @@ Value UnionType::initializerCodegen(InitializerAST *ast) {
     if (initializers.size() == 1) {
       result = firstType->initializerCodegen(initializers[0].get()).getValue();
     }
-    if (auto* constant = llvm::dyn_cast<llvm::Constant>(result)) {
+    if (auto *constant = llvm::dyn_cast<llvm::Constant>(result)) {
       result = llvm::ConstantStruct::get(getLLVMType(), {constant});
     } else {
-      auto& builder = AST::getBuilder();
-      auto* alloca = builder.CreateAlloca(getLLVMType());
-      auto* bitCast = builder.CreateBitCast(alloca, firstType->getLLVMType());
+      auto &builder = AST::getBuilder();
+      auto *alloca = builder.CreateAlloca(getLLVMType());
+      auto *bitCast = builder.CreateBitCast(alloca, firstType->getLLVMType());
       builder.CreateStore(result, bitCast);
       result = alloca;
     }

@@ -4,7 +4,7 @@
 #include <sema/types.h>
 ISymbol *SymbolTable::lookup(const Token &token) const {
   try {
-    return at(token.getValue());
+    return at(token.toString());
   } catch (const std::out_of_range &) {
     if (mFather) {
       return mFather->lookup(token);
@@ -30,10 +30,10 @@ bool SymbolTable::isTypedef(const Token &token) {
 }
 ISymbol *SymbolTable::insert(const Token &token, ISymbol *symbol) {
   try {
-    at(token.getValue());
-    throw SemaException(std::string("symbol \"") + token.getValue() + "\" already defined", token);
+    at(token.toString());
+    throw SemaException(std::string("symbol \"") + token.toString() + "\" already defined", token);
   } catch (const std::out_of_range &) {
-    return emplace(token.getValue(), symbol).first->second;
+    return emplace(token.toString(), symbol).first->second;
   }
 }
 ISymbol *SymbolTable::insert(ISymbol *symbol) {

@@ -154,7 +154,7 @@ class Token {
     return this->kind != kind;
   }
 
-  const std::string &getValue() const {
+  const std::string &toString() const {
     return value;
   }
   std::string getTokenInLine() const {

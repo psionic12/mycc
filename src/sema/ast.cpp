@@ -244,7 +244,9 @@ void DeclarationAST::codegen() {
       if (initPair.second.get()) {
         if (auto *objtype = dynamic_cast<ObjectType *>(type)) {
           bool complete = objtype->complete();
+          sIsInitializerList = true;
           auto initValue = objtype->initializerCodegen(initPair.second.get());
+          sIsInitializerList = false;
           // if the initializer is an incomplete array type, the declaration is not imcomplete any more
           if (dynamic_cast<ArrayType *>(objtype) && !complete) {
             if (auto *gVar = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
@@ -431,9 +433,9 @@ ObjectType *StructOrUnionSpecifierAST::codegen() {
     std::unique_ptr<ObjectType> structTy;
     if (!tagType) {
       if (bStruct == StructOrUnion::kSTRUCT) {
-        structTy = std::make_unique<StructType>(token.getValue());
+        structTy = std::make_unique<StructType>(token.toString());
       } else {
-        structTy = std::make_unique<UnionType>(token.getValue());
+        structTy = std::make_unique<UnionType>(token.toString());
       }
       mSymbol = std::make_unique<TagSymbol>(std::move(structTy), id ? &token : nullptr);
       sTagTable->insert(token, mSymbol.get());
@@ -958,14 +960,14 @@ llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
 }
 CharacterConstantAST::CharacterConstantAST(
     const Token &token)
-    : AST(AST::Kind::CHARACTER_CONSTANT), mToken(token), c(token.getValue().c_str()[0]) {}
+    : AST(AST::Kind::CHARACTER_CONSTANT), mToken(token), c(token.toString().c_str()[0]) {}
 FloatingConstantAST::FloatingConstantAST(
     const Token &token)
     : AST(AST::Kind::FLOATING_CONSTANT), mToken(token) {
   std::string::size_type sz;
   try {
-    value = std::stof(this->mToken.getValue(), &sz);
-    const std::string &sub = this->mToken.getValue().substr(sz);
+    value = std::stof(this->mToken.toString(), &sz);
+    const std::string &sub = this->mToken.toString().substr(sz);
     if (sub.empty()) {
       suffix = Suffix::None;
     } else if (sub.size() == 1) {
@@ -986,7 +988,7 @@ FloatingConstantAST::FloatingConstantAST(
 void FloatingConstantAST::print(int indent) {
   AST::print(indent);
   AST::printIndent(++indent);
-  std::cout << mToken.getValue() << std::endl;
+  std::cout << mToken.toString() << std::endl;
 }
 EnumerationConstantAST::EnumerationConstantAST(nt<IdentifierAST>
                                                id)
@@ -1153,7 +1155,7 @@ void TypedefNameAST::print(int indent) {
 QualifiedType TypedefNameAST::codegen() {
   ISymbol *symbol = sObjectTable->lookup(id->token);
   if (!symbol) {
-    throw SemaException(std::string("Type ") + id->token.getValue() + "not declared", id->token);
+    throw SemaException(std::string("Type ") + id->token.toString() + "not declared", id->token);
   } else {
     auto *typedefSymbol = dynamic_cast<TypedefSymbol *>(symbol);
     if (typedefSymbol) {
@@ -1169,12 +1171,12 @@ IdentifierAST::IdentifierAST(
 void IdentifierAST::print(int indent) {
   AST::print(indent);
   AST::printIndent(++indent);
-  std::cout << token.getValue() << std::endl;
+  std::cout << token.toString() << std::endl;
 }
 StringAST::StringAST(
     const Token &token) : AST(AST::Kind::STRING), mToken(token) {
   mType = std::make_unique<ArrayType>(QualifiedType(&IntegerType::sCharType, {TypeQualifier::kCONST}),
-                                      mToken.getValue().size());
+                                      mToken.toString().size());
 }
 ArrayType *StringAST::getType() {
   return mType.get();
@@ -1189,6 +1191,7 @@ SymbolTable *AST::sObjectTable = nullptr;
 SymbolTable *AST::sTagTable = nullptr;
 SymbolTable *AST::sLabelTable = nullptr;
 SymbolTables AST::mTables;
+bool AST::sIsInitializerList = false;
 AST::AST(AST::Kind
          kind, int
          id) : mKind(kind), mProductionId(id) {}
@@ -1290,8 +1293,8 @@ IntegerConstantAST::IntegerConstantAST(
     : AST(AST::Kind::INTEGER_CONSTANT), mToken(token) {
   std::string::size_type sz;
   try {
-    this->value = std::stoull(this->mToken.getValue(), &sz, 0);
-    const std::string sub = token.getValue().substr(sz);
+    this->value = std::stoull(this->mToken.toString(), &sz, 0);
+    const std::string sub = token.toString().substr(sz);
     if (sub.empty()) {
       this->suffix = Suffix::None;
     } else {
@@ -1349,7 +1352,7 @@ IntegerConstantAST::IntegerConstantAST(
 void IntegerConstantAST::print(int indent) {
   AST::print(indent);
   printIndent(++indent);
-  std::cout << mToken.getValue() << std::endl;
+  std::cout << mToken.toString() << std::endl;
 }
 void ArgumentExpressionList::print(int indent) {
   AST::print(indent);
@@ -1518,7 +1521,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, Q
         auto *priorObject = dynamic_cast<ObjectSymbol *>(priorDeclartion);
         if (!priorObject
             || priorObject->getQualifiedType() != derivedType) {
-          throw SemaException(std::string("redefine ") + identifier->token.getValue(), involvedTokens());
+          throw SemaException(std::string("redefine ") + identifier->token.toString(), involvedTokens());
         }
 
         if (priorDeclartion->getLinkage() != Linkage::kNone) {
@@ -1555,7 +1558,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, Q
         if (dynamic_cast< ArrayType *>(objectType)) {
           goto create_in_file_scope;
         }
-        value = sBuilder.CreateAlloca(objectType->getLLVMType(), nullptr, identifier->token.getValue());
+        value = sBuilder.CreateAlloca(objectType->getLLVMType(), nullptr, identifier->token.toString());
         break;
       }
       case ScopeKind::LABEL:throw std::runtime_error("WTF: how could a object type declared in a tag symbol");
@@ -1576,7 +1579,7 @@ ISymbol *SimpleDirectDeclaratorAST::codegen(StorageSpecifier storageSpecifier, Q
         } else {
           value = llvm::Function::Create(functionType->getLLVMType(),
                                          llvm::Function::ExternalLinkage,
-                                         identifier->token.getValue(),
+                                         identifier->token.toString(),
                                          sModule.get());
         }
         break;
@@ -1662,7 +1665,7 @@ ISymbol *FunctionDeclaratorAST::codegen(StorageSpecifier storageSpecifier, Quali
   if (dynamic_cast< FunctionType *>(derivedType.getType())
       || dynamic_cast< ArrayType *>(derivedType.getType())) {
     throw SemaException(
-        std::string("function ") + getIdentifier()->getValue() + "cannot be array type or function type",
+        std::string("function ") + getIdentifier()->toString() + "cannot be array type or function type",
         involvedTokens());
   }
   if (parameterList) {
@@ -1698,7 +1701,7 @@ void IdentifierPrimaryExpressionAST::print(int indent) {
 Value IdentifierPrimaryExpressionAST::codegen() {
   auto *symbol = sObjectTable->lookup(identifier->token);
   if (!symbol) {
-    throw SemaException(identifier->token.getValue() + " is not declared", identifier->token);
+    throw SemaException(identifier->token.toString() + " is not declared", identifier->token);
   }
   QualifiedType qualifiedType;
   bool lvalue = false;
@@ -1728,7 +1731,7 @@ void IntegerConstantPrimaryExpressionAST::print(int indent) {
   integer_constant->print(++indent);
 }
 Value IntegerConstantPrimaryExpressionAST::codegen() {
-  bool isBase10 = integer_constant->mToken.getValue()[0] != 0;
+  bool isBase10 = integer_constant->mToken.toString()[0] != 0;
   unsigned long long int n = integer_constant->value;
 
   unsigned int intSize = IntegerType::sIntType.getSizeInBits();
@@ -1853,20 +1856,22 @@ Value CharacterConstantPrimaryExpressionAST::codegen() {
                llvm::ConstantInt::get(type->getLLVMType(),
                                       type->getAPInt(static_cast<uint64_t>(character_constant->c))));
 }
-CharacterConstantPrimaryExpressionAST::CharacterConstantPrimaryExpressionAST(nt<CharacterConstantAST>
-                                                                             character_constant)
-    : character_constant(std::move(
-    character_constant)) {}
+CharacterConstantPrimaryExpressionAST::CharacterConstantPrimaryExpressionAST(nt<CharacterConstantAST> character_constant)
+    : character_constant(std::move(character_constant)) {}
 void StringPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
   string->print(++indent);
 }
 Value StringPrimaryExpressionAST::codegen() {
-  mPointerType = std::make_unique<PointerType>(string->getType()->getReferencedQualifiedType());
-  auto *ptr = sBuilder.CreateGlobalStringPtr(string->getToken().getValue());
-  auto *alloca = sBuilder.CreateAlloca(ptr->getType());
-  sBuilder.CreateStore(ptr, alloca);
-  return Value(QualifiedType(mPointerType.get(), {}), true, alloca);
+  if (sIsInitializerList) {
+    auto *v = llvm::ConstantDataArray::getString(getContext(), string->getToken().toString());
+    QualifiedType qualifiedType(string->getType(), {});
+    return {qualifiedType, false, v};
+  } else {
+    mPointerType = std::make_unique<PointerType>(string->getType()->getReferencedQualifiedType());
+    auto *ptr = sBuilder.CreateGlobalStringPtr(string->getToken().toString());
+    return Value(QualifiedType(mPointerType.get(), {}), false, ptr);
+  }
 }
 StringPrimaryExpressionAST::StringPrimaryExpressionAST(nt<StringAST>
                                                        string) : string(std::move(string)) {}
@@ -2014,7 +2019,7 @@ Value MemberPostfixExpressionAST::codegen() {
   auto *memberSymbol = dynamic_cast<ObjectSymbol *>(compoundTy->mTable.lookup(identifier->token));
   //TODO 6.5.2.3.6
   if (!memberSymbol) {
-    throw SemaException(identifier->token.getValue() + "is not a member of " + compoundTy->getTagName(),
+    throw SemaException(identifier->token.toString() + "is not a member of " + compoundTy->getTagName(),
                         identifier->involvedTokens());
   }
   QualifiedType qualifiedType(memberSymbol->getQualifiedType());
@@ -2061,7 +2066,7 @@ Value PointerMemberPostfixExpressionAST::codegen() {
   }
   auto *memberSymbol = dynamic_cast<ObjectSymbol *>(compoundTy->mTable.lookup(identifier->token));
   if (!memberSymbol) {
-    throw SemaException(identifier->token.getValue() + "is not a member of " + compoundTy->getTagName(),
+    throw SemaException(identifier->token.toString() + "is not a member of " + compoundTy->getTagName(),
                         identifier->involvedTokens());
   }
   QualifiedType qualifiedType(memberSymbol->getQualifiedType());
@@ -2157,14 +2162,18 @@ Value SimpleUnaryExpressionAST::codegen() {
                  false,
                  v.getPtr());
   } else if (auto *arrayType = dynamic_cast<ArrayType *>(v.getQualifiedType().getType())) {
-    auto *ptr =
-        sBuilder.CreateGEP(arrayType->getLLVMType(),
-                           v.getPtr(),
-                           {IntegerType::sIntType.getDefaultValue(), IntegerType::sIntType.getDefaultValue()});
-    mConvertedPointer = std::make_unique<PointerType>(arrayType->getReferencedQualifiedType());
-    return Value(QualifiedType(mConvertedPointer.get(), v.getQualifiedType().getQualifiers()),
-                 false,
-                 ptr);
+    if (!sIsInitializerList) {
+      auto *ptr =
+          sBuilder.CreateGEP(arrayType->getLLVMType(),
+                             v.getPtr(),
+                             {IntegerType::sIntType.getDefaultValue(), IntegerType::sIntType.getDefaultValue()});
+      mConvertedPointer = std::make_unique<PointerType>(arrayType->getReferencedQualifiedType());
+      return Value(QualifiedType(mConvertedPointer.get(), v.getQualifiedType().getQualifiers()),
+                   false,
+                   ptr);
+    } else {
+      return v;
+    }
   } else {
     return v;
   }

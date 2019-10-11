@@ -16,9 +16,9 @@ bool Parser::expect(TokenKind kind) {
 }
 const std::string &Parser::accept(TokenKind kind) {
   if (lex.peek() != kind) {
-    throw parseError(std::string("except ").append(Token::enumToString(kind)).append(" but ").append(lex.peek().getValue()));
+    throw parseError(std::string("except ").append(Token::enumToString(kind)).append(" but ").append(lex.peek().toString()));
   } else {
-    const std::string &name = lex.peek().getValue();
+    const std::string &name = lex.peek().toString();
     lex.consumeToken();
     return name;
   }
@@ -291,7 +291,7 @@ nt<EnumSpecifierAST> Parser::parseEnumSpecifier() {
   accept(TokenKind::TOKEN_ENUM);
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     if (table->isTypedef(lex.peek())) {
-      throw parseError(std::string("cannot combine type \"") + lex.peek().getValue() + "\" with enum");
+      throw parseError(std::string("cannot combine type \"") + lex.peek().toString() + "\" with enum");
     }
     auto id = parseIdentifier();
     if (expect(TokenKind::TOKEN_LBRACE)) {
@@ -521,8 +521,8 @@ nt<DeclarationSpecifiersAST> Parser::parseDeclarationSpecifiers() {
       case TokenKind::TOKEN_ENUM:
       case TokenKind::TOKEN_FLOAT:
         if (!tc.put(token.getKind())) {
-          throw parseError(std::string("cannot combine ") + (lex.peek().getValue()) + (" with ")
-                               + type_specifiers.back().get()->mLeftMost->getValue(), lex.peek());
+          throw parseError(std::string("cannot combine ") + (lex.peek().toString()) + (" with ")
+                               + type_specifiers.back().get()->mLeftMost->toString(), lex.peek());
         }
         type_specifiers.push_back(parseTypeSpecifier());
         continue;
@@ -829,7 +829,7 @@ nt<StructOrUnionSpecifierAST> Parser::parseStructOrUnionSpecifier() {
   nt<IdentifierAST> id = nullptr;
   if (lex.peek() == TokenKind::TOKEN_IDENTIFIER) {
     if (table->isTypedef(lex.peek())) {
-      throw parseError(std::string("cannot combine type \"") + lex.peek().getValue() + "\" with struct or union");
+      throw parseError(std::string("cannot combine type \"") + lex.peek().toString() + "\" with struct or union");
     }
     id = parseIdentifier();
   }
@@ -1380,8 +1380,8 @@ nt<SpecifierQualifierAST> Parser::parseSpecifierQualifiers() {
       case TokenKind::TOKEN_ENUM:
       case TokenKind::TOKEN_FLOAT:
         if (!tc.put(lex.peek().getKind())) {
-          throw parseError(std::string("cannot combine ") + (lex.peek().getValue()) + (" with ")
-                               + type_specifiers.back().get()->mLeftMost->getValue(), lex.peek());
+          throw parseError(std::string("cannot combine ") + (lex.peek().toString()) + (" with ")
+                               + type_specifiers.back().get()->mLeftMost->toString(), lex.peek());
         }
         type_specifiers.push_back(parseTypeSpecifier());
         continue;
