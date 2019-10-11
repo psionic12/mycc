@@ -49,8 +49,8 @@ int main() {
   }
 
   engine->finalizeObject();
-  typedef void (*Function)(int);
+  typedef void (*Function)();
   Function f = reinterpret_cast<Function>(
       engine->getPointerToNamedFunction("main"));
-  f(2);
+  f();
 }

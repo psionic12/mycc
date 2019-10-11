@@ -1124,11 +1124,11 @@ ExpressionStatementAST::ExpressionStatementAST(nt<ExpressionAST>
     : StatementAST(AST::Kind::EXPRESSION_STATEMENT), expression(std::move(expression)) {}
 void ExpressionStatementAST::print(int indent) {
   AST::print(indent);
-  if(expression) expression->print(++indent);
+  if (expression) expression->print(++indent);
 }
 void ExpressionStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
-  if(expression) expression->codegen();
+  if (expression) expression->codegen();
 }
 SelectionStatementAST::SelectionStatementAST() : StatementAST(AST::Kind::SELECTION_STATEMENT) {}
 IterationStatementAST::IterationStatementAST() : StatementAST(AST::Kind::ITERATION_STATEMENT) {}
@@ -2846,7 +2846,7 @@ void SwitchSelectionStatementAST::print(int indent) {
 void SwitchSelectionStatementAST::codegen(StatementContexts &contexts) {
   if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto exp = mExpression->codegen();
-  if (dynamic_cast<IntegerType*>(exp.getType())) {
+  if (dynamic_cast<IntegerType *>(exp.getType())) {
     auto *switchInst = sBuilder.CreateSwitch(exp.getValue(), nullptr);
     auto *endBB = llvm::BasicBlock::Create(getContext());
     contexts.add(std::make_unique<SwitchContext>(switchInst, endBB));
@@ -3089,17 +3089,21 @@ void ForIterationStatementAST::codegen(StatementContexts &contexts) {
   sBuilder.CreateBr(conditionBB);
   //condition bb
   sBuilder.SetInsertPoint(conditionBB);
-  auto value = mExpression->codegen();
   llvm::Value *cond;
-  if (auto *integerTy = dynamic_cast< IntegerType *>(value.getType())) {
-    cond = sBuilder.CreateICmpNE(value.getValue(), integerTy->getDefaultValue());
-  } else if (auto *floatTy = dynamic_cast< FloatingType *>(value.getType())) {
-    cond = sBuilder.CreateFCmpONE(value.getValue(), floatTy->getDefaultValue());
-  } else if (auto *pointerTy = dynamic_cast< PointerType *>(value.getType())) {
-    cond = sBuilder.CreateICmpNE(value.getValue(), pointerTy->getDefaultValue());
+  if (mConditionExpression) {
+    auto value = mConditionExpression->codegen();
+    if (auto *integerTy = dynamic_cast< IntegerType *>(value.getType())) {
+      cond = sBuilder.CreateICmpNE(value.getValue(), integerTy->getDefaultValue());
+    } else if (auto *floatTy = dynamic_cast< FloatingType *>(value.getType())) {
+      cond = sBuilder.CreateFCmpONE(value.getValue(), floatTy->getDefaultValue());
+    } else if (auto *pointerTy = dynamic_cast< PointerType *>(value.getType())) {
+      cond = sBuilder.CreateICmpNE(value.getValue(), pointerTy->getDefaultValue());
+    } else {
+      throw SemaException("The controlling expression of an iteration statement shall have scalar type.",
+                          mExpression->involvedTokens());
+    }
   } else {
-    throw SemaException("The controlling expression of an iteration statement shall have scalar type.",
-                        mExpression->involvedTokens());
+    cond = llvm::ConstantInt::get(IntegerType::sOneBitBoolIntType.getLLVMType(), 1);
   }
   sBuilder.CreateCondBr(cond, loopBB, endBB);
   contexts.add(std::make_unique<LoopContext>(conditionBB, endBB));
@@ -3112,7 +3116,7 @@ void ForIterationStatementAST::codegen(StatementContexts &contexts) {
   //after loop
   contexts.getContainingFunction()->getBasicBlockList().push_back(afterLoopBB);
   sBuilder.SetInsertPoint(afterLoopBB);
-  mStepExpression->codegen();
+  if (mStepExpression) mStepExpression->codegen();
   if (!sBuilder.GetInsertBlock()->getTerminator())
     sBuilder.CreateBr(conditionBB);
   // end body

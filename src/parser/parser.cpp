@@ -16,8 +16,7 @@ bool Parser::expect(TokenKind kind) {
 }
 const std::string &Parser::accept(TokenKind kind) {
   if (lex.peek() != kind) {
-    lex.consumeToken();
-    throw parseError(std::string("except ").append(Token::enumToString(kind)));
+    throw parseError(std::string("except ").append(Token::enumToString(kind)).append(" but ").append(lex.peek().getValue()));
   } else {
     const std::string &name = lex.peek().getValue();
     lex.consumeToken();
@@ -1173,6 +1172,7 @@ nt<IterationStatementAST> Parser::parseIterationStatement() {
 ///                   | return {<expression>}? ;
 nt<JumpStatementAST> Parser::parseJumpStatement() {
   mStartToken = &lex.peek();
+  nt<JumpStatementAST> jumpAst;
   if (expect(TokenKind::TOKEN_GOTO)) {
     auto id = parseIdentifier();
     accept(TokenKind::TOKEN_SEMI);
@@ -1186,9 +1186,11 @@ nt<JumpStatementAST> Parser::parseJumpStatement() {
     return make_ast<ReturnJumpStatementAST>(std::move(exp));
   } else {
     if (expect(TokenKind::TOKEN_CONTINUE)) {
+      accept(TokenKind::TOKEN_SEMI);
       return make_ast<ContinueJumpStatementAST>();
     } else {
       accept(TokenKind::TOKEN_BREAK);
+      accept(TokenKind::TOKEN_SEMI);
       return make_ast<BreakJumpStatementAST>();
     }
   }
