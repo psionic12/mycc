@@ -189,7 +189,6 @@ void CompoundStatementAST::print(int indent) {
   mASTs.print(indent);
 }
 void CompoundStatementAST::codegen(StatementContexts &contexts) {
-  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   SymbolScope s1(sObjectTable, &mObjectTable);
   SymbolScope s2(sTagTable, &mTagTable);
   for (auto &ast : mASTs) {
@@ -2904,7 +2903,6 @@ CaseLabeledStatementAST::CaseLabeledStatementAST(nt<ConstantExpressionAST> const
                                                  nt<StatementAST> statement)
     : LabeledStatementAST(std::move(statement)), mConstantExpression(std::move(constantExpression)) {}
 void CaseLabeledStatementAST::codegen(StatementContexts &contexts) {
-  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *switchContext = contexts.getLastContext<SwitchContext>();
   if (switchContext) {
     auto *switchInst = switchContext->getSwitchInst();
@@ -2937,7 +2935,6 @@ void DefaultLabeledStatementAST::print(int indent) {
   mStatement->print(indent);
 }
 void DefaultLabeledStatementAST::codegen(StatementContexts &contexts) {
-  if (sBuilder.GetInsertBlock()->getTerminator()) return;
   auto *switchContext = contexts.getLastContext<SwitchContext>();
   if (switchContext) {
     auto *switchInst = switchContext->getSwitchInst();
@@ -2949,6 +2946,7 @@ void DefaultLabeledStatementAST::codegen(StatementContexts &contexts) {
       }
       sBuilder.SetInsertPoint(BB);
       mStatement->codegen(contexts);
+      sBuilder.CreateBr(switchContext->getBreakBB());
       switchInst->setDefaultDest(BB);
     } else {
       throw SemaException(
