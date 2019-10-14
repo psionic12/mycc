@@ -191,22 +191,29 @@ class StringAST : public AST {
 class IdentifierAST : public AST {
  public:
   IdentifierAST(const Token &token);
-  const Token &token;
   void print(int indent) override;
+ private:
+  const Token &mToken;
+ public:
+  const Token &getToken() const;
 };
 class TypedefNameAST : public AST {
  public:
   TypedefNameAST(nt<IdentifierAST> identifier);
-  const nt<IdentifierAST> id;
   void print(int indent) override;
   QualifiedType codegen();
+ private:
+  const nt<IdentifierAST> mIdentifier;
 };
 class TypeQualifierAST : public AST {
  public:
   TypeQualifierAST(Terminal<TypeQualifier> op);
-  const Terminal<TypeQualifier> op;
   void print(int indent) override;
   TypeQualifier codegen();
+ private:
+  friend class DeclarationSpecifiersAST;
+  friend class SpecifierQualifierAST;
+  const Terminal<TypeQualifier> mOp;
 };
 
 class StatementAST : public AST {
@@ -351,24 +358,28 @@ class SwitchSelectionStatementAST : public SelectionStatementAST {
 class ExpressionStatementAST : public StatementAST {
  public:
   ExpressionStatementAST(nt<ExpressionAST> expression);
-  const nt<ExpressionAST> expression;
   void print(int indent) override;
   void codegen(StatementContexts &contexts) override;
+ private:
+  const nt<ExpressionAST> mExpression;
 };
 
 class InitializerListAST : public AST {
  public:
   InitializerListAST(nts<InitializerAST> initializer);
-  const nts<InitializerAST> initializers;
   void print(int indent) override;
-
+  const nts<InitializerAST> & getInitializers();
+ private:
+  const nts<InitializerAST> mInitializers;
 };
 class InitializerAST : public AST {
  public:
   InitializerAST(nt<AssignmentExpressionAST> assignment_expression);
   InitializerAST(nt<InitializerListAST> initializer_list);
-  const nt<AST> ast;
   void print(int indent) override;
+  AST* getInitializer();
+ private:
+  const nt<AST> mAST;
 };
 
 typedef std::vector<std::pair<nt<DeclaratorAST>, nt<InitializerAST>>> InitDeclarators;
@@ -376,45 +387,50 @@ class EnumeratorAST : public AST {
  public:
   EnumeratorAST(nt<IdentifierAST> id);
   EnumeratorAST(nt<IdentifierAST> id, nt<ConstantExpressionAST> constant_expression);
-  const nt<IdentifierAST> id;
-  const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
   EnumConstSymbol *codegen(EnumerationType *enumerationType, int64_t index);
  private:
   std::unique_ptr<EnumConstSymbol> mSymbol;
+  const nt<IdentifierAST> mIdentifier;
+  const nt<ConstantExpressionAST> mConstantExpression;
 };
 class EnumeratorListAST : public AST {
  public:
   EnumeratorListAST(nts<EnumeratorAST> enumerator);
-  const nts<EnumeratorAST> enumerators;
   void print(int indent) override;
   std::vector<EnumConstSymbol *> codegen(EnumerationType *enumType);
+ private:
+  const nts<EnumeratorAST> mEnumerators;
 };
 class ParameterDeclarationAST : public AST {
  public:
   ParameterDeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers, nt<DeclaratorAST> declarator);
-  const nt<DeclarationSpecifiersAST> declaration_specifiers;
-  nt<DeclaratorAST> declarator;
   void print(int indent) override;
   ISymbol *codegen();
+ private:
+  const nt<DeclarationSpecifiersAST> mDeclarationSpecifiers;
+  nt<DeclaratorAST> mDeclarator;
 };
 class ParameterListAST : public AST {
  public:
   ParameterListAST(nts<ParameterDeclarationAST> parameter_declaration,
                    bool hasMultiple,
                    SymbolTable &table);
-  const nts<ParameterDeclarationAST> parameter_declaration;
-  SymbolTable &mObjectTable;
   void print(int indent) override;
   std::vector<QualifiedType> codegen();
   bool hasMultiple() const;
  private:
+  friend class FunctionDefinitionAST;
+  friend class FunctionDeclaratorAST;
   bool mMultiple;
+  const nts<ParameterDeclarationAST> mParameterDeclaration;
+  SymbolTable &mObjectTable;
 };
 class EnumerationConstantAST : public AST {
  public:
   EnumerationConstantAST(nt<IdentifierAST> id);
-  const nt<IdentifierAST> id;
+ private:
+  const nt<IdentifierAST> mIdentifier;
 };
 class FloatingConstantAST : public AST {
  public:
@@ -424,17 +440,21 @@ class FloatingConstantAST : public AST {
     F,
     L,
   };
+  void print(int indent) override;
+ private:
+  friend class FloatingConstantPrimaryExpressionAST;
   const Token &mToken;
   //TODO use APFloat
-  long double value;
-  Suffix suffix;
-  void print(int indent) override;
+  long double mValue;
+  Suffix mSuffix;
 };
 class CharacterConstantAST : public AST {
  public:
   CharacterConstantAST(const Token &token);
+ private:
+  friend class CharacterConstantPrimaryExpressionAST;
   const Token &mToken;
-  char c;
+  char mChar;
 };
 class IntegerConstantAST : public AST {
  public:
@@ -447,11 +467,13 @@ class IntegerConstantAST : public AST {
     LL,
     ULL,
   };
+  void print(int indent) override;
+ private:
+  friend class IntegerConstantPrimaryExpressionAST;
   const Token &mToken;
   //TODO use APInt
-  unsigned long long value;
-  Suffix suffix;
-  void print(int indent) override;
+  unsigned long long mValue;
+  Suffix mSuffix;
 };
 class AssignmentExpressionAST : public IExpression {
  public:
@@ -459,9 +481,6 @@ class AssignmentExpressionAST : public IExpression {
   AssignmentExpressionAST(nt<ConditionalExpressionAST> conditional_expression,
                           Terminal<AssignmentOp> op,
                           nt<AssignmentExpressionAST> assignment_expression);
-  const nt<ConditionalExpressionAST> conditional_expression;
-  const std::unique_ptr<Terminal<AssignmentOp>> op;
-  const nt<AssignmentExpressionAST> assignment_expression;
   void print(int indent) override;
   Value codegen() override;
   static llvm::Value *eqCodegen(Value &lhs,
@@ -469,6 +488,10 @@ class AssignmentExpressionAST : public IExpression {
                                 AST *lhsAST,
                                 AST *rhsAST,
                                 bool isInitialization);
+ private:
+  const nt<ConditionalExpressionAST> mConditionalExpression;
+  const std::unique_ptr<Terminal<AssignmentOp>> mOp;
+  const nt<AssignmentExpressionAST> mAssignmentExpression;
 };
 class PrimaryExpressionAST : public IExpression {
  public:
@@ -478,140 +501,149 @@ class PrimaryExpressionAST : public IExpression {
 class IdentifierPrimaryExpressionAST : public PrimaryExpressionAST {
  public:
   IdentifierPrimaryExpressionAST(nt<IdentifierAST> identifier);
-  const nt<IdentifierAST> identifier;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  const nt<IdentifierAST> mIdentifier;
 };
 
 class IntegerConstantPrimaryExpressionAST : public PrimaryExpressionAST {
  public:
   IntegerConstantPrimaryExpressionAST(nt<IntegerConstantAST> integer_constant);
-  nt<IntegerConstantAST> integer_constant;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<IntegerConstantAST> mIntegerConstant;
 };
 
 class FloatingConstantPrimaryExpressionAST : public PrimaryExpressionAST {
  public:
   FloatingConstantPrimaryExpressionAST(nt<FloatingConstantAST> floating_constant);
-  nt<FloatingConstantAST> floating_constant;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<FloatingConstantAST> mFloatingConstant;
 };
 
 class CharacterConstantPrimaryExpressionAST : public PrimaryExpressionAST {
  public:
   CharacterConstantPrimaryExpressionAST(nt<CharacterConstantAST> character_constant);
-  nt<CharacterConstantAST> character_constant;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<CharacterConstantAST> mCharacterConstant;
 };
 
 class StringPrimaryExpressionAST : public PrimaryExpressionAST {
  public:
   StringPrimaryExpressionAST(nt<StringAST> string);
-  nt<StringAST> string;
   void print(int indent) override;
   Value codegen() override;
  private:
   std::unique_ptr<PointerType> mPointerType;
+  nt<StringAST> mStringAST;
 };
 
 class ExpressionPrimaryExpressionAST : public PrimaryExpressionAST {
  public:
   ExpressionPrimaryExpressionAST(nt<ExpressionAST> expression);
-  nt<ExpressionAST> expression;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<ExpressionAST> mExpression;
 };
 
 class ArgumentExpressionList : public AST {
  public:
   ArgumentExpressionList(nts<AssignmentExpressionAST> argumentList);
   void print(int indent) override;
-  const nts<AssignmentExpressionAST> argumentsList;
   std::vector<Value> codegen();
+ private:
+  const nts<AssignmentExpressionAST> mArgumentsList;
 };
 class PostfixExpressionAST : public IExpression {
  public:
-  PostfixExpressionAST() : IExpression(Kind::POSTFIX_EXPRESSION) {}
+  PostfixExpressionAST();
 };
 
 class SimplePostfixExpressionAST : public PostfixExpressionAST {
  public:
-  SimplePostfixExpressionAST(nt<PrimaryExpressionAST> primary) : primary_expression(std::move(primary)) {}
-  nt<PrimaryExpressionAST> primary_expression;
+  SimplePostfixExpressionAST(nt<PrimaryExpressionAST> primary);
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<PrimaryExpressionAST> mPrimaryExpression;
 };
 
 class ArrayPostfixExpressionAST : public PostfixExpressionAST {
  public:
-  ArrayPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<ExpressionAST> expression)
-      : postfix_expression(std::move(postfix_expression)), expression(std::move(expression)) {}
-  nt<PostfixExpressionAST> postfix_expression;
-  nt<ExpressionAST> expression;
+  ArrayPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<ExpressionAST> expression);
   void print(int indent) override;
   Value codegen() override;
  private:
   std::unique_ptr<PointerType> mArrayToPointer;
+  nt<PostfixExpressionAST> mPostfixExpression;
+  nt<ExpressionAST> mExpression;
 };
 
 class FunctionPostfixExpressionAST : public PostfixExpressionAST {
  public:
-  FunctionPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<ArgumentExpressionList> arguments)
-      : postfix_expression(std::move(postfix_expression)), argument_expression_list(std::move(arguments)) {}
-  nt<PostfixExpressionAST> postfix_expression;
-  nt<ArgumentExpressionList> argument_expression_list;
+  FunctionPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<ArgumentExpressionList> arguments);
   void print(int indent) override;
   Value codegen();
+ private:
+  nt<PostfixExpressionAST> mPostfixExpression;
+  nt<ArgumentExpressionList> mArgumentExpressionList;
 };
 
 class MemberPostfixExpressionAST : public PostfixExpressionAST {
  public:
   MemberPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<IdentifierAST> identifier)
-      : postfix_expression(std::move(postfix_expression)), identifier(std::move(identifier)) {}
-  nt<PostfixExpressionAST> postfix_expression;
-  nt<IdentifierAST> identifier;
+      : mPostfixExpression(std::move(postfix_expression)), mIdentifier(std::move(identifier)) {}
+
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<PostfixExpressionAST> mPostfixExpression;
+  nt<IdentifierAST> mIdentifier;
 };
 
 class PointerMemberPostfixExpressionAST : public PostfixExpressionAST {
  public:
-  PointerMemberPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<IdentifierAST> identifier)
-      : postfix_expression(std::move(postfix_expression)), identifier(std::move(identifier)) {}
-  nt<PostfixExpressionAST> postfix_expression;
-  nt<IdentifierAST> identifier;
+  PointerMemberPostfixExpressionAST(nt<PostfixExpressionAST> postfix_expression, nt<IdentifierAST> identifier);
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<PostfixExpressionAST> mPostfixExpression;
+  nt<IdentifierAST> mIdentifier;
 };
 
 class IncrementPostfixExpression : public PostfixExpressionAST {
  public:
-  IncrementPostfixExpression(nt<PostfixExpressionAST> postfix_expression) :
-      postfix_expression(std::move(postfix_expression)) {}
-  nt<PostfixExpressionAST> postfix_expression;
+  IncrementPostfixExpression(nt<PostfixExpressionAST> postfix_expression);
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<PostfixExpressionAST> mPostfixExpression;
 };
 
 class DecrementPostfixExpression : public PostfixExpressionAST {
  public:
-  DecrementPostfixExpression(nt<PostfixExpressionAST> postfix_expression) :
-      postfix_expression(std::move(postfix_expression)) {}
-  nt<PostfixExpressionAST> postfix_expression;
+  DecrementPostfixExpression(nt<PostfixExpressionAST> postfix_expression);
   void print(int indent) override;
   Value codegen() override;
+ private:
+  nt<PostfixExpressionAST> mPostfixExpression;
 };
 
 class TypeNameAST : public AST {
  public:
   TypeNameAST(nt<SpecifierQualifierAST> specifier, nt<DeclaratorAST> declarator);
-  const nt<SpecifierQualifierAST> specifiers;
-  const nt<DeclaratorAST> declarator;
   void print(int indent) override;
   QualifiedType codegen();
+ private:
+  const nt<SpecifierQualifierAST> mSpecifiers;
+  const nt<DeclaratorAST> mDeclarator;
 };
 class UnaryExpressionAST : public IExpression {
  public:
@@ -620,8 +652,7 @@ class UnaryExpressionAST : public IExpression {
 
 class SimpleUnaryExpressionAST : public UnaryExpressionAST {
  public:
-  SimpleUnaryExpressionAST(nt<PostfixExpressionAST> postfixExpression)
-      : mPostfixExpression(std::move(postfixExpression)) {}
+  SimpleUnaryExpressionAST(nt<PostfixExpressionAST> postfixExpression);
   void print(int indent) override;
   Value codegen() override;
  private:
@@ -631,8 +662,7 @@ class SimpleUnaryExpressionAST : public UnaryExpressionAST {
 
 class PrefixIncrementExpressionAST : public UnaryExpressionAST {
  public:
-  PrefixIncrementExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST)
-      : mUnaryExpression(std::move(unaryExpressionAST)) {}
+  PrefixIncrementExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST);
   void print(int indent) override;
   Value codegen() override;
  private:
@@ -641,8 +671,7 @@ class PrefixIncrementExpressionAST : public UnaryExpressionAST {
 
 class PrefixDecrementExpressionAST : public UnaryExpressionAST {
  public:
-  PrefixDecrementExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST)
-      : mUnaryExpression(std::move(unaryExpressionAST)) {}
+  PrefixDecrementExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST);
   void print(int indent) override;
   Value codegen() override;
  private:
@@ -651,8 +680,7 @@ class PrefixDecrementExpressionAST : public UnaryExpressionAST {
 
 class UnaryOperatorExpressionAST : public UnaryExpressionAST {
  public:
-  UnaryOperatorExpressionAST(Terminal<UnaryOp> op, nt<CastExpressionAST> castExpressionAST)
-      : mOp(op), mCastExpression(std::move(castExpressionAST)) {}
+  UnaryOperatorExpressionAST(Terminal<UnaryOp> op, nt<CastExpressionAST> castExpressionAST);
   void print(int indent) override;
   Value codegen() override;
  private:
@@ -663,10 +691,8 @@ class UnaryOperatorExpressionAST : public UnaryExpressionAST {
 
 class SizeofUnaryExpressionAST : public UnaryExpressionAST {
  public:
-  SizeofUnaryExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST)
-      : mAST(std::move(unaryExpressionAST)) {}
-  SizeofUnaryExpressionAST(nt<TypeNameAST> typeNameAST)
-      : mAST(std::move(typeNameAST)) {}
+  SizeofUnaryExpressionAST(nt<UnaryExpressionAST> unaryExpressionAST);
+  SizeofUnaryExpressionAST(nt<TypeNameAST> typeNameAST);
   void print(int indent) override;
   Value codegen() override;
  private:
@@ -675,13 +701,12 @@ class SizeofUnaryExpressionAST : public UnaryExpressionAST {
 
 class CastExpressionAST : public IExpression {
  public:
-  CastExpressionAST() : IExpression(Kind::CAST_EXPRESSION) {}
+  CastExpressionAST();
 };
 
 class SimpleCastExpressionAST : public CastExpressionAST {
  public:
-  SimpleCastExpressionAST(nt<UnaryExpressionAST> unaryExpression)
-      : mUnaryExpression(std::move(unaryExpression)) {}
+  SimpleCastExpressionAST(nt<UnaryExpressionAST> unaryExpression);
   void print(int indent) override;
   Value codegen() override;
  private:
@@ -690,8 +715,7 @@ class SimpleCastExpressionAST : public CastExpressionAST {
 
 class RealCastExpressionAST : public CastExpressionAST {
  public:
-  RealCastExpressionAST(nt<TypeNameAST> typeName, nt<CastExpressionAST> castExpression)
-      : mTypeName(std::move(typeName)), mCastExpression(std::move(castExpression)) {}
+  RealCastExpressionAST(nt<TypeNameAST> typeName, nt<CastExpressionAST> castExpression);
   void print(int indent) override;
   Value codegen() override;
  private:
@@ -701,10 +725,7 @@ class RealCastExpressionAST : public CastExpressionAST {
 
 class ExpressionAST : public IExpression {
  public:
-  ExpressionAST(nt<ExpressionAST> expression, nt<AssignmentExpressionAST> assignment_expression)
-      : IExpression(AST::Kind::EXPRESSION),
-        mExpression(std::move(expression)),
-        mAssignmentExpression(std::move(assignment_expression)) {};
+  ExpressionAST(nt<ExpressionAST> expression, nt<AssignmentExpressionAST> assignment_expression);;
   void print(int indent) override;
   Value codegen() override;
  private:
@@ -714,7 +735,7 @@ class ExpressionAST : public IExpression {
 
 class IBinaryOperationAST : public IExpression {
  public:
-  IBinaryOperationAST() : IExpression(Kind::LOGICAL_OR_EXPRESSION) {}
+  IBinaryOperationAST();
 };
 
 class SimpleBinaryOperatorAST : public IBinaryOperationAST {
@@ -728,15 +749,14 @@ class SimpleBinaryOperatorAST : public IBinaryOperationAST {
 
 class BinaryOperatorAST : public IBinaryOperationAST {
  public:
-  BinaryOperatorAST(nt<IBinaryOperationAST> left, Terminal<InfixOp> op, nt<IBinaryOperationAST> right)
-      : mLeft(std::move(left)), mOp(op), mRight(std::move(right)) {}
+  BinaryOperatorAST(nt<IBinaryOperationAST> left, Terminal<InfixOp> op, nt<IBinaryOperationAST> right);
   void print(int indent) override;
   Value codegen() override;
   static Value codegen(Value &lhs, Value &rhs, InfixOp op, const AST *lAST, const AST *rAST);
   static std::tuple<Type *, llvm::Value *, llvm::Value *> UsualArithmeticConversions(Value &lhs,
                                                                                      Value &rhs,
                                                                                      const AST *ast);
-  static bool UsualArithmeticConversions(Type* lhs, Type* rhs, const AST *ast);
+  static bool UsualArithmeticConversions(Type *lhs, Type *rhs, const AST *ast);
  protected:
   nt<IBinaryOperationAST> mLeft;
   Terminal<InfixOp> mOp;
@@ -754,11 +774,12 @@ class ConditionalExpressionAST : public IExpression {
   ConditionalExpressionAST(nt<IBinaryOperationAST> logical_or_expression,
                            nt<ExpressionAST> expression,
                            nt<ConditionalExpressionAST> conditional_expression);
-  const nt<IBinaryOperationAST> logical_or_expression;
-  const nt<ExpressionAST> expression;
-  const nt<ConditionalExpressionAST> conditional_expression;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  const nt<IBinaryOperationAST> mLogicalOrExpression;
+  const nt<ExpressionAST> mExpression;
+  const nt<ConditionalExpressionAST> mConditionalExpression;
 };
 class DirectDeclaratorAST : public AST {
  public:
@@ -770,32 +791,33 @@ class DirectDeclaratorAST : public AST {
 class SimpleDirectDeclaratorAST : public DirectDeclaratorAST {
  public:
   SimpleDirectDeclaratorAST(nt<IdentifierAST> identifier);
-  const nt<IdentifierAST> identifier;
   void print(int indent) override;
   const Token *getIdentifier() override;
   ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) override;
  private:
   std::unique_ptr<ISymbol> mSymbol;
+  const nt<IdentifierAST> mIdentifier;
 };
 
 class ParenthesedDirectDeclaratorAST : public DirectDeclaratorAST {
  public:
   ParenthesedDirectDeclaratorAST(nt<DeclaratorAST> declarator);
-  const nt<DeclaratorAST> declarator;
   void print(int indent) override;
   const Token *getIdentifier() override;
   ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) override;
+ private:
+  const nt<DeclaratorAST> mDeclarator;
 };
 
 class ArrayDeclaratorAST : public DirectDeclaratorAST {
  public:
   ArrayDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator, nt<ConstantExpressionAST> constantExpression);
-  const nt<DirectDeclaratorAST> directDeclarator;
-  const nt<ConstantExpressionAST> constantExpression;
   void print(int indent) override;
   const Token *getIdentifier() override;
   ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) override;
  private:
+  const nt<DirectDeclaratorAST> mDirectDeclarator;
+  const nt<ConstantExpressionAST> mConstantExpression;
   std::unique_ptr<ArrayType> mArrayType;
 };
 
@@ -803,86 +825,93 @@ class FunctionDeclaratorAST : public DirectDeclaratorAST {
  public:
   FunctionDeclaratorAST(nt<DirectDeclaratorAST> directDeclarator,
                         nt<ParameterListAST> parameterList);
-  const nt<DirectDeclaratorAST> directDeclarator;
-  const nt<ParameterListAST> parameterList;
   void print(int indent) override;
   const Token *getIdentifier() override;
   ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType) override;
  private:
+  friend class FunctionDefinitionAST;
+  const nt<DirectDeclaratorAST> mDirectDeclarator;
+  const nt<ParameterListAST> mParameterList;
   std::unique_ptr<FunctionType> mFunctionType;
 };
 
 class PointerAST : public AST {
  public:
   PointerAST(nts<TypeQualifierAST> type_qualifiers, nt<PointerAST> pointer);
-  const nts<TypeQualifierAST> type_qualifiers;
-  const nt<PointerAST> pointer;
   void print(int indent) override;
   QualifiedType codegen(QualifiedType derivedType);
  private:
   std::unique_ptr<PointerType> mPointerType;
+  const nts<TypeQualifierAST> mTypeQualifiers;
+  const nt<PointerAST> mPointer;
 };
 class ConstantExpressionAST : public IExpression {
  public:
   ConstantExpressionAST(nt<ConditionalExpressionAST> conditional_expression);
-  const nt<ConditionalExpressionAST> conditional_expression;
   void print(int indent) override;
   Value codegen() override;
+ private:
+  const nt<ConditionalExpressionAST> mConditionalExpression;
 };
 class StructDeclaratorAST : public AST {
  public:
   StructDeclaratorAST(nt<DeclaratorAST> declarator);
   StructDeclaratorAST(nt<DeclaratorAST> declarator, nt<ConstantExpressionAST> constant_expression);
   StructDeclaratorAST(nt<ConstantExpressionAST> constant_expression);
-  const nt<DeclaratorAST> declarator;
-  const nt<ConstantExpressionAST> constant_expression;
   void print(int indent) override;
   ISymbol *codegen(const QualifiedType &derivedType);
+ private:
+  const nt<DeclaratorAST> mDeclarator;
+  const nt<ConstantExpressionAST> mConstantExpression;
 };
 class StructDeclaratorListAST : public AST {
  public:
   StructDeclaratorListAST(nts<StructDeclaratorAST> struct_declarators);
-  const nts<StructDeclaratorAST> struct_declarators;
   void print(int indent) override;
+ private:
+  friend class StructDeclarationAST;
+  const nts<StructDeclaratorAST> mStructDeclarators;
 };
 class StructDeclarationAST : public AST {
  public:
   StructDeclarationAST(nt<SpecifierQualifierAST> specifier_qualifier,
                        nt<StructDeclaratorListAST> struct_declarator_list);
-  const nt<SpecifierQualifierAST> specifier_qualifier;
-  const nt<StructDeclaratorListAST> struct_declarator_list;
   void print(int indent) override;
   std::vector<ObjectSymbol *> codegen();
+ private:
+  const nt<SpecifierQualifierAST> mSpecifierQualifier;
+  const nt<StructDeclaratorListAST> mStructDeclaratorList;
 };
 class EnumSpecifierAST : public AST {
  public:
   EnumSpecifierAST(nt<IdentifierAST> identifier, nt<EnumeratorListAST> enumeratorList);
   EnumSpecifierAST(nt<EnumeratorListAST> enumeratorList);
   EnumSpecifierAST(nt<IdentifierAST> identifier);
-  const nt<IdentifierAST> id;
-  const nt<EnumeratorListAST> enum_list;
   void print(int indent) override;
   EnumerationType *codegen();
  private:
   std::unique_ptr<TagSymbol> mSymbol;
+  const nt<IdentifierAST> mIdentifier;
+  const nt<EnumeratorListAST> mEnumList;
 };
 class StructOrUnionSpecifierAST : public AST {
  public:
   StructOrUnionSpecifierAST(StructOrUnion type, nt<IdentifierAST> id, nts<StructDeclarationAST> declarations);
-  const StructOrUnion bStruct;
-  const nt<IdentifierAST> id;
-  const nts<StructDeclarationAST> declarations;
   void print(int indent) override;
-  const ObjectType *type;
   ObjectType *codegen();
  private:
   std::unique_ptr<TagSymbol> mSymbol;
+  const StructOrUnion mIsStruct;
+  const nt<IdentifierAST> mIdentifier;
+  const nts<StructDeclarationAST> mDeclarations;
+  const ObjectType *mType;
 };
 class ProtoTypeSpecifierAST : public AST, public Terminal<ProtoTypeSpecifierOp> {
  public:
   ProtoTypeSpecifierAST(Terminal<ProtoTypeSpecifierOp> specifier);
-  const Terminal<ProtoTypeSpecifierOp> specifier;
   void print(int indent) override;
+ private:
+  const Terminal<ProtoTypeSpecifierOp> mSpecifier;
 };
 class TypeSpecifierAST : public AST {
  public:
@@ -890,65 +919,75 @@ class TypeSpecifierAST : public AST {
   TypeSpecifierAST(nt<StructOrUnionSpecifierAST> specifier);
   TypeSpecifierAST(nt<EnumSpecifierAST> specifier);
   TypeSpecifierAST(nt<TypedefNameAST> specifier);
-  const nt<AST> specifier;
   void print(int indent) override;
+ private:
+  friend class TypeSpecifiersAST;
+  const nt<AST> mSpecifier;
 };
 class TypeSpecifiersAST : public AST {
  public:
   TypeSpecifiersAST(CombinationKind kind, nts<TypeSpecifierAST> specifiers);
-  const CombinationKind combination_kind;
-  nts<TypeSpecifierAST> type_specifiers;
   bool empty();
   void print(int indent) override;
-  ObjectType *type;
   QualifiedType codegen();
+ private:
+  const CombinationKind mCombinationKind;
+  nts<TypeSpecifierAST> mTypeSpecifiers;
+  ObjectType *mType;
 };
 class SpecifierQualifierAST : public AST {
  public:
   SpecifierQualifierAST(nt<TypeSpecifiersAST> types, nts<TypeQualifierAST> qualifiers);
-  nt<TypeSpecifiersAST> types;
-  nts<TypeQualifierAST> qualifiers;
   void print(int indent) override;
-  const ObjectType *type;
   QualifiedType codegen();
+ private:
+  nt<TypeSpecifiersAST> mTypes;
+  nts<TypeQualifierAST> mQualifiers;
+  const ObjectType *mType;
 };
 class StorageClassSpecifierAST : public AST {
  public:
   StorageClassSpecifierAST(Terminal<StorageSpecifier> storage_speicifier);
-  const Terminal<StorageSpecifier> storage_speicifier;
   void print(int indent) override;
+ private:
+  const Terminal<StorageSpecifier> mStorageSpeicifier;
 };
 class DeclaratorAST : public AST {
  public:
   DeclaratorAST(nt<PointerAST> pointer, nt<DirectDeclaratorAST> direct_declarator);
-  nt<PointerAST> pointer;
-  const nt<DirectDeclaratorAST> direct_declarator;
   void print(int indent) override;
   const Token *getIdentifier() const;
   ISymbol *codegen(StorageSpecifier storageSpecifier, QualifiedType derivedType);
+ private:
+  friend class FunctionDefinitionAST;
+  nt<PointerAST> mPointer;
+  const nt<DirectDeclaratorAST> mDirectDeclarator;
 };
 class DeclarationSpecifiersAST : public AST {
  public:
   DeclarationSpecifiersAST(ts<StorageSpecifier> storage_specifiers,
                            nt<TypeSpecifiersAST> type_specifiers,
                            nts<TypeQualifierAST> type_qualifiers);
-  const ts<StorageSpecifier> storage_specifiers;
-  const nt<TypeSpecifiersAST> type_specifiers;
-  const nts<TypeQualifierAST> type_qualifiers;
   bool empty();
   void print(int indent) override;
   std::pair<StorageSpecifier, QualifiedType> codegen();
+ private:
+  friend class FunctionDefinitionAST;
+  friend class DeclarationAST;
+  const ts<StorageSpecifier> mStorageSpecifiers;
+  const nt<TypeSpecifiersAST> mTypeSpecifiers;
+  const nts<TypeQualifierAST> mTypeQualifiers;
 };
 class DeclarationAST : public AST {
  public:
   DeclarationAST(nt<DeclarationSpecifiersAST> declaration_specifiers,
                  InitDeclarators init_declarators,
                  SymbolTable &table);
-  const nt<DeclarationSpecifiersAST> declaration_specifiers;
-  const InitDeclarators init_declarators;
   void print(int indent) override;
   void codegen();
  private:
+  const nt<DeclarationSpecifiersAST> mDeclarationSpecifiers;
+  const InitDeclarators mInitDeclarators;
   static TypedefSymbol sFakeTypedef;
 };
 class CompoundStatementAST : public StatementAST {
@@ -971,32 +1010,33 @@ class FunctionDefinitionAST : public AST {
                         nts<DeclarationAST> declarations,
                         nt<CompoundStatementAST> compound_statement,
                         SymbolTable &labelTable);
-  const nt<DeclarationSpecifiersAST> declaration_spcifiers;
-  const nt<DeclaratorAST> declarator;
-  const nts<DeclarationAST> declarations;
-  const nt<CompoundStatementAST> compound_statement;
-  SymbolTable &mLabelTable;
   void print(int indent) override;
   llvm::Value *codegen();
+ private:
+  const nt<DeclarationSpecifiersAST> mDeclarationSpcifiers;
+  const nt<DeclaratorAST> mDeclarator;
+  const nts<DeclarationAST> mDeclarations;
+  const nt<CompoundStatementAST> mCompoundStatement;
+  SymbolTable &mLabelTable;
 
 };
 class ExternalDeclarationAST : public AST {
  public:
   explicit ExternalDeclarationAST(nt<AST> def);
-  const nt<AST> def;
   void print(int indent) override;
   void codegen();
+ private:
+  nt<AST> mDef;
 };
 class TranslationUnitAST : public AST {
  public:
   TranslationUnitAST(nts<ExternalDeclarationAST> external_declarations,
                      SymbolTable &objectTable,
                      SymbolTable &tagTable);
-  const nts<ExternalDeclarationAST> external_declarations;
   void print(int indent) override;
   void codegen();
-  //TODO private members
  private:
+  const nts<ExternalDeclarationAST> mExternalDeclarations;
   SymbolTable &mObjectTable;
   SymbolTable &mTagTable;
 };

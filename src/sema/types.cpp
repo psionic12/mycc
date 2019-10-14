@@ -256,8 +256,8 @@ QualifiedType &ArrayType::getReferencedQualifiedType() {
 }
 Value ArrayType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
-  if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
-    const auto &initializers = list->initializers;
+  if (auto *list = dynamic_cast<InitializerListAST *>(ast->getInitializer())) {
+    const auto &initializers = list->getInitializers();
     bool isAllConstant = true;
     long difference = mSize - initializers.size();
     if (!complete()) {
@@ -298,7 +298,7 @@ Value ArrayType::initializerCodegen(InitializerAST *ast) {
       result = alloc;
     }
     mSize = initializers.size();
-  } else if (auto *assignmentAST = dynamic_cast<AssignmentExpressionAST *>(ast->ast.get())) {
+  } else if (auto *assignmentAST = dynamic_cast<AssignmentExpressionAST *>(ast->getInitializer())) {
     Value value = assignmentAST->codegen();
     auto *arrayType = dynamic_cast<ArrayType *>(value.getType());
     if (!arrayType
@@ -473,8 +473,8 @@ bool StructType::compatible(Type *type) {
 }
 Value StructType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
-  if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
-    const auto &initializers = list->initializers;
+  if (auto *list = dynamic_cast<InitializerListAST *>(ast->getInitializer())) {
+    const auto &initializers = list->getInitializers();
     if (mOrderedFields.size() < initializers.size()) {
       throw SemaException("excess elements", ast->involvedTokens());
     }
@@ -586,8 +586,8 @@ unsigned int UnionType::getSizeInBits() {
 }
 Value UnionType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
-  if (auto *list = dynamic_cast<InitializerListAST *>(ast->ast.get())) {
-    const auto &initializers = list->initializers;
+  if (auto *list = dynamic_cast<InitializerListAST *>(ast->getInitializer())) {
+    const auto &initializers = list->getInitializers();
     auto *firstType = static_cast<ObjectType *> (mOrderedFields[0].getType());
     if (initializers.size() > 1) {
       throw SemaException("excess elements", ast->involvedTokens());
@@ -636,11 +636,11 @@ EnumerationType::EnumerationType() : IntegerType(sIntType.getSizeInBits(), sIntT
 
 Value ScalarType::initializerCodegen(InitializerAST *ast) {
   llvm::Value *result = nullptr;
-  if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(ast->ast.get())) {
+  if (auto *exp = dynamic_cast<AssignmentExpressionAST *>(ast->getInitializer())) {
     auto v = exp->codegen();
     result = v.getType()->castTo(this, v.getValue(), ast);
   } else {
-    const auto &initializers = static_cast<InitializerListAST *>(ast->ast.get())->initializers;
+    const auto &initializers = static_cast<InitializerListAST *>(ast->getInitializer())->getInitializers();
     if (initializers.size() > 1) {
       throw SemaException("excess elements", ast->involvedTokens());
     } else if (initializers.size() == 1) {
