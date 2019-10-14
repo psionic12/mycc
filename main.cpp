@@ -22,7 +22,7 @@ int main() {
   testFile.open("test.c");
   auto parser = Parser(testFile);
   auto tr = parser.parseTranslationUnit();
-    tr->print(0);
+//    tr->print(0);
   tr->codegen();
   AST::getModule()->print(llvm::outs(), nullptr);
 //  } catch (const SemaException &e) {

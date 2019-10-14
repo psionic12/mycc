@@ -736,6 +736,7 @@ class BinaryOperatorAST : public IBinaryOperationAST {
   static std::tuple<Type *, llvm::Value *, llvm::Value *> UsualArithmeticConversions(Value &lhs,
                                                                                      Value &rhs,
                                                                                      const AST *ast);
+  static bool UsualArithmeticConversions(Type* lhs, Type* rhs, const AST *ast);
  protected:
   nt<IBinaryOperationAST> mLeft;
   Terminal<InfixOp> mOp;

@@ -634,6 +634,8 @@ Value ConditionalExpressionAST::codegen() {
     auto *falseBlock = llvm::BasicBlock::Create(getContext());
     auto *endBlock = llvm::BasicBlock::Create(getContext());
 
+    Type *type;
+
     if (auto *ltype = dynamic_cast<IntegerType *> (condValue.getType())) {
       auto *const0 = llvm::ConstantInt::get(ltype->getLLVMType(), 0);
       cond = sBuilder.CreateICmpNE(condValue.getValue(), const0);
@@ -650,34 +652,41 @@ Value ConditionalExpressionAST::codegen() {
     // true block
     sBuilder.SetInsertPoint(trueBlock);
     auto exp1 = expression->codegen();
-    if (!sBuilder.GetInsertBlock()->getTerminator())
-      sBuilder.CreateBr(endBlock);
+    llvm::Value *trueValue = exp1.getValue();
 
     // false block
     currentFunction->getBasicBlockList().push_back(falseBlock);
     sBuilder.SetInsertPoint(falseBlock);
     auto exp2 = conditional_expression->codegen();
-    Type *type;
-    llvm::Value *trueValue = exp1.getValue();
     llvm::Value *falseValue = exp2.getValue();
 
-    if (dynamic_cast< ArithmeticType *>(exp1.getType())
-        && dynamic_cast< ArithmeticType *>(exp2.getType())) {
-      std::tie(type, trueValue, falseValue) = BinaryOperatorAST::UsualArithmeticConversions(exp1, exp2, this);
-    } else if ((dynamic_cast< StructType *>(exp1.getType())
-        || dynamic_cast< UnionType *>(exp1.getType()))
-        && exp1.getType() == exp2.getType()) {
-      type = exp1.getType();
-    } else if (exp1.getType() == &VoidType::sVoidType
-        && exp2.getType() == &VoidType::sVoidType) {
-      type = &VoidType::sVoidType;
-    } else if (dynamic_cast< PointerType *>(exp1.getType())
-        && dynamic_cast< PointerType *>(exp2.getType())) {
-      if (exp1.getType()->compatible(exp2.getType())) {
-        type = exp1.getType();
+    Type* lType = exp1.getType();
+    Type* rType = exp2.getType();
+    if (dynamic_cast< ArithmeticType *>(lType)
+        && dynamic_cast< ArithmeticType *>(rType)) {
+      if (BinaryOperatorAST::UsualArithmeticConversions(lType, rType, this)) {
+        sBuilder.SetInsertPoint(falseBlock);
+        falseValue = rType->castTo(lType, falseValue, this);
+        type = lType;
       } else {
-        auto *p1 = static_cast<PointerType *>(exp1.getType());
-        auto *p2 = static_cast<PointerType *>(exp2.getType());
+        sBuilder.SetInsertPoint(trueBlock);
+        trueValue = lType->castTo(rType, trueValue, this);
+        type = rType;
+      }
+    } else if ((dynamic_cast< StructType *>(lType)
+        || dynamic_cast< UnionType *>(lType))
+        && lType == rType) {
+      type = lType;
+    } else if (lType == &VoidType::sVoidType
+        && rType == &VoidType::sVoidType) {
+      type = &VoidType::sVoidType;
+    } else if (dynamic_cast< PointerType *>(lType)
+        && dynamic_cast< PointerType *>(rType)) {
+      if (lType->compatible(rType)) {
+        type = lType;
+      } else {
+        auto *p1 = static_cast<PointerType *>(lType);
+        auto *p2 = static_cast<PointerType *>(rType);
         if (p1->getReferencedQualifiedType().getType() == &VoidType::sVoidType
             && dynamic_cast< ObjectType *> (p2->getReferencedQualifiedType().getType())) {
           type = p1;
@@ -693,6 +702,11 @@ Value ConditionalExpressionAST::codegen() {
     } else {
       throw SemaException("incompatible operand types", involvedTokens());
     }
+    sBuilder.SetInsertPoint(trueBlock);
+    if (!sBuilder.GetInsertBlock()->getTerminator())
+      sBuilder.CreateBr(endBlock);
+
+    sBuilder.SetInsertPoint(falseBlock);
     if (!sBuilder.GetInsertBlock()->getTerminator())
       sBuilder.CreateBr(endBlock);
 
@@ -2396,51 +2410,11 @@ BinaryOperatorAST::UsualArithmeticConversions(Value &lhs, Value &rhs, const AST 
   Type *rType = rhs.getType();
   llvm::Value *lValue = lhs.getValue();
   llvm::Value *rValue = rhs.getValue();
-
-  while (true) {
-    if (auto *li = dynamic_cast< IntegerType *>(lType)) {
-      if (auto *ri = dynamic_cast< IntegerType *>(rType)) {
-        if (li->getSizeInBits() > ri->getSizeInBits()) {
-          rValue = ri->castTo(li, rValue, ast);
-          rType = lType;
-          break;
-        } else if (li->getSizeInBits() == ri->getSizeInBits()) {
-          if (!li->isSigned() || !ri->isSigned()) {
-            lType = !li->isSigned() ? li : ri;
-          }
-          break;
-        } else {
-          lValue = li->castTo(ri, lValue, ast);
-          lType = rType;
-          break;
-        }
-      } else if (auto *rf = dynamic_cast< FloatingType *>(rType)) {
-        lValue = li->castTo(rf, lValue, ast);
-        lType = rf;
-        break;
-      }
-    } else if (auto *lf = dynamic_cast< FloatingType *>(lType)) {
-      if (auto *ri = dynamic_cast< IntegerType *>(rType)) {
-        rValue = ri->castTo(lf, rValue, ast);
-        break;
-      } else if (auto *rf = dynamic_cast< FloatingType *>(rType)) {
-        if (lf->getSizeInBits() > rf->getSizeInBits()) {
-          rValue = rf->castTo(lf, rValue, ast);
-          rType = lType;
-          break;
-        } else if (lf->getSizeInBits() == rf->getSizeInBits()) {
-          break;
-        } else {
-          lValue = lf->castTo(rf, lValue, ast);
-          lType = rType;
-          break;
-        }
-      }
-    }
-    throw SemaException("operands must be integer or float type", ast->involvedTokens());
+  if (UsualArithmeticConversions(lType, rType, ast)) {
+    return {lType, lValue, rType->castTo(lType, rValue, ast)};
+  } else {
+    return {rType, lType->castTo(rType, lValue, ast), rValue};
   }
-  return {lType, lValue, rValue};
-
 }
 Value BinaryOperatorAST::codegen(Value &lhs,
                                  Value &rhs,
@@ -2735,6 +2709,19 @@ Value BinaryOperatorAST::codegen(Value &lhs,
     default:break;
   }
   throw SemaException("invalid operands to binary expression", lAST->involvedTokens());
+}
+bool BinaryOperatorAST::UsualArithmeticConversions(Type *lhs, Type *rhs, const AST *ast) {
+  if (dynamic_cast<IntegerType *>(lhs) && dynamic_cast<IntegerType *>(rhs)) {
+    return static_cast<IntegerType *>(lhs)->getSizeInBits() > static_cast<IntegerType *>(rhs)->getSizeInBits();
+  } else if (dynamic_cast<IntegerType *>(lhs) && dynamic_cast<FloatingType *>(rhs)) {
+    return false;
+  } else if (dynamic_cast<FloatingType *>(lhs) && dynamic_cast<IntegerType *>(rhs)) {
+    return true;
+  } else if (dynamic_cast<FloatingType *>(lhs) && dynamic_cast<FloatingType *>(rhs)) {
+    return static_cast<FloatingType *>(lhs)->getSizeInBits() > static_cast<FloatingType *>(rhs)->getSizeInBits();
+  } else {
+    throw SemaException("operands must be integer or float type", ast->involvedTokens());
+  }
 }
 Value LogicalBinaryOperatorAST::codegen() {
   auto *currentFunction = sBuilder.GetInsertBlock()->getParent();
