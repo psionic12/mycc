@@ -2,6 +2,13 @@
 #include <sema/ast.h>
 Value::Value(QualifiedType qualifiedType, bool lvalue, llvm::Value *value)
     : mQualifiedType(std::move(qualifiedType)), mLValue(lvalue), mValue(value) {
+  if (mValue->getType() == mQualifiedType.getType()->getLLVMType()) {
+    assert(!mLValue);
+  } else if (mValue->getType()->getPointerElementType() == mQualifiedType.getType()->getLLVMType()) {
+    assert(mLValue);
+  } else {
+    throw std::runtime_error("WTF: type mismatch");
+  }
 }
 llvm::Value *Value::getValue() {
   if (isLValue()) {

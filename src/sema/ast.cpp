@@ -770,130 +770,123 @@ void AssignmentExpressionAST::print(int indent) {
 }
 Value AssignmentExpressionAST::codegen() {
   auto lhs = conditional_expression->codegen();
-  llvm::Value *result;
-  if (lhs.isLValue()) {
+  if (!op) {
+    return lhs;
+  } else {
     if (!lhs.modifiable()) {
       throw SemaException("An assignment operator shall have a modifiable lvalue as its left operand.",
                           conditional_expression->involvedTokens());
     }
-    if (!op) {
-      result = lhs.getValue();
-    } else {
-      auto rhs = assignment_expression->codegen();
-      switch (op->type) {
-        case AssignmentOp::STAREQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::STAR,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
+    llvm::Value *result;
+    auto rhs = assignment_expression->codegen();
+    switch (op->type) {
+      case AssignmentOp::STAREQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::STAR,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
 
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::SLASHEQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::SLASH,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::PERCENTEQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::PERCENT,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::PLUSEQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::PLUS,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::SUBEQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::SUB,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::LTLTEQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::LTLT,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::GTGTEQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::GTGT,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::AMPEQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::AMP,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::CARETEQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::CARET,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::BAREQ: {
-          Value v = BinaryOperatorAST::codegen(lhs,
-                                               rhs,
-                                               InfixOp::BAR,
-                                               conditional_expression.get(),
-                                               assignment_expression.get());
-
-          result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
-          break;
-        }
-        case AssignmentOp::EQ:
-          result =
-              eqCodegen(lhs, rhs, conditional_expression.get(), assignment_expression.get(), false);
-          break;
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
       }
+      case AssignmentOp::SLASHEQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::SLASH,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::PERCENTEQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::PERCENT,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::PLUSEQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::PLUS,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::SUBEQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::SUB,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::LTLTEQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::LTLT,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::GTGTEQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::GTGT,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::AMPEQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::AMP,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::CARETEQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::CARET,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::BAREQ: {
+        Value v = BinaryOperatorAST::codegen(lhs,
+                                             rhs,
+                                             InfixOp::BAR,
+                                             conditional_expression.get(),
+                                             assignment_expression.get());
+
+        result = eqCodegen(lhs, v, conditional_expression.get(), assignment_expression.get(), false);
+        break;
+      }
+      case AssignmentOp::EQ:
+        result =
+            eqCodegen(lhs, rhs, conditional_expression.get(), assignment_expression.get(), false);
+        break;
     }
-  } else {
-    if (op || assignment_expression) {
-      throw SemaException("rvalue cannot be assigned", conditional_expression->involvedTokens());
-    }
-    result = lhs.getValue();
+    return Value(lhs.getQualifiedType(), false, result);
   }
-  return Value(lhs.getQualifiedType(), false, result);
 }
 llvm::Value *AssignmentExpressionAST::eqCodegen(Value &lhs,
                                                 Value &rhs,
@@ -1176,7 +1169,7 @@ void IdentifierAST::print(int indent) {
 StringAST::StringAST(
     const Token &token) : AST(AST::Kind::STRING), mToken(token) {
   mType = std::make_unique<ArrayType>(QualifiedType(&IntegerType::sCharType, {TypeQualifier::kCONST}),
-                                      mToken.toString().size());
+                                      mToken.toString().size() + 1);
 }
 ArrayType *StringAST::getType() {
   return mType.get();
@@ -1873,8 +1866,7 @@ Value StringPrimaryExpressionAST::codegen() {
     return Value(QualifiedType(mPointerType.get(), {}), false, ptr);
   }
 }
-StringPrimaryExpressionAST::StringPrimaryExpressionAST(nt<StringAST>
-                                                       string) : string(std::move(string)) {}
+StringPrimaryExpressionAST::StringPrimaryExpressionAST(nt<StringAST> string) : string(std::move(string)) {}
 void ExpressionPrimaryExpressionAST::print(int indent) {
   PrimaryExpressionAST::print(indent);
   expression->print(++indent);
@@ -1882,9 +1874,8 @@ void ExpressionPrimaryExpressionAST::print(int indent) {
 Value ExpressionPrimaryExpressionAST::codegen() {
   return expression->codegen();
 }
-ExpressionPrimaryExpressionAST::ExpressionPrimaryExpressionAST(nt<ExpressionAST>
-                                                               expression) : expression(std::move(
-    expression)) {}
+ExpressionPrimaryExpressionAST::ExpressionPrimaryExpressionAST(nt<ExpressionAST> expression)
+    : expression(std::move(expression)) {}
 void SimplePostfixExpressionAST::print(int indent) {
   AST::print(indent);
   primary_expression->print(++indent);
@@ -2095,14 +2086,14 @@ Value IncrementPostfixExpression::codegen() {
   // 6.5.2.4 Postfix increment and decrement operators
   Value value = postfix_expression->codegen();
   if (!value.modifiable()) {
-    throw SemaException("oprand must be modifiable", postfix_expression->involvedTokens());
+    throw SemaException("operand must be modifiable", postfix_expression->involvedTokens());
   }
   Type *type = value.getType();
   llvm::Value *result = sBuilder.CreateAlloca(value.getType()->getLLVMType());
   sBuilder.CreateStore(value.getValue(), result, value.isVolatile());
   llvm::Value *newVal;
   if (dynamic_cast< IntegerType *>(type)) {
-    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(type->getLLVMType(), 1));
+    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::getSigned(type->getLLVMType(), 1));
   } else if (dynamic_cast< FloatingType *>(type)) {
     newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(type->getLLVMType(), 1.0));
   } else if (dynamic_cast< PointerType *>(type)) {
@@ -2126,16 +2117,16 @@ Value DecrementPostfixExpression::codegen() {
   // 6.5.2.4 Postfix increment and decrement operators
   Value value = postfix_expression->codegen();
   if (!value.modifiable()) {
-    throw SemaException("oprand must be modifiable", postfix_expression->involvedTokens());
+    throw SemaException("operand must be modifiable", postfix_expression->involvedTokens());
   }
   Type *type = value.getType();
   llvm::Value *result = sBuilder.CreateAlloca(value.getType()->getLLVMType());
   sBuilder.CreateStore(value.getValue(), result, value.isVolatile());
   llvm::Value *newVal;
   if (dynamic_cast< IntegerType *>(type)) {
-    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
+    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::getSigned(type->getLLVMType(), 1));
   } else if (dynamic_cast< FloatingType *>(type)) {
-    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
+    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(type->getLLVMType(), 1.0f));
   } else if (dynamic_cast< PointerType *>(type)) {
     newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true))});
   } else {
@@ -2162,7 +2153,7 @@ Value SimpleUnaryExpressionAST::codegen() {
                  false,
                  v.getPtr());
   } else if (auto *arrayType = dynamic_cast<ArrayType *>(v.getQualifiedType().getType())) {
-    if (!sIsInitializerList) {
+    if (v.isLValue()) {
       auto *ptr =
           sBuilder.CreateGEP(arrayType->getLLVMType(),
                              v.getPtr(),
@@ -2188,12 +2179,13 @@ Value PrefixIncrementExpressionAST::codegen() {
   if (!value.modifiable()) {
     throw SemaException("oprand must be modifiable", mUnaryExpression->involvedTokens());
   }
+  Type *type = value.getType();
   llvm::Value *newVal;
-  if (dynamic_cast< IntegerType *>(value.getType())) {
-    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
-  } else if (dynamic_cast< FloatingType *>(value.getType())) {
-    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
-  } else if (dynamic_cast< PointerType *>(value.getType())) {
+  if (dynamic_cast< IntegerType *>(type)) {
+    newVal = sBuilder.CreateAdd(value.getValue(), llvm::ConstantInt::getSigned(type->getLLVMType(), 1));
+  } else if (dynamic_cast< FloatingType *>(type)) {
+    newVal = sBuilder.CreateFAdd(value.getValue(), llvm::ConstantFP::get(type->getLLVMType(), 1.0f));
+  } else if (dynamic_cast< PointerType *>(type)) {
     newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1))});
   } else {
     throw SemaException(
@@ -2214,11 +2206,12 @@ Value PrefixDecrementExpressionAST::codegen() {
     throw SemaException("oprand must be modifiable", mUnaryExpression->involvedTokens());
   }
   llvm::Value *newVal;
-  if (dynamic_cast< IntegerType *>(value.getType())) {
-    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(getContext(), llvm::APInt(32, 1)));
-  } else if (dynamic_cast< FloatingType *>(value.getType())) {
-    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(getContext(), llvm::APFloat(1.0f)));
-  } else if (dynamic_cast< PointerType *>(value.getType())) {
+  Type *type = value.getType();
+  if (dynamic_cast< IntegerType *>(type)) {
+    newVal = sBuilder.CreateSub(value.getValue(), llvm::ConstantInt::get(type->getLLVMType(), 1));
+  } else if (dynamic_cast< FloatingType *>(type)) {
+    newVal = sBuilder.CreateFSub(value.getValue(), llvm::ConstantFP::get(type->getLLVMType(), 1.0f));
+  } else if (dynamic_cast< PointerType *>(type)) {
     newVal = sBuilder.CreateGEP(value.getValue(), {llvm::ConstantInt::get(getContext(), llvm::APInt(32, -1, true))});
   } else {
     throw SemaException(
@@ -2255,8 +2248,7 @@ Value UnaryOperatorExpressionAST::codegen() {
     }
     case UnaryOp::STAR:
       if (auto *pointerType = dynamic_cast< PointerType *>(type)) {
-        auto *v = sBuilder.CreateLoad(newVal);
-        return Value(pointerType->getReferencedQualifiedType(), false, v);
+        return Value(pointerType->getReferencedQualifiedType(), true, newVal);
       } else {
         throw SemaException("The operand of the unary * operator shall have pointer type.", mOp.token);
       }

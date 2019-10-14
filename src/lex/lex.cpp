@@ -520,6 +520,8 @@ void Lex::scanCharConstant() {
         break;
       case '\\': c = '\\';
         break;
+      case '0': c = '\0';
+        break;
       default:throwLexError(std::string("illegal.esc.char"), TokenKind::TOKEN_CHARLITERAL);
     }
   } else {
