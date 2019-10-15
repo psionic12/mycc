@@ -25,3 +25,12 @@ And as mentioned above, this compiler is used for beginners, who is focusing on 
 
 This project is written in my spare time, so it takes amost half a year and still get tons of bugs, including and especialy wrong 
 diagnosities. Bug reports are welcomed.
+
+## How to use
+`mycc --print-ast --print-ir --execute test.c`
+
+this command will print the abstract syntax tree, print the IR code, and then execute the `int main()` if exist.
+
+## TODO
+1. generate object file.
+2. use passes for optimaziation
