@@ -262,15 +262,15 @@ void DeclarationAST::codegen() {
     }
 
   }
-  bool hasDeclarator = !mInitDeclarators.empty();
-  bool hasTag = false;
-  bool hasEnumMembers = false;
-  // check definations in codegen;
-
-  if (!hasDeclarator && !hasTag && !hasEnumMembers) {
-    throw SemaException("A declaration shall declare at least a declarator, a tag, or the members of an enumeration",
-                        *mLeftMost);
-  }
+//  bool hasDeclarator = !mInitDeclarators.empty();
+//  bool hasTag = false;
+//  bool hasEnumMembers = false;
+//  // check definations in codegen;
+//
+//  if (!hasDeclarator && !hasTag && !hasEnumMembers) {
+//    throw SemaException("A declaration shall declare at least a declarator, a tag, or the members of an enumeration",
+//                        *mLeftMost);
+//  }
   //TODO 6.7.3
 }
 DeclarationSpecifiersAST::DeclarationSpecifiersAST(ts<StorageSpecifier>
