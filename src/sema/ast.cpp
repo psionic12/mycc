@@ -1110,7 +1110,7 @@ void InitializerListAST::print(int indent) {
   AST::print(indent);
   mInitializers.print(++indent);
 }
-const nts<InitializerAST> & InitializerListAST::getInitializers() {
+const nts<InitializerAST> &InitializerListAST::getInitializers() {
   return mInitializers;
 }
 LabeledStatementAST::LabeledStatementAST(nt<StatementAST>
@@ -2363,11 +2363,10 @@ Value SizeofUnaryExpressionAST::codegen() {
   if (!objectType) {
     throw std::runtime_error("WTF: sizeof on a non-object type");
   }
-  return Value(QualifiedType(&IntegerType::sIntType, {TypeQualifier::kCONST}),
+
+  return Value(QualifiedType(&IntegerType::sLongIntType, {TypeQualifier::kCONST}),
                false,
-               llvm::ConstantInt::get(getContext(),
-                                      llvm::APInt(IntegerType::sIntType.getSizeInBits(),
-                                                  objectType->getSizeInBits() / 8)));
+                llvm::ConstantExpr::getSizeOf(objectType->getLLVMType()));
 }
 void SizeofUnaryExpressionAST::print(int indent) {
   AST::print(indent);
