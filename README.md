@@ -1,19 +1,19 @@
 # My C Language Compiler
 
-This compiler takes a c file as input and generate llvm IR code to be used in JIT or converted to object files to be linked with.
-The parser is a hand writing ll(1) parser, and depends on the famous  BNF wrote by Brian W. Kernighan and Dennis M. Ritchie,Prentice Hall, 1988 do not support variable length array
+This compiler takes a C file as input and generates LLVM IR codes which to be used in JIT or converted to object files to be linked with.
+The parser is a hand writing ll(1) parser, and depends on the famous BNF wrote by Brian W. Kernighan and Dennis M. Ritchie,Prentice Hall, 1988, except that variable length array is not supported
 
-The semantics follows *part* or C99 standard.
+The semantics follows *part* of C99 standard.
 
-Takes llvm as backend.
+Takes LLVM as backend.
 
-*notice* grammers which shows in C99 but not in BNF is not implemented
+*notice* grammers which shows in C99 but not in BNF are not implemented
 
 Obviously not implemented (yet) features: Bit-fields, variable lengh array, identifier parameter list, declaration for loop.
 
 ## What is this compiler used for
 
-This compiler intents to bring llvm beginners in, and makes a full picture of how a real language compiler looks like, not toy examples on the internet. Write some code and put break points to see how a statement turns to IR code from pure strings.
+This compiler intents to bring LLVM beginners in, and makes a full picture of how a real language compiler(front-end) looks like, not toy examples on the internet. Write some code and put break points to see how a statement turns to IR code from pure strings.
 
 ## Why can't I use #include?
 
@@ -34,3 +34,4 @@ this command will print the abstract syntax tree, print the IR code, and then ex
 ## TODO
 1. generate object file.
 2. use passes for optimaziation
+3. debug messages for gdb.
